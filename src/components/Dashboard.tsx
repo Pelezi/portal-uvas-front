@@ -11,7 +11,7 @@ import {
   CartesianGrid,
   PieChart,
   Pie,
-  Celula,
+  Cell,
   Legend,
 } from 'recharts';
 
@@ -61,7 +61,7 @@ export default function Dashboard() {
               <PieChart>
                 <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} fill="#8884d8">
                   {pieData.map((entry, index) => (
-                    <Celula key={`celula-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`celula-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Legend />
