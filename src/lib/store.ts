@@ -1,18 +1,18 @@
 import { create } from 'zustand';
-import { Cell, Member, User, PermissionUpsertInput } from '@/types';
+import { Celula, Member, User, PermissionUpsertInput } from '@/types';
 
 interface AppState {
-  // Cells (formerly groups)
-  cells: Cell[];
-  setCells: (cells: Cell[]) => void;
+  // Celulas (formerly groups)
+  celulas: Celula[];
+  setCelulas: (celulas: Celula[]) => void;
 
-  // Members of the selected cell
+  // Members of the selected celula
   members: Member[];
   setMembers: (members: Member[]) => void;
 
-  // Current selected cell id (null = personal / none)
-  currentCellId: number | null;
-  setCurrentCellId: (cellId: number | null) => void;
+  // Current selected celula id (null = personal / none)
+  currentCelulaId: number | null;
+  setCurrentCelulaId: (celulaId: number | null) => void;
 
   // Current user (if available)
   currentUser: User | null;
@@ -28,14 +28,14 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  cells: [],
-  setCells: (cells) => set({ cells }),
+  celulas: [],
+  setCelulas: (celulas) => set({ celulas }),
 
   members: [],
   setMembers: (members) => set({ members }),
 
-  currentCellId: null,
-  setCurrentCellId: (cellId) => set({ currentCellId: cellId }),
+  currentCelulaId: null,
+  setCurrentCelulaId: (celulaId) => set({ currentCelulaId: celulaId }),
 
   currentUser: null,
   setCurrentUser: (user) => set({ currentUser: user }),

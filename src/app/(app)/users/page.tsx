@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { FiPlus } from 'react-icons/fi';
 import { userService } from '@/services/userService';
 import { permissionService } from '@/services/permissionService';
 import toast from 'react-hot-toast';
@@ -19,10 +20,10 @@ export default function UsersPage() {
   const [lastName, setLastName] = useState('');
 
   // permissions
-  const [cells, setCells] = useState<any[]>([]);
-  const [selectedCellIds, setSelectedCellIds] = useState<number[]>([]);
+  const [celulas, setCelulas] = useState<any[]>([]);
+  const [selectedCelulaIds, setSelectedCelulaIds] = useState<number[]>([]);
   const [hasGlobal, setHasGlobal] = useState(false);
-  const [canManageCells, setCanManageCells] = useState(false);
+  const [canManageCelulas, setCanManageCelulas] = useState(false);
   const [canManagePermissions, setCanManagePermissions] = useState(false);
 
   const load = async () => {
@@ -30,12 +31,12 @@ export default function UsersPage() {
     try {
       const list = await userService.list();
       setUsers(list);
-      // also load available cells for permissions select
+      // also load available celulas for permissions select
       try {
-        const cellList = await (await import('@/services/cellsService')).cellsService.getCells();
-        setCells(cellList);
+        const celulaList = await (await import('@/services/celulasService')).celulasService.getCelulas();
+        setCelulas(celulaList);
       } catch (e) {
-        // ignore cells load errors
+        // ignore celulas load errors
         // console.error(e);
       }
     } catch (e) { console.error(e); toast.error('Falha ao buscar usuários'); }
@@ -46,7 +47,7 @@ export default function UsersPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setEmail(''); setFirstName(''); setLastName(''); setSelectedCellIds([]); setHasGlobal(false); setCanManageCells(false); setCanManagePermissions(false);
+    setEmail(''); setFirstName(''); setLastName(''); setSelectedCelulaIds([]); setHasGlobal(false); setCanManageCelulas(false); setCanManagePermissions(false);
     setShowModal(true);
   };
 
@@ -58,9 +59,9 @@ export default function UsersPage() {
         setEmail(usr.email || ''); setFirstName(usr.firstName || ''); setLastName(usr.lastName || '');
         // populate permissions if returned
         const perm = (full as any).permission;
-        setSelectedCellIds((perm && perm.cellIds && Array.isArray(perm.cellIds)) ? (perm.cellIds as number[]) : []);
-        setHasGlobal(!!(perm && perm.hasGlobalCellAccess));
-        setCanManageCells(!!(perm && perm.canManageCells));
+        setSelectedCelulaIds((perm && perm.celulaIds && Array.isArray(perm.celulaIds)) ? (perm.celulaIds as number[]) : []);
+        setHasGlobal(!!(perm && perm.hasGlobalCelulaAccess));
+        setCanManageCelulas(!!(perm && perm.canManageCelulas));
         setCanManagePermissions(!!(perm && perm.canManagePermissions));
       setShowModal(true);
     } catch (e) {
@@ -79,9 +80,9 @@ export default function UsersPage() {
       }
 
       // update permissions if provided
-      if (selectedCellIds.length || hasGlobal || canManageCells || canManagePermissions) {
-        const cellIds = selectedCellIds;
-        await permissionService.upsertPermission({ email: editing ? editing.email : email, cellIds, hasGlobalCellAccess: hasGlobal, canManageCells, canManagePermissions });
+      if (selectedCelulaIds.length || hasGlobal || canManageCelulas || canManagePermissions) {
+        const celulaIds = selectedCelulaIds;
+        await permissionService.upsertPermission({ email: editing ? editing.email : email, celulaIds, hasGlobalCelulaAccess: hasGlobal, canManageCelulas, canManagePermissions });
         toast.success('Permissões salvas');
       }
 
@@ -112,7 +113,6 @@ export default function UsersPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Usuários</h2>
-        <button onClick={openCreate} className="px-4 py-2 bg-blue-600 text-white rounded dark:bg-blue-500">Criar Usuário</button>
       </div>
 
       {loading ? (
@@ -129,7 +129,7 @@ export default function UsersPage() {
                     <div className="text-sm text-gray-600 dark:text-gray-300">{u.email}</div>
                   </div>
                   <div>
-                    <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100">{u.role || (u.permission && u.permission.role) || 'USER'}</span>
+                    <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100">{u.roles[0] == 'PASTOR' ? 'Pastor' : u.roles[0] == 'DISCIPULADOR' ? 'Discipulador' : u.roles[0] == 'LEADER' ? 'Líder' : u.roles[0] == 'VICELEADER' ? 'Líder E.T.': 'Membro'}</span>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
@@ -166,13 +166,13 @@ export default function UsersPage() {
               <h4 className="font-medium mb-2 text-gray-800 dark:text-gray-100">Permissões</h4>
               <label className="block mb-1 text-gray-700 dark:text-gray-200">Células</label>
               <div className="max-h-40 sm:max-h-48 overflow-y-auto p-2 border border-gray-300 dark:border-gray-600 rounded w-full mb-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                {cells.length === 0 && <div className="text-sm text-gray-500">Nenhuma célula disponível</div>}
-                {cells.map((c) => (
+                {celulas.length === 0 && <div className="text-sm text-gray-500">Nenhuma célula disponível</div>}
+                {celulas.map((c) => (
                   <label key={c.id} className="flex items-center gap-2 p-1">
                     <input
                       type="checkbox"
-                      checked={selectedCellIds.includes(c.id)}
-                      onChange={() => setSelectedCellIds((prev) => (prev.includes(c.id) ? prev.filter((x) => x !== c.id) : [...prev, c.id]))}
+                      checked={selectedCelulaIds.includes(c.id)}
+                      onChange={() => setSelectedCelulaIds((prev) => (prev.includes(c.id) ? prev.filter((x) => x !== c.id) : [...prev, c.id]))}
                     />
                     <span className="text-sm">{c.name}</span>
                   </label>
@@ -180,7 +180,7 @@ export default function UsersPage() {
               </div>
               <div className="flex items-center gap-4 text-gray-700 dark:text-gray-200">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={hasGlobal} onChange={(e) => setHasGlobal(e.target.checked)} /> Acesso global</label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={canManageCells} onChange={(e) => setCanManageCells(e.target.checked)} /> Gerenciar células</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={canManageCelulas} onChange={(e) => setCanManageCelulas(e.target.checked)} /> Gerenciar células</label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked={canManagePermissions} onChange={(e) => setCanManagePermissions(e.target.checked)} /> Gerenciar permissões</label>
               </div>
             </div>
@@ -192,6 +192,11 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      {/* Floating create button */}
+      <button aria-label="Criar usuário" onClick={openCreate} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
+        <FiPlus className="h-7 w-7" aria-hidden />
+      </button>
 
       {/* Remove confirmation modal */}
       {userToRemove && (

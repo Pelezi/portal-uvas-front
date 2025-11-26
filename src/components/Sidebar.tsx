@@ -7,8 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
-import { Permission, Cell } from '@/types';
-import { cellsService } from '@/services/cellsService';
+import { Permission, Celula } from '@/types';
+import { celulasService } from '@/services/celulasService';
 
 interface NavLinkProps {
   href: string;
@@ -23,7 +23,7 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   matchPrefix: boolean;
-  require?: 'cells' | 'users';
+  require?: 'leader' | 'discipulador' | 'pastor' | 'admin';
 }
 
 const NavLink = ({ href, icon, label, isActive, onClick }: NavLinkProps) => (
@@ -53,6 +53,12 @@ export default function Sidebar() {
     router.push('/auth/login');
   };
 
+  if (!user || !user.permission) {
+    logout();
+    router.push('/auth/login');
+    return null;
+  }
+
   const handleNavClick = useCallback(() => {
     if (window.innerWidth < 1024) {
       toggleSidebar();
@@ -60,18 +66,25 @@ export default function Sidebar() {
   }, []);
 
   // Compute permissions
-  const perm: Permission | null | undefined = user?.permission;
-  const canViewCells = !!perm && (perm.hasGlobalCellAccess || perm.canManageCells);
-  const canViewUsers = !!perm && perm.canManagePermissions;
+  const perm: Permission = user.permission;
+  const isAdmin = perm.admin;
+  const isPastor = perm.admin || perm.pastor;
+  const isDiscipulador = perm.admin || perm.pastor || perm.discipulador;
+  const isLeader = perm.admin || perm.pastor || perm.discipulador || perm.leader;
 
-  const homeHref = canViewCells ? '/cells' : '/report';
+  const homeHref = isAdmin ? '/users' 
+  : isPastor ? '/redes'
+  : isDiscipulador ? '/discipulados'
+  : '/report';
 
   const navItems: NavItem[] = [
     { href: homeHref, label: 'Início', icon: <Home size={18} />, matchPrefix: false },
     { href: '/report', label: 'Relatório', icon: <FileText size={18} />, matchPrefix: false },
-    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true, require: 'cells' },
-    { href: '/cells', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'cells' },
-    { href: '/users', label: 'Usuários', icon: <User size={18} />, matchPrefix: false, require: 'users' },
+    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
+    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
+    { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
+    { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'pastor' },
+    { href: '/users', label: 'Usuários', icon: <User size={18} />, matchPrefix: false, require: 'admin' },
   ];
 
   return (
@@ -116,10 +129,10 @@ export default function Sidebar() {
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
             // permission filtering
-            if (item.require === 'cells' && !canViewCells) return null;
-            if (item.require === 'users' && !canViewUsers) return null;
-
-            
+            if (item.require === 'admin' && !isAdmin) return null;
+            if (item.require === 'pastor' && !isPastor) return null;
+            if (item.require === 'discipulador' && !isDiscipulador) return null;
+            if (item.require === 'leader' && !isLeader) return null;
 
             const isActive = item.matchPrefix ? pathname.startsWith(item.href) : pathname === item.href;
 

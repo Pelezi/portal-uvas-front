@@ -1,19 +1,27 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { cellsService } from '@/services/cellsService';
+import { celulasService } from '@/services/celulasService';
 import { membersService } from '@/services/membersService';
 import { reportsService } from '@/services/reportsService';
-import { Cell, Member } from '@/types';
+import { Celula, Member } from '@/types';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { LuHistory } from 'react-icons/lu';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
 
 export default function ReportPage() {
-  const [groups, setGroups] = useState<Cell[]>([]);
+  const [groups, setGroups] = useState<Celula[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [presentMap, setPresentMap] = useState<Record<number, boolean>>({});
+  const [reportDate, setReportDate] = useState<string>(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -25,8 +33,12 @@ export default function ReportPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const g = await cellsService.getCells();
+        const g = await celulasService.getCelulas();
         setGroups(g);
+        // If user only has one célula (group), select it automatically
+        if (Array.isArray(g) && g.length === 1) {
+          setSelectedGroup(g[0].id);
+        }
       } catch (e) {
         console.error(e);
       }
@@ -73,7 +85,7 @@ export default function ReportPage() {
     const memberIds = members.filter((m) => !!presentMap[m.id]).map((m) => m.id);
     if (memberIds.length === 0) return toast.error('Marque pelo menos um membro presente');
     try {
-      await reportsService.createReport(selectedGroup, { memberIds });
+      await reportsService.createReport(selectedGroup, { memberIds, date: reportDate });
       toast.success('Relatório enviado');
     } catch (e) {
       console.error(e);
@@ -112,12 +124,19 @@ export default function ReportPage() {
         </ThemeProvider>
       </div>
 
+      <div className="mb-4 max-w-xs">
+        <label className="block text-sm font-medium mb-1">Data do relatório</label>
+        <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="w-full border px-3 py-2 rounded bg-white dark:bg-gray-800" />
+      </div>
+
       {members.length > 0 && (
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium">Membros</h3>
             {selectedGroup && (
-              <Link href={`/cells/${selectedGroup}/presence`} className="px-3 py-1 bg-teal-600 text-white rounded text-sm">Acompanhamento</Link>
+              <Link href={`/celulas/${selectedGroup}/presence?from=report`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Acompanhamento">
+                <LuHistory className="h-4 w-4 text-teal-600" aria-hidden />
+              </Link>
             )}
           </div>
           <ul className="space-y-2">

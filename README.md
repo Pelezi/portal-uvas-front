@@ -52,17 +52,17 @@ Observação: o `apiClient` do frontend pode também definir a URL base diretame
 
 ## Estrutura do projeto
 
-- `src/app/` — rotas/pages (Next.js App Router). Rotas notáveis: `auth`, `(app)/report`, `(app)/users`, `(app)/cells`, `(app)/members`.
+- `src/app/` — rotas/pages (Next.js App Router). Rotas notáveis: `auth`, `(app)/report`, `(app)/users`, `(app)/celulas`, `(app)/members`.
 - `src/components/` — componentes reutilizáveis (Sidebar, Dashboard, Providers, etc.).
-- `src/services/` — serviços que fazem chamadas HTTP ao backend (`userService`, `cellsService`, `membersService`, `reportsService`).
+- `src/services/` — serviços que fazem chamadas HTTP ao backend (`userService`, `celulasService`, `membersService`, `reportsService`).
 - `src/lib/` — utilitários (ex.: `apiClient.ts`, `store.ts`, timezone helpers).
 
 ## Integração com o backend
 
 - A aplicação consome a API do backend (ver `NEXT_PUBLIC_API_BASE_URL`).
 - Endpoints usados (resumo):
-	- `GET /cells`, `GET /cells/:id` — células
-	- `GET /members?cellId=...` — membros por célula
+	- `GET /celulas`, `GET /celulas/:id` — células
+	- `GET /members?celulaId=...` — membros por célula
 	- `POST /reports` — criar relatório de presença
 	- `GET/POST/PUT/DELETE /users` — gerenciamento de usuários
 

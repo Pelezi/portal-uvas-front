@@ -6,7 +6,7 @@ import { Member } from '@/types';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 
-export default function CellMembersPage({ params }: { params: any }) {
+export default function CelulaMembersPage({ params }: { params: any }) {
   // `params` may be a Promise (Next routing). Unwrap it with React.use()
   const resolvedParams = use(params) as { id: string };
   const [members, setMembers] = useState<Member[]>([]);
@@ -14,13 +14,13 @@ export default function CellMembersPage({ params }: { params: any }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
 
-  const cellId = parseInt(resolvedParams.id, 10);
+  const celulaId = parseInt(resolvedParams.id, 10);
 
   const load = async () => {
-    if (Number.isNaN(cellId)) return;
+    if (Number.isNaN(celulaId)) return;
     setLoading(true);
     try {
-      const m = await membersService.getMembers(cellId);
+      const m = await membersService.getMembers(celulaId);
       setMembers(m as Member[]);
     } catch (err) {
       console.error(err);
@@ -36,7 +36,7 @@ export default function CellMembersPage({ params }: { params: any }) {
   const saveEdit = async () => {
     if (editingId == null) return;
     try {
-      await membersService.updateMember(cellId, editingId, { name: editingName });
+      await membersService.updateMember(celulaId, editingId, { name: editingName });
       toast.success('Atualizado');
       setEditingId(null); setEditingName('');
       load();
@@ -46,7 +46,7 @@ export default function CellMembersPage({ params }: { params: any }) {
   const remove = async (memberId: number) => {
     if (!confirm('Remover membro?')) return;
     try {
-      await membersService.deleteMember(cellId, memberId);
+      await membersService.deleteMember(celulaId, memberId);
       toast.success('Removido'); load();
     } catch (err) { console.error(err); toast.error('Falha ao remover'); }
   };
@@ -55,7 +55,7 @@ export default function CellMembersPage({ params }: { params: any }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-semibold">Membros da célula {resolvedParams.id}</h2>
-        <Link href="/cells" className="text-sm text-blue-500">Voltar</Link>
+        <Link href="/celulas" className="text-sm text-blue-500">Voltar</Link>
       </div>
 
       {loading && <div>Carregando...</div>}

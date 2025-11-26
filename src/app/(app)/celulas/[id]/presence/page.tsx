@@ -1,35 +1,37 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { reportsService } from '@/services/reportsService';
-import { cellsService } from '@/services/cellsService';
+import { celulasService } from '@/services/celulasService';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 
-export default function CellPresencePage() {
+export default function CelulaPresencePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams?.get('from');
   const idParam = params?.id;
-  const cellId = idParam ? Number(idParam) : NaN;
+  const celulaId = idParam ? Number(idParam) : NaN;
 
   const [loading, setLoading] = useState(false);
   const [presences, setPresences] = useState<Array<{ date: string; members: any[] }>>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [cellName, setCellName] = useState<string | null>(null);
+  const [celulaName, setCelulaName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (Number.isNaN(cellId)) return;
+    if (Number.isNaN(celulaId)) return;
     const load = async () => {
       setLoading(true);
       try {
-        const data = await reportsService.getRecentPresences(cellId);
+        const data = await reportsService.getRecentPresences(celulaId);
         setPresences(data || []);
         try {
-          const c = await cellsService.getCell(cellId);
-          setCellName(c?.name || null);
+          const c = await celulasService.getCelula(celulaId);
+          setCelulaName(c?.name || null);
         } catch (err) {
-          // ignore cell name failure, keep null
+          // ignore celula name failure, keep null
         }
         // default collapsed
         const map: Record<string, boolean> = {};
@@ -43,17 +45,29 @@ export default function CellPresencePage() {
       }
     };
     load();
-  }, [cellId]);
+  }, [celulaId]);
 
   const toggle = (date: string) => {
     setExpanded((prev) => ({ ...prev, [date]: !prev[date] }));
   };
 
-  if (Number.isNaN(cellId)) {
+  const handleBack = () => {
+    if (from === 'report') {
+      router.push('/report');
+      return;
+    }
+    if (from === 'celulas') {
+      router.push('/celulas');
+      return;
+    }
+    router.back();
+  };
+
+  if (Number.isNaN(celulaId)) {
     return (
       <div className="p-6">
         <div className="mb-4">ID da célula inválido.</div>
-        <Link href="/cells" className="text-blue-600">Voltar às células</Link>
+        <button onClick={handleBack} className="text-blue-600">Voltar</button>
       </div>
     );
   }
@@ -61,9 +75,9 @@ export default function CellPresencePage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-semibold">Célula {cellName ?? cellId}</h2>
+        <h2 className="text-2xl font-semibold">Célula {celulaName ?? celulaId}</h2>
         <div className="flex items-center gap-2">
-            <Link href="/cells" className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded hover:bg-gray-300 dark:hover:bg-gray-600">Voltar</Link>
+          <button onClick={handleBack} className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded hover:bg-gray-300 dark:hover:bg-gray-600">Voltar</button>
         </div>
       </div>
 

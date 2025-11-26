@@ -2,21 +2,23 @@ import api from '@/lib/apiClient';
 import { Member } from '@/types';
 
 export const membersService = {
-  getMembers: async (cellId: number): Promise<Member[]> => {
-    const res = await api.get<Member[]>(`/cells/${cellId}/members`);
+  getMembers: async (celulaId: number): Promise<Member[]> => {
+    const res = await api.get<Member[]>(`/celulas/${celulaId}/members`);
     return res.data;
   },
 
-  addMember: async (cellId: number, data: { name: string }): Promise<Member> => {
-    const res = await api.post<Member>(`/cells/${cellId}/members`, data);
+  addMember: async (celulaId: number, data: Partial<Member> & { name: string }): Promise<Member> => {
+    const res = await api.post<Member>(`/celulas/${celulaId}/members`, data);
     return res.data;
   },
-  updateMember: async (cellId: number, memberId: number, data: { name: string }): Promise<Member> => {
-    const res = await api.put<Member>(`/cells/${cellId}/members/${memberId}`, data);
+  updateMember: async (celulaId: number, memberId: number, data: Partial<Member>): Promise<Member> => {
+    // backend exposes member update at /members/:memberId
+    const res = await api.put<Member>(`/members/${memberId}`, data);
     return res.data;
   },
 
-  deleteMember: async (cellId: number, memberId: number): Promise<void> => {
-    await api.delete(`/cells/${cellId}/members/${memberId}`);
+  deleteMember: async (celulaId: number, memberId: number): Promise<void> => {
+    // backend exposes member deletion/inactivation at /members/:memberId
+    await api.delete(`/members/${memberId}`);
   },
 };
