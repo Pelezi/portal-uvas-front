@@ -18,6 +18,7 @@ import Link from 'next/link';
 export default function CelulasPage() {
   const [groups, setGroups] = useState<Celula[]>([]);
   const [cellMembersCount, setCellMembersCount] = useState<Record<number, number>>({});
+  const [cellHasInactive, setCellHasInactive] = useState<Record<number, boolean>>({});
   const [confirmingCelula, setConfirmingCelula] = useState<Celula | null>(null);
   const [name, setName] = useState('');
   // leader selection via autocomplete
@@ -128,17 +129,21 @@ export default function CelulasPage() {
         setGroups(g);
       }
       // load member counts per célula
-      try {
-        const counts: Record<number, number> = {};
-        await Promise.all((g || []).map(async (c: any) => {
-          try {
-            const m = await membersService.getMembers(c.id);
-            counts[c.id] = (m || []).length;
-          } catch (err) {
-            counts[c.id] = 0;
-          }
-        }));
-        setCellMembersCount(counts);
+        try {
+          const counts: Record<number, number> = {};
+          const inactiveMap: Record<number, boolean> = {};
+          await Promise.all((g || []).map(async (c: any) => {
+            try {
+              const m = await membersService.getMembers(c.id);
+              counts[c.id] = (m || []).length;
+              inactiveMap[c.id] = (m || []).some((mm: any) => mm.status === 'INACTIVE');
+            } catch (err) {
+              counts[c.id] = 0;
+              inactiveMap[c.id] = false;
+            }
+          }));
+          setCellMembersCount(counts);
+          setCellHasInactive(inactiveMap);
       } catch (err) {
         console.error('failed loading member counts', err);
       }
@@ -385,12 +390,18 @@ export default function CelulasPage() {
                         return (
                           <button
                             onClick={() => {
-                              if (disabled) { return toast.error('Não é possível apagar célula com membros associados'); }
+                              const memberCountLocal = cellMembersCount[g.id] ?? 0;
+                              const hasInactive = cellHasInactive[g.id] ?? false;
+                              const disabledLocal = memberCountLocal > 0 || hasInactive;
+                              if (disabledLocal) {
+                                if (hasInactive) return toast.error('Não é possível apagar célula: possui membros inativos');
+                                return toast.error('Não é possível apagar célula com membros associados');
+                              }
                               setConfirmingCelula(g);
                             }}
-                            title={disabled ? 'Não é possível apagar: possui membros associados' : 'Excluir célula'}
-                            disabled={disabled}
-                            className={`p-1 rounded ${disabled ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900'}`}
+                            title={(cellHasInactive[g.id] ?? false) ? 'Não é possível apagar: possui membros inativos' : (disabled ? 'Não é possível apagar: possui membros associados' : 'Excluir célula')}
+                            disabled={(cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)}
+                            className={`p-1 rounded ${((cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)) ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900'}`}
                             aria-label={`Excluir ${g.name}`}
                           >
                             <FiTrash2 className="h-4 w-4" aria-hidden />
@@ -575,6 +586,34 @@ export default function CelulasPage() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setMultiplyingCelula(null)} className="px-3 py-1">Cancelar</button>
               <button onClick={submitMultiply} className="px-3 py-1 bg-indigo-600 text-white rounded">Multiplicar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmingCelula && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-55">
+          <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
+            <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">Confirmar exclusão</h4>
+            <div className="mb-4 text-sm text-gray-700 dark:text-gray-300">Tem certeza que deseja excluir a célula <strong>{confirmingCelula.name}</strong>? Esta ação é irreversível.</div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmingCelula(null)} className="px-3 py-1">Cancelar</button>
+              <button
+                onClick={async () => {
+                  try {
+                    await celulasService.deleteCelula(confirmingCelula.id);
+                    toast.success('Célula excluída');
+                    setConfirmingCelula(null);
+                    await load();
+                  } catch (e) {
+                    console.error(e);
+                    toast.error('Falha ao excluir célula');
+                  }
+                }}
+                className="px-3 py-1 bg-red-600 text-white rounded"
+              >
+                Excluir
+              </button>
             </div>
           </div>
         </div>
