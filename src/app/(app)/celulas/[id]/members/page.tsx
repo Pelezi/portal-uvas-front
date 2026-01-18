@@ -4,15 +4,17 @@ import React, { useEffect, useState, use } from 'react';
 import { membersService } from '@/services/membersService';
 import { Member } from '@/types';
 import toast from 'react-hot-toast';
+import { ErrorMessages } from '@/lib/errorHandler';
 import Link from 'next/link';
+import MemberModal from '@/components/MemberModal';
 
-export default function CelulaMembersPage({ params }: { params: any }) {
+export default function CelulaMembersPage({ params }: { params: Promise<{ id: string }> }) {
   // `params` may be a Promise (Next routing). Unwrap it with React.use()
-  const resolvedParams = use(params) as { id: string };
+  const resolvedParams = use(params);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingName, setEditingName] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMember, setModalMember] = useState<Member | null>(null);
 
   const celulaId = parseInt(resolvedParams.id, 10);
 
@@ -24,7 +26,7 @@ export default function CelulaMembersPage({ params }: { params: any }) {
       setMembers(m as Member[]);
     } catch (err) {
       console.error(err);
-      toast.error('Falha ao carregar membros');
+      toast.error(ErrorMessages.loadMembers(err));
     } finally {
       setLoading(false);
     }
@@ -32,23 +34,37 @@ export default function CelulaMembersPage({ params }: { params: any }) {
 
   useEffect(() => { load(); }, [resolvedParams.id]);
 
-  const startEdit = (m: Member) => { setEditingId(m.id); setEditingName(m.name); };
-  const saveEdit = async () => {
-    if (editingId == null) return;
+  const openEditModal = (member: Member) => {
+    setModalMember(member);
+    setIsModalOpen(true);
+  };
+
+  const handleModalSave = async (memberData: Partial<Member>) => {
     try {
-      await membersService.updateMember(celulaId, editingId, { name: editingName });
-      toast.success('Atualizado');
-      setEditingId(null); setEditingName('');
+      if (modalMember?.id) {
+        // Edit existing member
+        await membersService.updateMember(celulaId, modalMember.id, memberData);
+        toast.success('Membro atualizado com sucesso');
+      }
+      setIsModalOpen(false);
+      setModalMember(null);
       load();
-    } catch (err) { console.error(err); toast.error('Falha ao atualizar'); }
+    } catch (err) {
+      console.error(err);
+      toast.error(ErrorMessages.updateMember(err));
+    }
   };
 
   const remove = async (memberId: number) => {
     if (!confirm('Remover membro?')) return;
     try {
       await membersService.deleteMember(celulaId, memberId);
-      toast.success('Removido'); load();
-    } catch (err) { console.error(err); toast.error('Falha ao remover'); }
+      toast.success('Membro removido com sucesso!'); 
+      load();
+    } catch (err) { 
+      console.error(err); 
+      toast.error(ErrorMessages.deleteMember(err)); 
+    }
   };
 
   return (
@@ -69,7 +85,7 @@ export default function CelulaMembersPage({ params }: { params: any }) {
                 <div className="text-sm text-gray-500 dark:text-gray-400">id: {m.id}</div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => startEdit(m)} className="px-3 py-1 bg-yellow-400 rounded">Editar</button>
+                <button onClick={() => openEditModal(m)} className="px-3 py-1 bg-yellow-400 rounded">Editar</button>
                 <button onClick={() => remove(m.id)} className="px-3 py-1 bg-red-500 text-white rounded">Remover</button>
               </div>
             </li>
@@ -77,18 +93,15 @@ export default function CelulaMembersPage({ params }: { params: any }) {
         </ul>
       )}
 
-      {editingId != null && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded w-11/12 sm:w-96">
-            <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">Editar membro</h4>
-            <input value={editingName} onChange={(e) => setEditingName(e.target.value)} className="border p-2 rounded w-full mb-4 bg-white dark:bg-gray-700 dark:text-white" />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setEditingId(null)} className="px-3 py-1">Cancelar</button>
-              <button onClick={saveEdit} className="px-3 py-1 bg-blue-600 text-white rounded">Salvar</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MemberModal
+        member={modalMember}
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setModalMember(null);
+        }}
+        onSave={handleModalSave}
+      />
     </div>
   );
 }

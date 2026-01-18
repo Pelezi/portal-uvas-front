@@ -12,12 +12,12 @@ export const celulasService = {
     return res.data;
   },
 
-  createCelula: async (data: { name: string; leaderUserId?: number; discipuladoId?: number }): Promise<Celula> => {
+  createCelula: async (data: { name: string; leaderMemberId?: number; discipuladoId?: number }): Promise<Celula> => {
     const res = await api.post<Celula>('/celulas', data);
     return res.data;
   },
 
-  updateCelula: async (id: number, data: { name?: string; leaderUserId?: number }): Promise<Celula> => {
+  updateCelula: async (id: number, data: { name?: string; leaderMemberId?: number; discipuladoId?: number }): Promise<Celula> => {
     const res = await api.put<Celula>(`/celulas/${id}`, data);
     return res.data;
   },
@@ -31,8 +31,8 @@ export const celulasService = {
     data: {
       memberIds: number[];
       newCelulaName: string;
-      newLeaderUserId?: number;
-      oldLeaderUserId?: number;
+      newLeaderMemberId?: number;
+      oldLeaderMemberId?: number;
     }
   ): Promise<void> => {
     await api.post(`/celulas/${id}/multiply`, data);

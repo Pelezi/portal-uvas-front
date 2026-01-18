@@ -55,7 +55,7 @@ Observação: o `apiClient` do frontend pode também definir a URL base diretame
 - `src/app/` — rotas/pages (Next.js App Router). Rotas notáveis: `auth`, `(app)/report`, `(app)/users`, `(app)/celulas`, `(app)/members`.
 - `src/components/` — componentes reutilizáveis (Sidebar, Dashboard, Providers, etc.).
 - `src/services/` — serviços que fazem chamadas HTTP ao backend (`userService`, `celulasService`, `membersService`, `reportsService`).
-- `src/lib/` — utilitários (ex.: `apiClient.ts`, `store.ts`, timezone helpers).
+- `src/lib/` — utilitários (ex.: `apiClient.ts`, `store.ts`).
 
 ## Integração com o backend
 

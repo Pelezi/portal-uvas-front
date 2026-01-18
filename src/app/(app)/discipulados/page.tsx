@@ -9,11 +9,11 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
-import { userService } from '@/services/userService';
+import { memberService } from '@/services/memberService';
 import { celulasService } from '@/services/celulasService';
-import { Discipulado, Celula } from '@/types';
+import { Discipulado, Celula, Rede, Member } from '@/types';
 import toast from 'react-hot-toast';
-import CreateUserModal from '@/components/CreateUserModal';
+import { ErrorMessages } from '@/lib/errorHandler';
 import { createTheme, ThemeProvider } from '@mui/material';
 import { FiTrash2, FiPlus } from 'react-icons/fi';
 
@@ -21,14 +21,14 @@ export default function DiscipuladosPage() {
   const [list, setList] = useState<Discipulado[]>([]);
   const [selected, setSelected] = useState<Discipulado | null>(null);
   const [celulas, setCelulas] = useState<Celula[]>([]);
-  const [redes, setRedes] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [redes, setRedes] = useState<Rede[]>([]);
+  const [users, setUsers] = useState<Member[]>([]);
   // filters
   const [filterDiscipuladorQuery, setFilterDiscipuladorQuery] = useState('');
   const [filterDiscipuladorId, setFilterDiscipuladorId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
   const [showFilterDiscipuladoresDropdown, setShowFilterDiscipuladoresDropdown] = useState(false);
-  const filterDiscipuladorDropdownRef = useRef<any>(null);
+  const filterDiscipuladorDropdownRef = useRef<HTMLDivElement>(null);
   const filterDiscipuladorTimeoutRef = useRef<number | null>(null);
   // creation
   const [createDiscipuladoModalOpen, setCreateDiscipuladoModalOpen] = useState(false);
@@ -36,20 +36,16 @@ export default function DiscipuladosPage() {
   const [createDiscipuladorId, setCreateDiscipuladorId] = useState<number | null>(null);
   const [createDiscipuladorName, setCreateDiscipuladorName] = useState('');
   const [createRedeId, setCreateRedeId] = useState<number | null>(null);
-  const createDiscipuladorDropdownRef = useRef<any>(null);
+  const createDiscipuladorDropdownRef = useRef<HTMLDivElement>(null);
   const createDiscipuladorTimeoutRef = useRef<number | null>(null);
   const [showCreateDiscipuladoresDropdown, setShowCreateDiscipuladoresDropdown] = useState(false);
-  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-  const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserFirstName, setNewUserFirstName] = useState('');
-  const [newUserLastName, setNewUserLastName] = useState('');
 
   // edit modal state
   const [editDiscipuladoModalOpen, setEditDiscipuladoModalOpen] = useState(false);
   const [editDiscipuladorQuery, setEditDiscipuladorQuery] = useState('');
   const [editDiscipuladorId, setEditDiscipuladorId] = useState<number | null>(null);
   const [editDiscipuladorName, setEditDiscipuladorName] = useState('');
-  const editDiscipuladorDropdownRef = useRef<any>(null);
+  const editDiscipuladorDropdownRef = useRef<HTMLDivElement>(null);
   const editDiscipuladorTimeoutRef = useRef<number | null>(null);
   const [showEditDiscipuladoresDropdown, setShowEditDiscipuladoresDropdown] = useState(false);
   const [editDiscipuladoId, setEditDiscipuladoId] = useState<number | null>(null);
@@ -70,7 +66,7 @@ export default function DiscipuladosPage() {
       try {
         const allCells = await celulasService.getCelulas();
         const counts: Record<number, number> = {};
-        (allCells || []).forEach((c: any) => {
+        (allCells || []).forEach((c) => {
           if (!c.discipuladoId) return;
           counts[c.discipuladoId] = (counts[c.discipuladoId] || 0) + 1;
         });
@@ -80,7 +76,7 @@ export default function DiscipuladosPage() {
       }
     } catch (err) {
       console.error(err);
-      toast.error('Falha ao carregar discipulados');
+      toast.error(ErrorMessages.loadDiscipulados(err));
     }
   };
 
@@ -91,7 +87,8 @@ export default function DiscipuladosPage() {
       try {
         const r = await redesService.getRedes();
         setRedes(r || []);
-        const u = await userService.list();
+        // Carregar apenas usuários que podem ser discipuladores (PRESIDENT_PASTOR, PASTOR ou DISCIPULADOR)
+        const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR' });
         setUsers(u || []);
       } catch (err) { console.error('failed loading redes/users', err); }
     };
@@ -105,10 +102,9 @@ export default function DiscipuladosPage() {
   const create = async () => {
     try {
       if (!createRedeId) throw new Error('Selecione uma rede');
-      if (!createDiscipuladorId) throw new Error('Selecione um discipulador');
       const discipulador = users.find(u => u.id === createDiscipuladorId);
-      const nameForApi = discipulador ? `${discipulador.firstName} ${discipulador.lastName}` : '';
-      const created = await discipuladosService.createDiscipulado({ name: nameForApi, redeId: createRedeId, discipuladorUserId: createDiscipuladorId });
+      const nameForApi = discipulador ? discipulador.name : 'Sem discipulador';
+      const created = await discipuladosService.createDiscipulado({ name: nameForApi, redeId: createRedeId, discipuladorMemberId: createDiscipuladorId || undefined });
       setCreateDiscipuladorId(null); setCreateDiscipuladorName(''); setCreateRedeId(null); setCreateDiscipuladoModalOpen(false);
       toast.success('Discipulado criado');
       await load();
@@ -119,15 +115,15 @@ export default function DiscipuladosPage() {
       setDiscipuladoCellCountMap(prev => ({ ...prev, [created.id]: cellsForCreated.length }));
     } catch (err) {
       console.error(err);
-      toast.error('Falha ao criar discipulado');
+      toast.error(ErrorMessages.createDiscipulado(err));
     }
   };
 
   const openEditModal = (d: Discipulado) => {
     setEditDiscipuladoId(d.id);
     setEditRedeId(d.redeId ?? null);
-    setEditDiscipuladorId(d.discipuladorUserId ?? null);
-    setEditDiscipuladorName(getUserName(d.discipuladorUserId));
+    setEditDiscipuladorId(d.discipuladorMemberId ?? null);
+    setEditDiscipuladorName(getUserName(d.discipuladorMemberId));
     setEditDiscipuladorQuery('');
     setShowEditDiscipuladoresDropdown(false);
     setEditDiscipuladoModalOpen(true);
@@ -137,16 +133,15 @@ export default function DiscipuladosPage() {
     try {
       if (!editDiscipuladoId) throw new Error('Selecione um discipulado');
       if (!editRedeId) throw new Error('Selecione uma rede');
-      if (!editDiscipuladorId) throw new Error('Selecione um discipulador');
       const discipulador = users.find(u => u.id === editDiscipuladorId);
-      const nameForApi = discipulador ? `${discipulador.firstName} ${discipulador.lastName}` : '';
-      await discipuladosService.updateDiscipulado(editDiscipuladoId, { name: nameForApi, redeId: editRedeId, discipuladorUserId: editDiscipuladorId });
+      const nameForApi = discipulador ? discipulador.name : 'Sem discipulador';
+      await discipuladosService.updateDiscipulado(editDiscipuladoId, { name: nameForApi, redeId: editRedeId, discipuladorMemberId: editDiscipuladorId || undefined });
       setEditDiscipuladoModalOpen(false);
       toast.success('Discipulado atualizado');
       await load();
     } catch (err) {
       console.error(err);
-      toast.error('Falha ao atualizar discipulado');
+      toast.error(ErrorMessages.updateDiscipulado(err));
     }
   };
 
@@ -161,39 +156,42 @@ export default function DiscipuladosPage() {
         setDiscipuladoCellCountMap(prev => ({ ...prev, [d.id]: cells.length }));
       }
       setExpandedDiscipulados(prev => ({ ...prev, [d.id]: !currently }));
-    } catch (err) { console.error(err); toast.error('Falha ao carregar células'); }
+    } catch (err) { 
+      console.error(err); 
+      toast.error(ErrorMessages.loadCelulas(err)); 
+    }
   };
 
   const deleteDiscipulado = async (d: Discipulado) => {
     try {
       const allCelulas = await celulasService.getCelulas();
-      const children = (allCelulas || []).filter((c:any) => c.discipuladoId === d.id);
+      const children = (allCelulas || []).filter((c: Celula) => c.discipuladoId === d.id);
       if (children.length > 0) {
         return toast.error('Não é possível apagar discipulado com células associadas');
       }
     } catch (err) {
       console.error(err);
-      return toast.error('Falha ao verificar associações');
+      return toast.error(ErrorMessages.checkAssociations(err));
     }
-    if (!confirm(`Remover discipulado de ${getUserName(d.discipuladorUserId)}?`)) return;
+    if (!confirm(`Remover discipulado de ${getUserName(d.discipuladorMemberId)}?`)) return;
     try {
       await discipuladosService.deleteDiscipulado(d.id);
-      toast.success('Discipulado removido');
+      toast.success('Discipulado removido com sucesso!');
       await load();
     } catch (err) {
       console.error(err);
-      toast.error('Falha ao remover discipulado');
+      toast.error(ErrorMessages.deleteDiscipulado(err));
     }
   };
 
   const getUserName = (id?: number | null) => {
     if (!id) return '';
     const u = users.find(x => x.id === id);
-    return u ? `${u.firstName} ${u.lastName}` : '';
+    return u ? u.name : '';
   };
 
   // users that are discipuladores in the current list
-  const discipuladorIds = new Set<number>(list.map(d => d.discipuladorUserId).filter(Boolean) as number[]);
+  const discipuladorIds = new Set<number>(list.map(d => d.discipuladorMemberId).filter(Boolean) as number[]);
 
   const muiTheme = createTheme({
     palette: {
@@ -223,11 +221,11 @@ export default function DiscipuladosPage() {
                   {users.filter(u => discipuladorIds.has(u.id)).filter(u => {
                     const q = (filterDiscipuladorQuery || '').toLowerCase();
                     if (!q) return true;
-                    return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+                    return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                   }).map(u => (
                     <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterDiscipuladorId(u.id); setFilterDiscipuladorQuery(''); setShowFilterDiscipuladoresDropdown(false); }}>
                       <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{u.firstName} {u.lastName}</div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
                       </div>
                       <div className="text-xs text-green-600">Selecionar</div>
@@ -243,13 +241,13 @@ export default function DiscipuladosPage() {
                 <Select
                   labelId="rede-filter-label"
                   value={filterRedeId ?? ''}
-                  onChange={(e: any) => setFilterRedeId(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => setFilterRedeId(e.target.value ? Number(e.target.value) : null)}
                   label="Rede"
                   size="small"
                   className="bg-white dark:bg-gray-800"
                 >
                   <MenuItem value="">Todas redes</MenuItem>
-                  {redes.map((r: any) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                  {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
                 </Select>
               </FormControl>
             </ThemeProvider>
@@ -261,9 +259,9 @@ export default function DiscipuladosPage() {
           <ul className="space-y-2">
             {list
               .filter(d => !filterRedeId || d.redeId === filterRedeId)
-              .filter(d => !filterDiscipuladorId || d.discipuladorUserId === filterDiscipuladorId)
+              .filter(d => !filterDiscipuladorId || d.discipuladorMemberId === filterDiscipuladorId)
               .map(d => (
-                <li key={d.id} className="border p-2 rounded">
+                <li key={d.id} className={`border p-2 rounded ${!d.discipuladorMemberId ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : ''}`}>
                   <CollapsibleItem
                     isOpen={!!expandedDiscipulados[d.id]}
                     onToggle={() => onToggleDiscipulado(d)}
@@ -286,13 +284,13 @@ export default function DiscipuladosPage() {
                               );
                       })()
                     }
-                    title={<>{(users.find(u => u.id === d.discipuladorUserId)?.firstName || '')} {(users.find(u => u.id === d.discipuladorUserId)?.lastName || '')} <span className="text-sm text-gray-500 ml-2">({discipuladoCellCountMap[d.id] ?? (discipuladoCelulasMap[d.id]?.length ?? 0)} células)</span></>}
+                    title={<>{(users.find(u => u.id === d.discipuladorMemberId)?.name || <span className="text-red-600 dark:text-red-400">Sem discipulador</span>)} <span className="text-sm text-gray-500 ml-2">({discipuladoCellCountMap[d.id] ?? (discipuladoCelulasMap[d.id]?.length ?? 0)} células)</span></>}
                     subtitle={<>{`rede: ${d.rede.name}`}</>}
                     duration={250}
                   >
                     {(discipuladoCelulasMap[d.id] || []).length === 0 && <div className="text-xs text-gray-500">Nenhuma célula</div>}
                     <ul className="space-y-1">
-                      {(discipuladoCelulasMap[d.id] || []).map((c:any) => (
+                      {(discipuladoCelulasMap[d.id] || []).map((c: Celula) => (
                         <li key={c.id} className="text-sm border p-1 rounded">{c.name} (id: {c.id})</li>
                       ))}
                     </ul>
@@ -325,12 +323,12 @@ export default function DiscipuladosPage() {
                     <Select 
                     labelId="create-rede-label" 
                     value={createRedeId ?? ''} 
-                    onChange={(e: any) => setCreateRedeId(e.target.value ? Number(e.target.value) : null)} 
+                    onChange={(e) => setCreateRedeId(e.target.value ? Number(e.target.value) : null)} 
                     label="Rede" 
                     size="small" 
                     className="bg-white dark:bg-gray-800 w-full">
                       <MenuItem value="">Selecione rede</MenuItem>
-                      {redes.map((r: any) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                      {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
                     </Select>
                   </FormControl>
                 </ThemeProvider>
@@ -355,19 +353,17 @@ export default function DiscipuladosPage() {
                     {users.filter(u => {
                       const q = (createDiscipuladorQuery || '').toLowerCase();
                       if (!q) return true;
-                      return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+                      return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                     }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setCreateDiscipuladorId(u.id); setCreateDiscipuladorName(`${u.firstName} ${u.lastName}`); setCreateDiscipuladorQuery(''); setShowCreateDiscipuladoresDropdown(false); }}>
+                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setCreateDiscipuladorId(u.id); setCreateDiscipuladorName(u.name); setCreateDiscipuladorQuery(''); setShowCreateDiscipuladoresDropdown(false); }}>
+
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.firstName} {u.lastName}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
                           <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
                         </div>
                         <div className="text-xs text-green-600">Selecionar</div>
                       </div>
                     ))}
-                    <div className="px-3 py-2 border-t text-center sticky bottom-0 bg-white dark:bg-gray-800">
-                      <button onMouseDown={(e) => { e.preventDefault(); setShowCreateUserModal(true); }} className="text-sm text-blue-600">Criar novo usuário</button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -397,12 +393,12 @@ export default function DiscipuladosPage() {
                     <Select 
                     labelId="edit-rede-label" 
                     value={editRedeId ?? ''} 
-                    onChange={(e: any) => setEditRedeId(e.target.value ? Number(e.target.value) : null)} 
+                    onChange={(e) => setEditRedeId(e.target.value ? Number(e.target.value) : null)} 
                     label="Rede" 
                     size="small" 
                     className="bg-white dark:bg-gray-800 w-full">
                       <MenuItem value="">Selecione rede</MenuItem>
-                      {redes.map((r: any) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                      {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
                     </Select>
                   </FormControl>
                 </ThemeProvider>
@@ -427,19 +423,16 @@ export default function DiscipuladosPage() {
                     {users.filter(u => {
                       const q = (editDiscipuladorQuery || '').toLowerCase();
                       if (!q) return true;
-                      return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+                      return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                     }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setEditDiscipuladorId(u.id); setEditDiscipuladorName(`${u.firstName} ${u.lastName}`); setEditDiscipuladorQuery(''); setShowEditDiscipuladoresDropdown(false); }}>
+                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setEditDiscipuladorId(u.id); setEditDiscipuladorName(u.name); setEditDiscipuladorQuery(''); setShowEditDiscipuladoresDropdown(false); }}>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.firstName} {u.lastName}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
                           <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
                         </div>
                         <div className="text-xs text-green-600">Selecionar</div>
                       </div>
                     ))}
-                    <div className="px-3 py-2 border-t text-center sticky bottom-0 bg-white dark:bg-gray-800">
-                      <button onMouseDown={(e) => { e.preventDefault(); setShowCreateUserModal(true); }} className="text-sm text-blue-600">Criar novo usuário</button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -452,19 +445,6 @@ export default function DiscipuladosPage() {
           </div>
         </div>
       )}
-
-      <CreateUserModal open={showCreateUserModal} onClose={() => setShowCreateUserModal(false)} onCreated={(created) => {
-        setUsers((prev) => [created, ...prev]);
-        // prefer editing selection if edit modal open
-        if (editDiscipuladoModalOpen) {
-          setEditDiscipuladorId(created.id);
-          setEditDiscipuladorName(`${created.firstName} ${created.lastName}`);
-        } else {
-          setCreateDiscipuladorId(created.id);
-          setCreateDiscipuladorName(`${created.firstName} ${created.lastName}`);
-        }
-        setShowCreateUserModal(false);
-      }} />
     </>
   );
 }

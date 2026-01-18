@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import api from '@/lib/apiClient';
+import { authService } from '@/services/authService';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,8 +22,8 @@ export default function LoginPage() {
     try {
       const result = await login(email, password);
       // If backend returned a setPasswordUrl, redirect the user immediately to define password
-      if ((result as any)?.setPasswordUrl) {
-        window.location.href = (result as any).setPasswordUrl;
+      if ('setPasswordUrl' in result) {
+        window.location.href = result.setPasswordUrl;
         return;
       }
       router.push('/report');
@@ -39,7 +39,7 @@ export default function LoginPage() {
   const handleRequestSetPassword = async () => {
     setError('');
     try {
-      await api.post('/users/request-set-password', { email });
+      await authService.requestSetPassword(email);
       setError('Link enviado. Verifique seu e-mail.');
     } catch (e) {
       setError('Falha ao enviar link');

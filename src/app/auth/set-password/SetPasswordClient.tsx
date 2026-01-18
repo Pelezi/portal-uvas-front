@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '@/lib/apiClient';
+import { authService } from '@/services/authService';
 import toast from 'react-hot-toast';
 
 export default function SetPasswordClient({ token }: { token: string }) {
@@ -53,11 +53,14 @@ export default function SetPasswordClient({ token }: { token: string }) {
         toast.error('Token ausente na URL.');
         return;
       }
-      await api.post('/users/set-password', { token: tk, password });
+      await authService.setPassword(tk, password);
       toast.success('Senha definida. Redirecionando para login...');
       setTimeout(() => router.push('/auth/login'), 1200);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Falha ao definir senha');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error && 'response' in err 
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message 
+        : undefined;
+      toast.error(errorMessage || 'Falha ao definir senha');
     }
   };
 

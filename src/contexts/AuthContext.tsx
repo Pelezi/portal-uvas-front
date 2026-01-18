@@ -1,21 +1,21 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '@/types';
+import { Member, SetPasswordResponse, AuthResponse } from '@/types';
 import { authService } from '@/services/authService';
 
 interface AuthContextType {
-  user: User | null;
+  user: Member | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<User | { setPasswordUrl: string }>;
+  login: (email: string, password: string) => Promise<Member | SetPasswordResponse>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Member | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -32,15 +32,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     const response = await authService.login(email, password);
     // If backend returned a setPasswordUrl (user has no password), bubble it up so the UI can redirect.
-    if (response && typeof response === 'object' && 'setPasswordUrl' in response) {
-      return response as { setPasswordUrl: string };
+    if ('setPasswordUrl' in response) {
+      return response as SetPasswordResponse;
     }
 
     // From here, response is an AuthResponse
-    const auth = response as unknown as { user: User; permission?: any };
-    const mergedUser: User = {
+    const auth = response as AuthResponse;
+    const mergedUser: Member = {
       ...auth.user,
-      permission: (auth as any).permission ?? auth.user.permission ?? null,
+      permission: auth.permission ?? auth.user.permission ?? null,
     };
     setUser(mergedUser);
     authService.setCurrentUser(mergedUser);

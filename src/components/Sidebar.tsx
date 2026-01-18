@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, FileText, Home, User, Menu, X } from 'lucide-react';
+import { Users, FileText, Home, User, Menu, X, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCallback, useEffect, useState } from 'react';
@@ -67,24 +67,19 @@ export default function Sidebar() {
 
   // Compute permissions
   const perm: Permission = user.permission;
-  const isAdmin = perm.admin;
-  const isPastor = perm.admin || perm.pastor;
-  const isDiscipulador = perm.admin || perm.pastor || perm.discipulador;
-  const isLeader = perm.admin || perm.pastor || perm.discipulador || perm.leader;
-
-  const homeHref = isAdmin ? '/users' 
-  : isPastor ? '/redes'
-  : isDiscipulador ? '/discipulados'
-  : '/report';
+  const isAdmin = perm.isAdmin;
+  const isPastor = perm.isAdmin || perm.pastor;
+  const isDiscipulador = perm.isAdmin || perm.pastor || perm.discipulador;
+  const isLeader = perm.isAdmin || perm.pastor || perm.discipulador || perm.leader;
 
   const navItems: NavItem[] = [
-    { href: homeHref, label: 'Início', icon: <Home size={18} />, matchPrefix: false },
+    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false },
     { href: '/report', label: 'Relatório', icon: <FileText size={18} />, matchPrefix: false },
     { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
     { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
     { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
     { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'pastor' },
-    { href: '/users', label: 'Usuários', icon: <User size={18} />, matchPrefix: false, require: 'discipulador' },
+    { href: '/settings', label: 'Configurações', icon: <Settings size={18} />, matchPrefix: true, require: 'admin' },
   ];
 
   return (

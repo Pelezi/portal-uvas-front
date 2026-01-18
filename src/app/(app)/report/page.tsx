@@ -135,7 +135,7 @@ export default function ReportPage() {
             <h3 className="font-medium">Membros</h3>
             {selectedGroup && (
               <Link href={`/celulas/${selectedGroup}/presence?from=report`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Acompanhamento">
-                <LuHistory className="h-4 w-4 text-teal-600" aria-hidden />
+                <LuHistory className="h-5 w-5 text-teal-600" aria-hidden />
               </Link>
             )}
           </div>

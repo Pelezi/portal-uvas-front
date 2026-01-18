@@ -7,12 +7,12 @@ export const redesService = {
     return res.data;
   },
 
-  createRede: async (data: { name: string; pastorUserId: number }): Promise<Rede> => {
+  createRede: async (data: { name: string; pastorMemberId?: number }): Promise<Rede> => {
     const res = await api.post<Rede>('/redes', data);
     return res.data;
   }
   ,
-  updateRede: async (id: number, data: { name?: string; pastorUserId?: number }): Promise<Rede> => {
+  updateRede: async (id: number, data: { name?: string; pastorMemberId?: number }): Promise<Rede> => {
     const res = await api.put<Rede>(`/redes/${id}`, data);
     return res.data;
   }

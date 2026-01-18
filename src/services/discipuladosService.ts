@@ -7,11 +7,11 @@ export const discipuladosService = {
     return res.data;
   },
 
-  createDiscipulado: async (data: { name: string; redeId: number; discipuladorUserId?: number }): Promise<Discipulado> => {
+  createDiscipulado: async (data: { name: string; redeId: number; discipuladorMemberId?: number }): Promise<Discipulado> => {
     const res = await api.post<Discipulado>('/discipulados', data);
     return res.data;
   },
-  updateDiscipulado: async (id: number, data: { name?: string; redeId?: number; discipuladorUserId?: number }): Promise<Discipulado> => {
+  updateDiscipulado: async (id: number, data: { name?: string; redeId?: number; discipuladorMemberId?: number }): Promise<Discipulado> => {
     const res = await api.put<Discipulado>(`/discipulados/${id}`, data);
     return res.data;
   },

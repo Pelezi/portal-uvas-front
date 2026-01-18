@@ -5,25 +5,27 @@ import { celulasService } from '@/services/celulasService';
 import { membersService } from '@/services/membersService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
-import { Celula } from '@/types';
-import { userService } from '@/services/userService';
+import { Celula, Member, Discipulado, Rede } from '@/types';
+import { memberService } from '@/services/memberService';
 import { useAuth } from '@/contexts/AuthContext';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
 import toast from 'react-hot-toast';
-import CreateUserModal from '@/components/CreateUserModal';
+import { ErrorMessages } from '@/lib/errorHandler';
 import { FiPlus, FiUsers, FiEdit2, FiCopy, FiTrash2 } from 'react-icons/fi';
 import { LuHistory } from 'react-icons/lu';
 import Link from 'next/link';
+import CelulaModal from '@/components/CelulaModal';
 
 export default function CelulasPage() {
   const [groups, setGroups] = useState<Celula[]>([]);
   const [cellMembersCount, setCellMembersCount] = useState<Record<number, number>>({});
   const [cellHasInactive, setCellHasInactive] = useState<Record<number, boolean>>({});
   const [confirmingCelula, setConfirmingCelula] = useState<Celula | null>(null);
-  const [name, setName] = useState('');
-  // leader selection via autocomplete
-  const [leaderName, setLeaderName] = useState('');
-  const [leaderUserId, setLeaderUserId] = useState<number | null>(null);
+  
+  // Modal states
+  const [showCelulaModal, setShowCelulaModal] = useState(false);
+  const [editingCelula, setEditingCelula] = useState<Celula | null>(null);
+  
   // listing filters
   const [filterName, setFilterName] = useState('');
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
@@ -31,36 +33,13 @@ export default function CelulasPage() {
   const [filterLeaderQuery, setFilterLeaderQuery] = useState('');
   const [filterLeaderId, setFilterLeaderId] = useState<number | null>(null);
   const [showFilterLeaderDropdown, setShowFilterLeaderDropdown] = useState(false);
-  const filterLeaderDropdownRef = useRef<any>(null);
-  const [users, setUsers] = useState<any[]>([]);
-  const [discipulados, setDiscipulados] = useState<any[]>([]);
-  const [redes, setRedes] = useState<any[]>([]);
-  // create modal state
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createName, setCreateName] = useState('');
-  const [createRedeId, setCreateRedeId] = useState<number | null>(null);
-  const [createDiscipuladoId, setCreateDiscipuladoId] = useState<number | null>(null);
-  const [createLeaderQuery, setCreateLeaderQuery] = useState('');
-  const [createLeaderId, setCreateLeaderId] = useState<number | null>(null);
-  const [createLeaderName, setCreateLeaderName] = useState('');
-  const [showCreateLeaderDropdown, setShowCreateLeaderDropdown] = useState(false);
-  const [selectedDiscipuladoId, setSelectedDiscipuladoId] = useState<number | null>(null);
-  const [leaderQuery, setLeaderQuery] = useState('');
-  const [showUsersDropdown, setShowUsersDropdown] = useState(false);
-  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-  const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserFirstName, setNewUserFirstName] = useState('');
-  const [newUserLastName, setNewUserLastName] = useState('');
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingName, setEditingName] = useState('');
-  const [editingLeaderUserId, setEditingLeaderUserId] = useState<number | null>(null);
-  const [editingLeaderName, setEditingLeaderName] = useState('');
-  const [editingLeaderQuery, setEditingLeaderQuery] = useState('');
-  const [editingShowUsersDropdown, setEditingShowUsersDropdown] = useState(false);
+  const filterLeaderDropdownRef = useRef<HTMLDivElement>(null);
+  
+  const [members, setMembers] = useState<Member[]>([]);
+  const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
+  const [redes, setRedes] = useState<Rede[]>([]);
+  
   const { user } = useAuth();
-
-  const leaderDropdownRef = useRef<any>(null);
-  const editingLeaderDropdownRef = useRef<any>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark');
@@ -91,38 +70,23 @@ export default function CelulasPage() {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (showUsersDropdown) {
-        if (leaderDropdownRef.current && !leaderDropdownRef.current.contains(target)) {
-          setShowUsersDropdown(false);
-        }
-      }
-      if (editingShowUsersDropdown) {
-        if (editingLeaderDropdownRef.current && !editingLeaderDropdownRef.current.contains(target)) {
-          setEditingShowUsersDropdown(false);
-        }
-      }
       if (showFilterLeaderDropdown) {
         if (filterLeaderDropdownRef.current && !filterLeaderDropdownRef.current.contains(target)) {
           setShowFilterLeaderDropdown(false);
-        }
-      }
-      if (showCreateLeaderDropdown) {
-        if (leaderDropdownRef.current && !leaderDropdownRef.current.contains(target)) {
-          setShowCreateLeaderDropdown(false);
         }
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showUsersDropdown, editingShowUsersDropdown, showFilterLeaderDropdown, showCreateLeaderDropdown]);
+  }, [showFilterLeaderDropdown]);
 
   const load = async () => {
     try {
       const g = await celulasService.getCelulas();
       const permission = user?.permission;
 
-      if (permission && !permission.admin) {
+      if (permission && !permission.isAdmin) {
         const allowed = permission.celulaIds || [];
         setGroups(g.filter((c) => allowed.includes(c.id)));
       } else {
@@ -132,11 +96,11 @@ export default function CelulasPage() {
         try {
           const counts: Record<number, number> = {};
           const inactiveMap: Record<number, boolean> = {};
-          await Promise.all((g || []).map(async (c: any) => {
+          await Promise.all((g || []).map(async (c) => {
             try {
               const m = await membersService.getMembers(c.id);
               counts[c.id] = (m || []).length;
-              inactiveMap[c.id] = (m || []).some((mm: any) => mm.status === 'INACTIVE');
+              inactiveMap[c.id] = (m || []).some((mm) => mm.isActive === false);
             } catch (err) {
               counts[c.id] = 0;
               inactiveMap[c.id] = false;
@@ -160,8 +124,9 @@ export default function CelulasPage() {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const u = await userService.list();
-        setUsers(u || []);
+        // Carregar apenas usuários que podem ser líderes (PRESIDENT_PASTOR, PASTOR, DISCIPULADOR, LEADER ou LEADER_IN_TRAINING)
+        const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING' });
+        setMembers(u || []);
       } catch (err) {
         console.error('failed load users', err);
       }
@@ -194,43 +159,56 @@ export default function CelulasPage() {
     load();
   }, [user?.permission]);
 
-  const create = async () => {
+  const handleSaveCelula = async (data: { name: string; leaderMemberId?: number; discipuladoId?: number }) => {
     try {
-      await celulasService.createCelula({ name: createName, leaderUserId: createLeaderId || undefined, discipuladoId: createDiscipuladoId || undefined });
-      setCreateName(''); setCreateRedeId(null); setCreateDiscipuladoId(null); setCreateLeaderId(null); setCreateLeaderName(''); setCreateLeaderQuery('');
-      setShowCreateModal(false);
-      toast.success('Célula criada');
+      if (editingCelula) {
+        // Edit mode
+        await celulasService.updateCelula(editingCelula.id, data);
+        toast.success('Célula atualizada com sucesso!');
+      } else {
+        // Create mode
+        await celulasService.createCelula(data);
+        toast.success('Célula criada com sucesso!');
+      }
+      setShowCelulaModal(false);
+      setEditingCelula(null);
       load();
-    } catch (e) { console.error(e); toast.error('Falha ao criar célula'); }
+    } catch (e) {
+      console.error(e);
+      toast.error(editingCelula ? ErrorMessages.updateCelula(e) : ErrorMessages.createCelula(e));
+      throw e; // Re-throw to prevent modal from closing
+    }
   };
 
-  const startEdit = (g: Celula) => {
-    setEditingId(g.id);
-    setEditingName(g.name);
-    setEditingLeaderUserId(g.leader?.id ?? null);
-    setEditingLeaderName(g.leader ? `${g.leader.firstName} ${g.leader.lastName}` : '');
-    setEditingLeaderQuery('');
+  const handleCloseCelulaModal = () => {
+    setShowCelulaModal(false);
+    setEditingCelula(null);
   };
-  const saveEdit = async () => {
-    if (!editingId) return;
-    try {
-      await celulasService.updateCelula(editingId, { name: editingName, leaderUserId: editingLeaderUserId || undefined });
-      setEditingId(null); setEditingName('');
-      setEditingLeaderUserId(null); setEditingLeaderName(''); setEditingLeaderQuery(''); setEditingShowUsersDropdown(false);
-      toast.success('Atualizado'); load();
-    } catch (e) { console.error(e); toast.error('Falha'); }
+
+  const handleOpenCreateModal = () => {
+    setEditingCelula(null);
+    setShowCelulaModal(true);
+  };
+
+  const handleOpenEditModal = (celula: Celula) => {
+    setEditingCelula(celula);
+    setShowCelulaModal(true);
   };
 
   const duplicate = async (g: Celula) => {
     try {
-      await celulasService.createCelula({ name: `${g.name} (cópia)`, leaderUserId: g.leader?.id });
-      toast.success('Célula duplicada'); load();
-    } catch (e) { console.error(e); toast.error('Falha'); }
+      await celulasService.createCelula({ name: `${g.name} (cópia)`, leaderMemberId: g.leader?.id });
+      toast.success('Célula duplicada com sucesso!'); 
+      load();
+    } catch (e) { 
+      console.error(e); 
+      toast.error(ErrorMessages.duplicateCelula(e)); 
+    }
   };
 
   // Multiply: open modal to pick members for the new celula and call backend
   const [multiplyingCelula, setMultiplyingCelula] = useState<Celula | null>(null);
-  const [availableMembers, setAvailableMembers] = useState<any[]>([]);
+  const [availableMembers, setAvailableMembers] = useState<Member[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
   const [newCelulaNameField, setNewCelulaNameField] = useState('');
   const [newLeaderNameField, setNewLeaderNameField] = useState('');
@@ -247,7 +225,7 @@ export default function CelulasPage() {
       setAvailableMembers(m);
     } catch (err) {
       console.error(err);
-      toast.error('Falha ao carregar membros');
+      toast.error(ErrorMessages.loadMembers(err));
     }
   };
 
@@ -261,13 +239,16 @@ export default function CelulasPage() {
       await celulasService.multiplyCelula(multiplyingCelula.id, {
         memberIds: selectedMemberIds,
         newCelulaName: newCelulaNameField,
-        newLeaderUserId: undefined,
-        oldLeaderUserId: undefined,
+        newLeaderMemberId: undefined,
+        oldLeaderMemberId: undefined,
       });
-      toast.success('Célula multiplicada');
+      toast.success('Célula multiplicada com sucesso!');
       setMultiplyingCelula(null);
       load();
-    } catch (e) { console.error(e); toast.error('Falha ao multiplicar'); }
+    } catch (e) { 
+      console.error(e); 
+      toast.error(ErrorMessages.multiplyCelula(e)); 
+    }
   };
 
   // Acompanhamento agora é uma página separada em /celulas/[id]/presence
@@ -289,7 +270,7 @@ export default function CelulasPage() {
                   size='small'
                 >Rede</InputLabel>
                 <Select
-                  labelId="filter-rede-label" value={filterRedeId ?? ''} label="Rede" onChange={(e: any) => { setFilterRedeId(e.target.value ? Number(e.target.value) : null); setFilterDiscipuladoId(null); }} size="small" className="bg-white dark:bg-gray-800">
+                  labelId="filter-rede-label" value={filterRedeId ?? ''} label="Rede" onChange={(e) => { setFilterRedeId(e.target.value ? Number(e.target.value) : null); setFilterDiscipuladoId(null); }} size="small" className="bg-white dark:bg-gray-800">
                   <MenuItem value="">Todas redes</MenuItem>
                   {redes.map(r => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
                 </Select>
@@ -301,27 +282,27 @@ export default function CelulasPage() {
             <ThemeProvider theme={muiTheme}>
               <FormControl fullWidth>
                 <InputLabel id="filter-discipulado-label" size='small'>Discipulado</InputLabel>
-                <Select labelId="filter-discipulado-label" value={filterDiscipuladoId ?? ''} label="Discipulado" onChange={(e: any) => setFilterDiscipuladoId(e.target.value ? Number(e.target.value) : null)} size="small" className="bg-white dark:bg-gray-800">
+                <Select labelId="filter-discipulado-label" value={filterDiscipuladoId ?? ''} label="Discipulado" onChange={(e) => setFilterDiscipuladoId(e.target.value ? Number(e.target.value) : null)} size="small" className="bg-white dark:bg-gray-800">
                   <MenuItem value="">Todos</MenuItem>
-                  {discipulados.filter(d => !filterRedeId || d.redeId === filterRedeId).map(d => (<MenuItem key={d.id} value={d.id}>{d.discipulador.firstName} {d.discipulador.lastName}</MenuItem>))}
+                  {discipulados.filter(discipulado => !filterRedeId || discipulado.redeId === filterRedeId).map(discipulado => (<MenuItem key={discipulado.id} value={discipulado.id}>{discipulado.discipulador?.name}</MenuItem>))}
                 </Select>
               </FormControl>
             </ThemeProvider>
           </div>
 
           <div ref={filterLeaderDropdownRef} className="relative w-full sm:w-64">
-            <input placeholder="Líder" value={filterLeaderQuery || (filterLeaderId ? (users.find(u => u.id === filterLeaderId)?.firstName + ' ' + users.find(u => u.id === filterLeaderId)?.lastName) : '')} onChange={(e) => { setFilterLeaderQuery(e.target.value); setShowFilterLeaderDropdown(true); setFilterLeaderId(null); }} onFocus={() => setShowFilterLeaderDropdown(true)} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10" />
+            <input placeholder="Líder" value={filterLeaderQuery || (filterLeaderId ? members.find(member => member.id === filterLeaderId)?.name : '')} onChange={(e) => { setFilterLeaderQuery(e.target.value); setShowFilterLeaderDropdown(true); setFilterLeaderId(null); }} onFocus={() => setShowFilterLeaderDropdown(true)} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10" />
             {showFilterLeaderDropdown && (
               <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                {users.filter(u => {
+                {members.filter(member => {
                   const q = (filterLeaderQuery || '').toLowerCase();
                   if (!q) return true;
-                  return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
-                }).map(u => (
-                  <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterLeaderId(u.id); setFilterLeaderQuery(''); setShowFilterLeaderDropdown(false); }}>
+                  return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
+                }).map(member => (
+                  <div key={member.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterLeaderId(member.id); setFilterLeaderQuery(''); setShowFilterLeaderDropdown(false); }}>
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{u.firstName} {u.lastName}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">{member.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{member.email}</div>
                     </div>
                     <div className="text-xs text-green-600">Selecionar</div>
                   </div>
@@ -331,27 +312,6 @@ export default function CelulasPage() {
           </div>
         </div>
       </div>
-
-      <CreateUserModal open={showCreateUserModal} onClose={() => setShowCreateUserModal(false)} onCreated={(created) => {
-        setUsers((prev) => [created, ...prev]);
-        // if creating from the create modal, prefer that selection
-        if (showCreateModal) {
-          setCreateLeaderId(created.id);
-          setCreateLeaderName(`${created.firstName} ${created.lastName}`);
-        } else {
-          // legacy: main inline create flow
-          setLeaderUserId(created.id);
-          setLeaderName(`${created.firstName} ${created.lastName}`);
-        }
-        // if creating while editing a celula, select there as well
-        if (editingId) {
-          setEditingLeaderUserId(created.id);
-          setEditingLeaderName(`${created.firstName} ${created.lastName}`);
-          setEditingLeaderQuery('');
-          setEditingShowUsersDropdown(false);
-        }
-        setShowCreateUserModal(false);
-      }} />
 
       <div>
         <h3 className="font-medium mb-2">Células existentes</h3>
@@ -366,18 +326,18 @@ export default function CelulasPage() {
             .filter(g => !filterDiscipuladoId || g.discipuladoId === filterDiscipuladoId)
             .filter(g => !filterLeaderId || g.leader?.id === filterLeaderId)
             .map((g) => (
-              <li key={g.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between border p-3 rounded bg-white dark:bg-gray-900">
+              <li key={g.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border p-3 rounded ${!g.leaderMemberId ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-white dark:bg-gray-900'}`}>
                 <div className="mb-3 sm:mb-0">
-                  <div className="font-medium text-gray-900 dark:text-white">{g.name}</div>
+                  <div className="font-medium text-gray-900 dark:text-white">{g.name} {!g.leaderMemberId && <span className="text-xs text-red-600 dark:text-red-400 ml-2">(sem líder)</span>}</div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">id: {g.id}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link href={`/celulas/${g.id}/members`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Membros" aria-label={`Membros ${g.name}`}>
                     <FiUsers className="h-4 w-4 text-blue-600" aria-hidden />
                   </Link>
-                  {(!user?.permission || user.permission.admin) && (
+                  {(!user?.permission || user.permission.isAdmin) && (
                     <>
-                      <button onClick={() => startEdit(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Editar" aria-label={`Editar ${g.name}`}>
+                      <button onClick={() => handleOpenEditModal(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Editar" aria-label={`Editar ${g.name}`}>
                         <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
                       </button>
                       <button onClick={() => openMultiply(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Multiplicar" aria-label={`Multiplicar ${g.name}`}>
@@ -420,134 +380,20 @@ export default function CelulasPage() {
       </div>
 
       {/* Floating create button */}
-      <button aria-label="Criar célula" onClick={() => setShowCreateModal(true)} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
+      <button aria-label="Criar célula" onClick={handleOpenCreateModal} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
         <FiPlus className="h-7 w-7" aria-hidden />
       </button>
 
-      {/* Create modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-55">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Criar Célula</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-500">Fechar</button>
-            </div>
-            <div className="space-y-3">
-              <input placeholder="Nome da célula" value={createName} onChange={(e) => setCreateName(e.target.value)} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10" />
-
-              <ThemeProvider theme={muiTheme}>
-                <FormControl className="w-full">
-                  <InputLabel id="create-rede-label" size='small'>Rede</InputLabel>
-                  <Select
-                    labelId="create-rede-label"
-                    value={createRedeId ?? ''}
-                    onChange={(e: any) => { setCreateRedeId(e.target.value ? Number(e.target.value) : null); setCreateDiscipuladoId(null); }}
-                    label="Rede"
-                    size="small"
-                    className="bg-white dark:bg-gray-800 w-full">
-                    <MenuItem value="">Selecione rede</MenuItem>
-                    {redes.map((r: any) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
-                  </Select>
-                </FormControl>
-              </ThemeProvider>
-
-              <div>
-                <ThemeProvider theme={muiTheme}>
-                  <FormControl className="w-full">
-                    <InputLabel id="create-discipulado-label" size='small'>Discipulado</InputLabel>
-                    <Select
-                      labelId="create-discipulado-label"
-                      value={createDiscipuladoId ?? ''}
-                      onChange={(e: any) => setCreateDiscipuladoId(e.target.value ? Number(e.target.value) : null)}
-                      label="Discipulado"
-                      size="small"
-                      className="bg-white dark:bg-gray-800 w-full">
-                      <MenuItem value="">Selecione discipulado</MenuItem>
-                      {discipulados.filter(d => !createRedeId || d.redeId === createRedeId).map((d: any) => (<MenuItem key={d.id} value={d.id}>{d.discipulador.firstName} {d.discipulador.lastName}</MenuItem>))}
-                    </Select>
-                  </FormControl>
-                </ThemeProvider>
-              </div>
-
-              <div ref={leaderDropdownRef} className="relative w-full">
-                <input
-                  placeholder="Líder"
-                  value={createLeaderQuery || createLeaderName}
-                  onChange={(e) => { setCreateLeaderQuery(e.target.value); setCreateLeaderName(''); setCreateLeaderId(null); setShowCreateLeaderDropdown(true); }}
-                  onFocus={() => setShowCreateLeaderDropdown(true)}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
-                />
-                {showCreateLeaderDropdown && (
-                  <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                    {users.filter(u => {
-                      const q = (createLeaderQuery || '').toLowerCase();
-                      if (!q) return true;
-                      return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
-                    }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setCreateLeaderId(u.id); setCreateLeaderName(`${u.firstName} ${u.lastName}`); setCreateLeaderQuery(''); setShowCreateLeaderDropdown(false); }}>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.firstName} {u.lastName}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
-                        </div>
-                        <div className="text-xs text-green-600">Selecionar</div>
-                      </div>
-                    ))}
-                    <div className="px-3 py-2 border-t text-center sticky bottom-0 bg-white dark:bg-gray-800">
-                      <button onMouseDown={(e) => { e.preventDefault(); setShowCreateLeaderDropdown(false); setShowCreateUserModal(true); }} className="text-sm text-blue-600">Criar novo usuário</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setShowCreateModal(false)} className="px-3 py-2 border rounded">Cancelar</button>
-                <button onClick={create} className="px-3 py-2 bg-green-600 text-white rounded">Criar célula</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingId && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded w-11/12 sm:w-96">
-            <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">Editar célula</h4>
-            <input value={editingName} onChange={(e) => setEditingName(e.target.value)} className="border p-2 rounded w-full mb-4 bg-white dark:bg-gray-700 dark:text-white" />
-
-            <div className="mb-4">
-              <label className="block text-sm mb-1 text-gray-700 dark:text-gray-300">Líder</label>
-              <div ref={editingLeaderDropdownRef} className="relative w-full">
-                <input placeholder="Líder" value={editingLeaderQuery || editingLeaderName} onChange={(e) => { setEditingLeaderQuery(e.target.value); setEditingShowUsersDropdown(true); setEditingLeaderName(''); setEditingLeaderUserId(null); }} onFocus={() => setEditingShowUsersDropdown(true)} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white" />
-                {editingShowUsersDropdown && (
-                  <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                    {users.filter(u => {
-                      const q = (editingLeaderQuery || '').toLowerCase();
-                      if (!q) return true;
-                      return (`${u.firstName} ${u.lastName}`.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
-                    }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setEditingLeaderUserId(u.id); setEditingLeaderName(`${u.firstName} ${u.lastName}`); setEditingLeaderQuery(''); setEditingShowUsersDropdown(false); }}>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.firstName} {u.lastName}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
-                        </div>
-                        <div className="text-xs text-green-600">Selecionar</div>
-                      </div>
-                    ))}
-                    <div className="px-3 py-2 border-t text-center sticky bottom-0 bg-white dark:bg-gray-800">
-                      <button onMouseDown={(e) => { e.preventDefault(); setEditingShowUsersDropdown(false); setShowCreateUserModal(true); }} className="text-sm text-blue-600">Criar novo usuário</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setEditingId(null)} className="px-3 py-1">Cancelar</button>
-              <button onClick={saveEdit} className="px-3 py-1 bg-blue-600 text-white rounded">Salvar</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* CelulaModal */}
+      <CelulaModal
+        celula={editingCelula}
+        isOpen={showCelulaModal}
+        onClose={handleCloseCelulaModal}
+        onSave={handleSaveCelula}
+        members={members}
+        discipulados={discipulados}
+        redes={redes}
+      />
 
       {multiplyingCelula && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-start sm:items-center justify-center pt-20 sm:pt-0">
@@ -574,7 +420,7 @@ export default function CelulasPage() {
               <div className="font-medium text-gray-900 dark:text-white mb-2">Selecionar membros para a nova célula</div>
               <div className="space-y-2 max-h-56 overflow-auto p-2 border rounded bg-white dark:bg-gray-800">
                 {availableMembers.length === 0 && <div className="text-sm text-gray-500 dark:text-gray-400">Nenhum membro disponível</div>}
-                {availableMembers.map((m: any) => (
+                {availableMembers.map((m) => (
                   <label key={m.id} className="flex items-center gap-2">
                     <input type="checkbox" checked={selectedMemberIds.includes(m.id)} onChange={() => toggleMemberSelection(m.id)} />
                     <span className="text-sm text-gray-900 dark:text-white">{m.name}</span>

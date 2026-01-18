@@ -16,8 +16,8 @@ export default function FirstAccessPage() {
     setLoading(true);
     try {
       const result = await login(email, "");
-      if ((result as any)?.setPasswordUrl) {
-        window.location.href = (result as any).setPasswordUrl;
+      if ('setPasswordUrl' in result) {
+        window.location.href = result.setPasswordUrl;
         return;
       }
       router.push("/report");

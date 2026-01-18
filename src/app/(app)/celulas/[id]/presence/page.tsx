@@ -6,6 +6,7 @@ import { reportsService } from '@/services/reportsService';
 import { celulasService } from '@/services/celulasService';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { Member } from '@/types';
 
 export default function CelulaPresencePage() {
   const params = useParams();
@@ -16,7 +17,7 @@ export default function CelulaPresencePage() {
   const celulaId = idParam ? Number(idParam) : NaN;
 
   const [loading, setLoading] = useState(false);
-  const [presences, setPresences] = useState<Array<{ date: string; members: any[] }>>([]);
+  const [presences, setPresences] = useState<Array<{ date: string; members: Member[] }>>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [celulaName, setCelulaName] = useState<string | null>(null);
 
@@ -35,7 +36,7 @@ export default function CelulaPresencePage() {
         }
         // default collapsed
         const map: Record<string, boolean> = {};
-        (data || []).forEach((d: any) => { map[d.date] = false; });
+        (data || []).forEach((d: { date: string; members: Member[] }) => { map[d.date] = false; });
         setExpanded(map);
       } catch (e) {
         console.error(e);
@@ -104,7 +105,7 @@ export default function CelulaPresencePage() {
               {isOpen && (
                 <div className="p-3 border-t bg-gray-50 dark:bg-gray-900">
                   <ul className="list-disc pl-5 space-y-1">
-                    {(p.members || []).map((m: any) => (
+                    {(p.members || []).map((m: Member) => (
                       <li key={m.id} className="text-sm text-gray-900 dark:text-gray-100">{m.name}</li>
                     ))}
                   </ul>

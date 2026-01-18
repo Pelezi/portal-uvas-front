@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Celula, Member, User, PermissionUpsertInput } from '@/types';
+import { Celula, Member, PermissionUpsertInput } from '@/types';
 
 interface AppState {
   // Celulas (formerly groups)
@@ -15,8 +15,8 @@ interface AppState {
   setCurrentCelulaId: (celulaId: number | null) => void;
 
   // Current user (if available)
-  currentUser: User | null;
-  setCurrentUser: (user: User | null) => void;
+  currentUser: Member | null;
+  setCurrentUser: (user: Member | null) => void;
 
   // Stored permission upserts (useful for batching UI operations)
   pendingPermissions: PermissionUpsertInput[];

@@ -1,14 +1,14 @@
 import api, { apiClient } from '@/lib/apiClient';
-import { AuthResponse, User } from '@/types';
+import { AuthResponse, Member, LoginResponse, SetPasswordResponse } from '@/types';
 
 export const authService = {
-  login: async (email: string, password: string): Promise<AuthResponse | { setPasswordUrl: string }> => {
-    const response = await api.post<AuthResponse | { setPasswordUrl: string }>('/users/login', { email, password });
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    const response = await api.post<LoginResponse>('/auth/login', { email, password });
     const data = response.data;
 
     // If backend returned a setPasswordUrl, return it immediately (no token present)
-    if (data && typeof data === 'object' && 'setPasswordUrl' in data) {
-      return data as { setPasswordUrl: string };
+    if ('setPasswordUrl' in data) {
+      return data as SetPasswordResponse;
     }
 
     // From here we expect an AuthResponse shape
@@ -17,8 +17,8 @@ export const authService = {
       apiClient.setToken(auth.token);
       if (typeof window !== 'undefined') {
         // Merge top-level permission into the persisted user when present
-        const userToPersist = (auth as any).permission
-          ? { ...auth.user, permission: (auth as any).permission }
+        const userToPersist = auth.permission
+          ? { ...auth.user, permission: auth.permission }
           : auth.user;
         localStorage.setItem('user', JSON.stringify(userToPersist));
       }
@@ -42,7 +42,7 @@ export const authService = {
     return null;
   },
 
-  setCurrentUser: (user: User | null) => {
+  setCurrentUser: (user: Member | null) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('user', JSON.stringify(user));
     }
@@ -55,11 +55,11 @@ export const authService = {
     return false;
   },
 
-  completeSetup: async (categories: Array<{ name: string; type: 'EXPENSE' | 'INCOME'; subcategories: string[] }>) => {
-    const response = await api.post('/users/setup', { categories });
-    if (typeof window !== 'undefined' && response.data) {
-      localStorage.setItem('user', JSON.stringify(response.data));
-    }
-    return response.data;
+  setPassword: async (token: string, password: string): Promise<void> => {
+    await api.post('/members/set-password', { token, password });
+  },
+
+  requestSetPassword: async (email: string): Promise<void> => {
+    await api.post('/members/request-set-password', { email });
   },
 };
