@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Member, Celula, Ministry, WinnerPath, Role } from '@/types';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, ThemeProvider, Checkbox, ListItemText, OutlinedInput } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -11,6 +11,7 @@ import 'dayjs/locale/pt-br';
 import toast from 'react-hot-toast';
 import { configService } from '@/services/configService';
 import { memberService } from '@/services/memberService';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface MemberModalProps {
   member: Member | null;
@@ -23,6 +24,7 @@ interface MemberModalProps {
 
 export default function MemberModal({ member, isOpen, onClose, onSave, celulas = [], initialCelulaId }: MemberModalProps) {
   const isEditing = !!member;
+  const { user } = useAuth();
 
   // Estados para todos os campos
   const [name, setName] = useState('');
@@ -122,6 +124,36 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     };
     loadConfigData();
   }, []);
+
+  // Filtrar ministérios permitidos baseado no cargo do usuário logado
+  const allowedMinistries = useMemo(() => {
+    // Se não há usuário logado, retornar lista vazia
+    if (!user) return [];
+
+    // Admin e pastores podem atribuir qualquer cargo
+    const isAdmin = user.permission?.isAdmin || false;
+    const isPastor = user.permission?.ministryType === 'PRESIDENT_PASTOR' || 
+                     user.permission?.ministryType === 'PASTOR';
+    
+    if (isAdmin || isPastor) {
+      return ministries;
+    }
+
+    // Se o usuário não tem cargo ministerial, não pode criar membros com cargo
+    const userMinistryPositionId = user.ministryPositionId;
+    if (!userMinistryPositionId) {
+      return [];
+    }
+
+    // Encontrar o cargo do usuário logado
+    const userMinistry = ministries.find(m => m.id === userMinistryPositionId);
+    if (!userMinistry) {
+      return ministries;
+    }
+
+    // Retornar apenas cargos com priority MAIOR (menor na hierarquia) que o do usuário
+    return ministries.filter(m => (m.priority ?? 0) > (userMinistry.priority ?? 0));
+  }, [user, ministries]);
 
   const muiTheme = createTheme({
     palette: {
@@ -506,7 +538,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                       displayEmpty
                     >
                       <MenuItem value="">Sem cargo ministerial</MenuItem>
-                      {ministries.map(m => (
+                      {allowedMinistries.map(m => (
                         <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
                       ))}
                     </Select>
