@@ -47,6 +47,18 @@ export default function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const { isSidebarOpen, toggleSidebar } = useAppStore();
 
+  const handleNavClick = useCallback(() => {
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+  }, [toggleSidebar]);
+
+  useEffect(() => {
+    if (!user || !user.permission) {
+      logout();
+      router.push('/auth/login');
+    }
+  }, [user, logout, router]);
 
   const handleLogout = () => {
     logout();
@@ -54,16 +66,8 @@ export default function Sidebar() {
   };
 
   if (!user || !user.permission) {
-    logout();
-    router.push('/auth/login');
     return null;
   }
-
-  const handleNavClick = useCallback(() => {
-    if (window.innerWidth < 1024) {
-      toggleSidebar();
-    }
-  }, []);
 
   // Compute permissions
   const perm: Permission = user.permission;

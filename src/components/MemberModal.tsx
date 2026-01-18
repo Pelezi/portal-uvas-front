@@ -18,9 +18,10 @@ interface MemberModalProps {
   onClose: () => void;
   onSave: (data: Partial<Member>) => Promise<void>;
   celulas?: Celula[];
+  initialCelulaId?: number | null;
 }
 
-export default function MemberModal({ member, isOpen, onClose, onSave, celulas = [] }: MemberModalProps) {
+export default function MemberModal({ member, isOpen, onClose, onSave, celulas = [], initialCelulaId }: MemberModalProps) {
   const isEditing = !!member;
 
   // Estados para todos os campos
@@ -162,9 +163,13 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
         setSelectedRoleIds(member.roles?.map(mr => mr.role.id) ?? []);
       } else {
         resetForm();
+        // Set initial celula if provided
+        if (initialCelulaId !== undefined && initialCelulaId !== null) {
+          setCelulaId(initialCelulaId);
+        }
       }
     }
-  }, [member, isOpen]);
+  }, [member, isOpen, initialCelulaId]);
 
   const resetForm = () => {
     setName('');

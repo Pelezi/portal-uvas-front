@@ -48,6 +48,21 @@ export const authService = {
     }
   },
 
+  refreshCurrentUser: async (): Promise<Member | null> => {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) return null;
+
+    try {
+      const response = await api.get<Member>(`/members/${currentUser.permission.id}`);
+      const updatedUser = response.data;
+      authService.setCurrentUser(updatedUser);
+      return updatedUser;
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+      return null;
+    }
+  },
+
   isAuthenticated: (): boolean => {
     if (typeof window !== 'undefined') {
       return !!localStorage.getItem('authToken');

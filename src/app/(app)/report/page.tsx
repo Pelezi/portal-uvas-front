@@ -8,7 +8,9 @@ import { Celula, Member } from '@/types';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { LuHistory } from 'react-icons/lu';
+import { FiPlus } from 'react-icons/fi';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
+import MemberModal from '@/components/MemberModal';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -21,6 +23,7 @@ export default function ReportPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [presentMap, setPresentMap] = useState<Record<number, boolean>>({});
   const [reportDate, setReportDate] = useState<Dayjs | null>(null);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -122,6 +125,17 @@ export default function ReportPage() {
     };
   }, []);
 
+  const reloadMembers = async () => {
+    if (selectedGroup === null) return;
+    try {
+      const m = await membersService.getMembers(selectedGroup);
+      setMembers(m);
+    } catch (e) {
+      console.error(e);
+      toast.error('Falha ao carregar membros');
+    }
+  };
+
   useEffect(() => {
     if (selectedGroup === null) return;
     const loadMembers = async () => {
@@ -156,6 +170,18 @@ export default function ReportPage() {
     } catch (e) {
       console.error(e);
       toast.error('Falha ao enviar');
+    }
+  };
+
+  const handleSaveMember = async (data: Partial<Member>) => {
+    try {
+      await membersService.addMember(selectedGroup, data as Partial<Member> & { name: string });
+      toast.success('Membro adicionado com sucesso');
+      setIsAddMemberModalOpen(false);
+      await reloadMembers();
+    } catch (e) {
+      console.error(e);
+      toast.error('Falha ao adicionar membro');
     }
   };
 
@@ -224,11 +250,21 @@ export default function ReportPage() {
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium">Membros</h3>
-            {selectedGroup && (
-              <Link href={`/celulas/${selectedGroup}/presence?from=report`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Acompanhamento">
-                <LuHistory className="h-5 w-5 text-teal-600" aria-hidden />
-              </Link>
-            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsAddMemberModalOpen(true)}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Adicionar membro"
+                aria-label="Adicionar membro"
+              >
+                <FiPlus className="h-5 w-5 text-blue-600" aria-hidden />
+              </button>
+              {selectedGroup && (
+                <Link href={`/celulas/${selectedGroup}/presence?from=report`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Acompanhamento">
+                  <LuHistory className="h-5 w-5 text-teal-600" aria-hidden />
+                </Link>
+              )}
+            </div>
           </div>
           <ul className="space-y-2">
             {members.map((m) => {
@@ -254,6 +290,15 @@ export default function ReportPage() {
       <div>
         <button onClick={submit} className="px-4 py-2 bg-blue-600 text-white rounded">Enviar</button>
       </div>
+
+      <MemberModal
+        member={null}
+        isOpen={isAddMemberModalOpen}
+        onClose={() => setIsAddMemberModalOpen(false)}
+        onSave={handleSaveMember}
+        celulas={groups}
+        initialCelulaId={selectedGroup}
+      />
     </div>
   );
 }

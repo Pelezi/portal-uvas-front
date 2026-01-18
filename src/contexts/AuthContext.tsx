@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Member, SetPasswordResponse, AuthResponse } from '@/types';
 import { authService } from '@/services/authService';
 
@@ -10,6 +10,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<Member | SetPasswordResponse>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,6 +19,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<Member | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const refreshUser = useCallback(async () => {
+    const updatedUser = await authService.refreshCurrentUser();
+    if (updatedUser) {
+      setUser(updatedUser);
+    }
+  }, []);
+
   useEffect(() => {
     // Check if user is already logged in from localStorage
     // This is intentionally done in useEffect to initialize state on mount
@@ -25,9 +33,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (initUser) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setUser(initUser);
+      // Refresh user data on page load to get latest permissions
+      refreshUser();
     }
     setIsLoading(false);
-  }, []);
+  }, [refreshUser]);
 
   const login = async (email: string, password: string) => {
     const response = await authService.login(email, password);
@@ -52,6 +62,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  // Poll for permission updates every 5 minutes
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      refreshUser();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [user, refreshUser]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -60,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         logout,
+        refreshUser,
       }}
     >
       {children}
