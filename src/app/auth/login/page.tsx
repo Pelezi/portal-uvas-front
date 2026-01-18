@@ -26,7 +26,7 @@ export default function LoginPage() {
         window.location.href = result.setPasswordUrl;
         return;
       }
-      router.push('/report');
+      router.push('/report/fill');
     } catch (err) {
       const error = err as { response?: { data?: { message?: string } } };
       const msg = error.response?.data?.message;

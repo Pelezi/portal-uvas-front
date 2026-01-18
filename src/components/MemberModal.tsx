@@ -332,30 +332,6 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
     // Salvar o membro
     await onSave(data);
-
-    // Enviar convite apenas se:
-    // 1. É um novo membro (não está editando) E hasSystemAccess está ativo
-    // 2. OU está editando E o email foi alterado E hasSystemAccess está ativo
-    const isCreating = !member;
-    const emailChanged = member && member.email !== email.trim();
-    const shouldSendInvite = hasSystemAccess && email.trim() && (isCreating || emailChanged);
-
-    if (shouldSendInvite) {
-      try {
-        await memberService.invite({
-          email: email.trim(),
-        });
-
-        toast.success('Convite enviado para o email com sucesso!');
-      } catch (err: unknown) {
-        console.error('Erro ao enviar convite:', err);
-        const errorMessage = err instanceof Error && 'response' in err
-          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
-          : undefined;
-        // Não bloqueamos o fluxo se o convite falhar
-        toast.error(errorMessage || 'Erro ao enviar convite por email');
-      }
-    }
   };
 
   const handleToggleActive = async () => {

@@ -53,8 +53,16 @@ export const authService = {
     if (!currentUser) return null;
 
     try {
-      const response = await api.get<Member>(`/members/${currentUser.permission.id}`);
-      const updatedUser = response.data;
+      // Use the new refresh endpoint that returns updated user data and permissions
+      const response = await api.get<{ user: Member; permission: any }>('/auth/refresh');
+      const { user: updatedMemberData, permission: updatedPermission } = response.data;
+      
+      // Merge the updated permission into the user data
+      const updatedUser: Member = {
+        ...updatedMemberData,
+        permission: updatedPermission,
+      };
+      
       authService.setCurrentUser(updatedUser);
       return updatedUser;
     } catch (error) {

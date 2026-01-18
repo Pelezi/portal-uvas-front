@@ -127,6 +127,12 @@ export interface Member {
   
   // Church info
   ministryPositionId?: number | null;
+  ministryPosition?: {
+    id: number;
+    name: string;
+    type: 'PRESIDENT_PASTOR' | 'PASTOR' | 'DISCIPULADOR' | 'LEADER' | 'LEADER_IN_TRAINING' | 'MEMBER' | 'REGULAR_ATTENDEE' | 'VISITOR';
+    priority: number;
+  } | null;
   winnerPathId?: number | null;
   canBeHost?: boolean;
   

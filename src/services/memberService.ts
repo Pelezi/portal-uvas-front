@@ -64,8 +64,18 @@ export const memberService = {
     return response.data;
   },
 
-  async invite(data: { email: string }): Promise<Member> {
-    const response = await apiClient.post('/members/invite', data);
+  async getOwnProfile(): Promise<Member> {
+    const response = await apiClient.get('/members/profile/me');
+    return response.data;
+  },
+
+  async updateOwnPassword(currentPassword: string, newPassword: string): Promise<{ success: boolean }> {
+    const response = await apiClient.put('/members/profile/password', { currentPassword, newPassword });
+    return response.data;
+  },
+
+  async updateOwnEmail(email: string): Promise<Member> {
+    const response = await apiClient.put('/members/profile/email', { email });
     return response.data;
   },
 };

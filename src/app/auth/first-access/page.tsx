@@ -20,7 +20,7 @@ export default function FirstAccessPage() {
         window.location.href = result.setPasswordUrl;
         return;
       }
-      router.push("/report");
+      router.push("/report/fill");
     } catch (err) {
       const error = err as { response?: { data?: { message?: string } } };
       const m = error.response?.data?.message;
