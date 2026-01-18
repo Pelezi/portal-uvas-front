@@ -81,7 +81,7 @@ export default function Sidebar() {
   }
 
   const navItems: NavItem[] = [
-    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false, require: 'leader' },
+    { href: '/dashboard', label: 'Início', icon: <Home size={18} />, matchPrefix: false },
     { 
       label: 'Relatório', 
       icon: <FileText size={18} />, 
