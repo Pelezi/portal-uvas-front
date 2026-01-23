@@ -40,6 +40,22 @@ export default function CelulasPage() {
   const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
 
+  // Multiply: open modal to pick members for the new celula and call backend
+  const [multiplyingCelula, setMultiplyingCelula] = useState<Celula | null>(null);
+  const [availableMembers, setAvailableMembers] = useState<Member[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
+  const [newCelulaNameField, setNewCelulaNameField] = useState('');
+  const [newLeaderQuery, setNewLeaderQuery] = useState('');
+  const [newLeaderId, setNewLeaderId] = useState<number | null>(null);
+  const [newLeaderName, setNewLeaderName] = useState('');
+  const [showNewLeaderDropdown, setShowNewLeaderDropdown] = useState(false);
+  const newLeaderDropdownRef = useRef<HTMLDivElement>(null);
+  const [oldLeaderQuery, setOldLeaderQuery] = useState('');
+  const [oldLeaderId, setOldLeaderId] = useState<number | null>(null);
+  const [oldLeaderName, setOldLeaderName] = useState('');
+  const [showOldLeaderDropdown, setShowOldLeaderDropdown] = useState(false);
+  const oldLeaderDropdownRef = useRef<HTMLDivElement>(null);
+
   const { user } = useAuth();
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -76,11 +92,21 @@ export default function CelulasPage() {
           setShowFilterLeaderDropdown(false);
         }
       }
+      if (showNewLeaderDropdown) {
+        if (newLeaderDropdownRef.current && !newLeaderDropdownRef.current.contains(target)) {
+          setShowNewLeaderDropdown(false);
+        }
+      }
+      if (showOldLeaderDropdown) {
+        if (oldLeaderDropdownRef.current && !oldLeaderDropdownRef.current.contains(target)) {
+          setShowOldLeaderDropdown(false);
+        }
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterLeaderDropdown]);
+  }, [showFilterLeaderDropdown, showNewLeaderDropdown, showOldLeaderDropdown]);
 
   const load = async () => {
     setLoading(true);
@@ -210,23 +236,28 @@ export default function CelulasPage() {
     }
   };
 
-  // Multiply: open modal to pick members for the new celula and call backend
-  const [multiplyingCelula, setMultiplyingCelula] = useState<Celula | null>(null);
-  const [availableMembers, setAvailableMembers] = useState<Member[]>([]);
-  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
-  const [newCelulaNameField, setNewCelulaNameField] = useState('');
-  const [newLeaderNameField, setNewLeaderNameField] = useState('');
-  const [oldLeaderNameField, setOldLeaderNameField] = useState('');
-
   const openMultiply = async (g: Celula) => {
     setMultiplyingCelula(g);
     setNewCelulaNameField(`${g.name} - Nova`);
-    setOldLeaderNameField((g.leader && g.leader.name) || '');
-    setNewLeaderNameField('');
+    setOldLeaderId(g.leader?.id || null);
+    setOldLeaderName(g.leader?.name || '');
+    setOldLeaderQuery('');
+    setNewLeaderId(null);
+    setNewLeaderName('');
+    setNewLeaderQuery('');
     setSelectedMemberIds([]);
     try {
       const m = await membersService.getMembers(g.id);
       setAvailableMembers(m);
+      
+      // Se houver apenas um líder em treinamento, pré-seleciona ele como novo líder
+      const leadersInTraining = m.filter(
+        member => member.ministryPosition?.type === 'LEADER_IN_TRAINING'
+      );
+      if (leadersInTraining.length === 1) {
+        setNewLeaderId(leadersInTraining[0].id);
+        setNewLeaderName(leadersInTraining[0].name);
+      }
     } catch (err) {
       console.error(err);
       toast.error(ErrorMessages.loadMembers(err));
@@ -243,8 +274,8 @@ export default function CelulasPage() {
       await celulasService.multiplyCelula(multiplyingCelula.id, {
         memberIds: selectedMemberIds,
         newCelulaName: newCelulaNameField,
-        newLeaderMemberId: undefined,
-        oldLeaderMemberId: undefined,
+        newLeaderMemberId: newLeaderId || undefined,
+        oldLeaderMemberId: oldLeaderId || undefined,
       });
       toast.success('Célula multiplicada com sucesso!');
       setMultiplyingCelula(null);
@@ -340,15 +371,15 @@ export default function CelulasPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link href={`/celulas/${g.id}/members`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Membros" aria-label={`Membros ${g.name}`}>
-                    <FiUsers className="h-4 w-4 text-blue-600" aria-hidden />
+                    <FiUsers className="h-6 w-6 text-blue-600" aria-hidden />
                   </Link>
                   {(!user?.permission || user.permission.isAdmin) && (
                     <>
                       <button onClick={() => handleOpenEditModal(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Editar" aria-label={`Editar ${g.name}`}>
-                        <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
+                        <FiEdit2 className="h-6 w-6 text-yellow-500" aria-hidden />
                       </button>
                       <button onClick={() => openMultiply(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Multiplicar" aria-label={`Multiplicar ${g.name}`}>
-                        <FiCopy className="h-4 w-4 text-indigo-600" aria-hidden />
+                        <FiCopy className="h-6 w-6 text-indigo-600" aria-hidden />
                       </button>
                       {/* delete célula - only if no members associated */}
                       {(() => {
@@ -371,14 +402,14 @@ export default function CelulasPage() {
                             className={`p-1 rounded ${((cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)) ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900'}`}
                             aria-label={`Excluir ${g.name}`}
                           >
-                            <FiTrash2 className="h-4 w-4" aria-hidden />
+                            <FiTrash2 className="h-6 w-6" aria-hidden />
                           </button>
                         );
                       })()}
                     </>
                   )}
                   <Link href={`/celulas/${g.id}/presence?from=celulas`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Acompanhamento" aria-label={`Acompanhamento ${g.name}`}>
-                    <LuHistory className="h-4 w-4 text-teal-600" aria-hidden />
+                    <LuHistory className="h-6 w-6 text-teal-600" aria-hidden />
                   </Link>
                 </div>
               </li>
@@ -404,42 +435,134 @@ export default function CelulasPage() {
       />
 
       {multiplyingCelula && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-start sm:items-center justify-center pt-20 sm:pt-0">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-start sm:items-center justify-center pt-20 sm:pt-0 z-50">
           <div className="bg-white dark:bg-gray-900 p-4 rounded w-11/12 sm:w-[720px] max-h-[80vh] overflow-auto">
-            <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">Multiplicar: {multiplyingCelula.name}</h4>
+            <h4 className="font-semibold mb-4 text-gray-900 dark:text-white">Multiplicar: {multiplyingCelula.name}</h4>
 
-            <div className="mb-3">
+            <div className="mb-4">
               <label className="block text-sm mb-1 text-gray-700 dark:text-gray-300">Nome da nova célula</label>
-              <input value={newCelulaNameField} onChange={(e) => setNewCelulaNameField(e.target.value)} className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:text-white" />
+              <input value={newCelulaNameField} onChange={(e) => setNewCelulaNameField(e.target.value)} className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:text-white h-10" />
             </div>
 
-            <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm mb-1 text-gray-700 dark:text-gray-300">Líder da célula nova</label>
-                <input value={newLeaderNameField} onChange={(e) => setNewLeaderNameField(e.target.value)} className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:text-white" />
+                <label className="block text-sm mb-1 text-gray-700 dark:text-gray-300">Líder da nova célula</label>
+                <div ref={newLeaderDropdownRef} className="relative w-full">
+                  <input
+                    placeholder="Buscar líder"
+                    value={newLeaderQuery || newLeaderName}
+                    onChange={(e) => {
+                      setNewLeaderQuery(e.target.value);
+                      setNewLeaderName('');
+                      setNewLeaderId(null);
+                      setShowNewLeaderDropdown(true);
+                    }}
+                    onFocus={() => setShowNewLeaderDropdown(true)}
+                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  />
+                  {showNewLeaderDropdown && (
+                    <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                      {members.filter(member => {
+                        const q = (newLeaderQuery || '').toLowerCase();
+                        if (!q) return true;
+                        return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
+                      }).map(member => (
+                        <div
+                          key={member.id}
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                          onMouseDown={() => {
+                            setNewLeaderId(member.id);
+                            setNewLeaderName(member.name);
+                            setNewLeaderQuery('');
+                            setShowNewLeaderDropdown(false);
+                          }}
+                        >
+                          <div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{member.name}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{member.email}</div>
+                          </div>
+                          <div className="text-xs text-green-600">Selecionar</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm mb-1 text-gray-700 dark:text-gray-300">Líder da célula atual</label>
-                <input value={oldLeaderNameField} onChange={(e) => setOldLeaderNameField(e.target.value)} className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:text-white" />
+                <div ref={oldLeaderDropdownRef} className="relative w-full">
+                  <input
+                    placeholder="Buscar líder"
+                    value={oldLeaderQuery || oldLeaderName}
+                    onChange={(e) => {
+                      setOldLeaderQuery(e.target.value);
+                      setOldLeaderName('');
+                      setOldLeaderId(null);
+                      setShowOldLeaderDropdown(true);
+                    }}
+                    onFocus={() => setShowOldLeaderDropdown(true)}
+                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  />
+                  {showOldLeaderDropdown && (
+                    <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                      {members.filter(member => {
+                        const q = (oldLeaderQuery || '').toLowerCase();
+                        if (!q) return true;
+                        return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
+                      }).map(member => (
+                        <div
+                          key={member.id}
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                          onMouseDown={() => {
+                            setOldLeaderId(member.id);
+                            setOldLeaderName(member.name);
+                            setOldLeaderQuery('');
+                            setShowOldLeaderDropdown(false);
+                          }}
+                        >
+                          <div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{member.name}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{member.email}</div>
+                          </div>
+                          <div className="text-xs text-green-600">Selecionar</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="mb-3">
-              <div className="font-medium text-gray-900 dark:text-white mb-2">Selecionar membros para a nova célula</div>
-              <div className="space-y-2 max-h-56 overflow-auto p-2 border rounded bg-white dark:bg-gray-800">
-                {availableMembers.length === 0 && <div className="text-sm text-gray-500 dark:text-gray-400">Nenhum membro disponível</div>}
-                {availableMembers.map((m) => (
-                  <label key={m.id} className="flex items-center gap-2">
-                    <input type="checkbox" checked={selectedMemberIds.includes(m.id)} onChange={() => toggleMemberSelection(m.id)} />
-                    <span className="text-sm text-gray-900 dark:text-white">{m.name}</span>
-                  </label>
-                ))}
+            <div className="mb-4">
+              <div className="font-medium text-gray-900 dark:text-white mb-2">Membros para a nova célula</div>
+              <div className="space-y-2 max-h-64 overflow-auto">
+                {availableMembers.length === 0 && <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">Nenhum membro disponível</div>}
+                {availableMembers.map((m) => {
+                  const selected = selectedMemberIds.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleMemberSelection(m.id)}
+                      className={`w-full text-left flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                        selected 
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
+                          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <span className="truncate font-medium text-gray-900 dark:text-white">{m.name}</span>
+                      {selected && (
+                        <span className="text-xs text-green-600 dark:text-green-400 font-semibold">✓ Selecionado</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setMultiplyingCelula(null)} className="px-3 py-1">Cancelar</button>
-              <button onClick={submitMultiply} className="px-3 py-1 bg-indigo-600 text-white rounded">Multiplicar</button>
+            <div className="flex justify-end gap-2 pt-2 border-t dark:border-gray-700">
+              <button onClick={() => setMultiplyingCelula(null)} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">Cancelar</button>
+              <button onClick={submitMultiply} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded">Multiplicar</button>
             </div>
           </div>
         </div>

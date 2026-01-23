@@ -54,7 +54,7 @@ export default function CelulaPresencePage() {
 
   const handleBack = () => {
     if (from === 'report') {
-      router.push('/report');
+      router.push('/report/fill');
       return;
     }
     if (from === 'celulas') {

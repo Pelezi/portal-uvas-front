@@ -61,15 +61,15 @@ export interface Celula {
   time?: string | null; // Formato HH:mm (ex: "19:30")
   createdAt?: string;
   updatedAt?: string;
+  discipulado?: Discipulado | null;
 }
 
 export interface Discipulado {
   id: number;
-  name: string;
   redeId: number;
-  discipuladorMemberId?: number | null;
+  discipuladorMemberId: number;
   rede: Rede;
-  discipulador?: Member | null;
+  discipulador: Member;
 }
 
 export interface Rede {

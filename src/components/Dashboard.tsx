@@ -235,7 +235,7 @@ export default function Dashboard() {
                   .filter(d => !selectedRedeId || d.redeId === selectedRedeId)
                   .map((discipulado) => (
                     <option key={discipulado.id} value={discipulado.id}>
-                      {discipulado.name}
+                      {discipulado.discipulador ? discipulado.discipulador.name : `Discipulado ${discipulado.id} `}
                     </option>
                   ))}
               </select>

@@ -68,11 +68,7 @@ export default function Sidebar() {
   };
 
   useEffect(() => {
-    console.log('Sidebar checking user permissions');
-    console.log('Current user:', user);
-    console.log('Current user permission:', user?.permission);
     if (!user || !user.permission) {
-      console.log('No user or no permissions, logging out');
       logout();
       router.push('/auth/login');
     }

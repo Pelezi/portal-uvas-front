@@ -44,7 +44,7 @@ export default function RedesPage() {
 
   // confirm modal for deletions
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmTarget, setConfirmTarget] = useState<Rede | Discipulado | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<Rede | null>(null);
 
   // edit modal state
   const [editRedeModalOpen, setEditRedeModalOpen] = useState(false);
@@ -200,7 +200,7 @@ export default function RedesPage() {
       console.error(err);
       return toast.error(ErrorMessages.checkAssociations(err));
     }
-    if (!confirm(`Remover discipulado de ${d.discipulador?.name}?`)) return;
+    if (!confirm(`Remover discipulado de ${d.discipulador.name}?`)) return;
     try {
       await discipuladosService.deleteDiscipulado(d.id);
       toast.success('Discipulado removido com sucesso!');

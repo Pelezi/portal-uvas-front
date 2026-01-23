@@ -11,9 +11,12 @@ import { LuHistory } from 'react-icons/lu';
 import { FiPlus } from 'react-icons/fi';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
 import MemberModal from '@/components/MemberModal';
+import AddMemberChoiceModal from '@/components/AddMemberChoiceModal';
+import ModalConfirm from '@/components/ModalConfirm';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/pt-br';
 
@@ -23,7 +26,11 @@ export default function ReportPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [presentMap, setPresentMap] = useState<Record<number, boolean>>({});
   const [reportDate, setReportDate] = useState<Dayjs | null>(null);
+  const [pendingDate, setPendingDate] = useState<Dayjs | null>(null);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -78,6 +85,14 @@ export default function ReportPage() {
     }
     
     return dates;
+  };
+
+  // Verificar se uma data é válida (dia da semana da célula)
+  const isValidDate = (date: Dayjs, celula: Celula | undefined): boolean => {
+    if (!celula || celula.weekday === null || celula.weekday === undefined) {
+      return true; // Sem restrição se não tiver dia da semana
+    }
+    return date.day() === celula.weekday;
   };
 
   // Atualizar data selecionada quando a célula mudar
@@ -161,6 +176,7 @@ export default function ReportPage() {
     if (!reportDate) return toast.error('Selecione uma data');
     const memberIds = members.filter((m) => !!presentMap[m.id]).map((m) => m.id);
     if (memberIds.length === 0) return toast.error('Marque pelo menos um membro presente');
+    setIsSubmitting(true);
     try {
       await reportsService.createReport(selectedGroup, {
         memberIds,
@@ -170,7 +186,25 @@ export default function ReportPage() {
     } catch (e) {
       console.error(e);
       toast.error('Falha ao enviar');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleAddExistingMember = async (memberId: number) => {
+    if (!selectedGroup) return;
+    try {
+      await membersService.updateMember(selectedGroup, memberId, { celulaId: selectedGroup });
+      await reloadMembers();
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+  };
+
+  const handleCreateNewMember = () => {
+    setIsChoiceModalOpen(false);
+    setIsAddMemberModalOpen(true);
   };
 
   const handleSaveMember = async (data: Partial<Member>) => {
@@ -183,6 +217,65 @@ export default function ReportPage() {
       console.error(e);
       toast.error('Falha ao adicionar membro');
     }
+  };
+
+  // Função para confirmar mudança de data
+  const handleDateChange = (newDate: Dayjs | null) => {
+    if (!newDate) {
+      setReportDate(newDate);
+      return;
+    }
+
+    const celula = groups.find(g => g.id === selectedGroup);
+    
+    // Se não há célula selecionada ou não há dia da semana definido, aceita qualquer data
+    if (!celula || celula.weekday === null || celula.weekday === undefined) {
+      setReportDate(newDate);
+      return;
+    }
+
+    // Se a data é válida (dia da semana correto), aceita diretamente
+    if (isValidDate(newDate, celula)) {
+      setReportDate(newDate);
+      return;
+    }
+
+    // Se a data não é válida, mostra modal de confirmação
+    setPendingDate(newDate);
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmDate = () => {
+    setReportDate(pendingDate);
+    setShowConfirmModal(false);
+    setPendingDate(null);
+  };
+
+  const handleCancelDate = () => {
+    setShowConfirmModal(false);
+    setPendingDate(null);
+  };
+
+  // Componente customizado para destacar os dias válidos
+  const CustomDay = (props: PickersDayProps) => {
+    const { day, ...other } = props;
+    const celula = groups.find(g => g.id === selectedGroup);
+    const isValid = isValidDate(day, celula);
+    
+    return (
+      <PickersDay
+        {...other}
+        day={day}
+        sx={{
+          ...(isValid && celula?.weekday !== null && celula?.weekday !== undefined && {
+            backgroundColor: isDarkMode ? 'rgba(96, 165, 250, 0.2)' : 'rgba(59, 130, 246, 0.1)',
+            '&:hover': {
+              backgroundColor: isDarkMode ? 'rgba(96, 165, 250, 0.3)' : 'rgba(59, 130, 246, 0.2)',
+            },
+          }),
+        }}
+      />
+    );
   };
 
   const muiTheme = createTheme({
@@ -220,15 +313,10 @@ export default function ReportPage() {
           <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
             <DatePicker
               value={reportDate}
-              onChange={(newValue: Dayjs | null) => setReportDate(newValue)}
+              onChange={handleDateChange}
               format="DD/MM/YYYY"
-              shouldDisableDate={(date) => {
-                const celula = groups.find(g => g.id === selectedGroup);
-                if (!celula || celula.weekday === null || celula.weekday === undefined) {
-                  return false; // Sem restrição
-                }
-                const validDates = getValidDates(celula);
-                return !validDates.some(d => d.isSame(date, 'day'));
+              slots={{
+                day: CustomDay,
               }}
               localeText={{
                 toolbarTitle: 'Selecionar data',
@@ -252,16 +340,16 @@ export default function ReportPage() {
             <h3 className="font-medium">Membros</h3>
             <div className="flex gap-2">
               <button
-                onClick={() => setIsAddMemberModalOpen(true)}
+                onClick={() => setIsChoiceModalOpen(true)}
                 className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                 title="Adicionar membro"
                 aria-label="Adicionar membro"
               >
-                <FiPlus className="h-5 w-5 text-blue-600" aria-hidden />
+                <FiPlus className="h-6 w-6 text-blue-600" aria-hidden />
               </button>
               {selectedGroup && (
                 <Link href={`/celulas/${selectedGroup}/presence?from=report`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Acompanhamento">
-                  <LuHistory className="h-5 w-5 text-teal-600" aria-hidden />
+                  <LuHistory className="h-6 w-6 text-teal-600" aria-hidden />
                 </Link>
               )}
             </div>
@@ -288,8 +376,28 @@ export default function ReportPage() {
       )}
 
       <div>
-        <button onClick={submit} className="px-4 py-2 bg-blue-600 text-white rounded">Enviar</button>
+        <button 
+          onClick={submit} 
+          disabled={isSubmitting}
+          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {isSubmitting && (
+            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          )}
+          {isSubmitting ? 'Enviando...' : 'Enviar'}
+        </button>
       </div>
+
+      <AddMemberChoiceModal
+        isOpen={isChoiceModalOpen}
+        onClose={() => setIsChoiceModalOpen(false)}
+        onCreateNew={handleCreateNewMember}
+        onAddExisting={handleAddExistingMember}
+        currentCelulaId={selectedGroup}
+      />
 
       <MemberModal
         member={null}
@@ -298,6 +406,23 @@ export default function ReportPage() {
         onSave={handleSaveMember}
         celulas={groups}
         initialCelulaId={selectedGroup}
+      />
+
+      <ModalConfirm
+        open={showConfirmModal}
+        title="Data fora do dia da célula"
+        message={(() => {
+          const celula = groups.find(g => g.id === selectedGroup);
+          if (!celula || celula.weekday === null || celula.weekday === undefined) {
+            return "Deseja confirmar esta data?";
+          }
+          const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+          return `A célula ocorre às ${weekdays[celula.weekday]}s. Deseja mesmo criar um relatório para ${pendingDate?.format('DD/MM/YYYY')} (${weekdays[pendingDate?.day() ?? 0]})?`;
+        })()}
+        confirmLabel="Confirmar"
+        cancelLabel="Cancelar"
+        onConfirm={handleConfirmDate}
+        onCancel={handleCancelDate}
       />
     </div>
   );

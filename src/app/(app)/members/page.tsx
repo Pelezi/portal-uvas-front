@@ -216,7 +216,7 @@ export default function MembersManagementPage() {
                     .filter(d => !filterRedeId || d.redeId === filterRedeId)
                     .map(d => (
                       <MenuItem key={d.id} value={String(d.id)}>
-                        {d.discipulador ? d.discipulador.name : `Discipulado ${d.id}`}
+                        {d.discipulador.name}
                       </MenuItem>
                     ))}
                 </Select>
