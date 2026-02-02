@@ -18,6 +18,7 @@ interface CelulaModalProps {
     name: string;
     leaderMemberId?: number;
     discipuladoId?: number;
+    leaderInTrainingIds?: number[];
     weekday?: number;
     time?: string;
     country?: string;
@@ -53,6 +54,8 @@ export default function CelulaModal({
   const [leaderId, setLeaderId] = useState<number | null>(null);
   const [leaderName, setLeaderName] = useState('');
   const [showLeaderDropdown, setShowLeaderDropdown] = useState(false);
+  const [leaderInTrainingIds, setLeaderInTrainingIds] = useState<number[]>([]);
+  const [celulaMemberOptions, setCelulaMemberOptions] = useState<Member[]>([]);
   const [weekday, setWeekday] = useState<number | null>(null);
   const [time, setTime] = useState<Dayjs | null>(() => dayjs().hour(19).minute(30));
 
@@ -167,6 +170,31 @@ export default function CelulaModal({
     }
   }, [celula, discipulados]);
 
+  // Carregar membros da célula quando editando
+  useEffect(() => {
+    const loadCelulaMembers = async () => {
+      if (celula?.id) {
+        try {
+          const { membersService } = await import('@/services/membersService');
+          const data = await membersService.getMembers(celula.id);
+          setCelulaMemberOptions(data || []);
+          
+          // Inicializar líderes em treinamento
+          if (celula.leadersInTraining) {
+            setLeaderInTrainingIds(celula.leadersInTraining.map(lit => lit.member.id));
+          }
+        } catch (error) {
+          console.error('Error loading celula members:', error);
+        }
+      } else {
+        setCelulaMemberOptions([]);
+        setLeaderInTrainingIds([]);
+      }
+    };
+    
+    loadCelulaMembers();
+  }, [celula]);
+
   const resetForm = () => {
     setName('');
     setRedeId(null);
@@ -174,6 +202,8 @@ export default function CelulaModal({
     setLeaderQuery('');
     setLeaderId(null);
     setLeaderName('');
+    setLeaderInTrainingIds([]);
+    setCelulaMemberOptions([]);
     setWeekday(null);
     setTime(dayjs().hour(19).minute(30));
     setCountry('Brasil');
@@ -266,6 +296,7 @@ export default function CelulaModal({
       time: time.format('HH:mm'),
       leaderMemberId: leaderId || undefined,
       discipuladoId: discipuladoId || undefined,
+      leaderInTrainingIds: leaderInTrainingIds.length > 0 ? leaderInTrainingIds : undefined,
       country: country || undefined,
       zipCode: zipCode || undefined,
       street: street || undefined,
@@ -401,6 +432,53 @@ export default function CelulaModal({
                 )}
               </div>
             </div>
+
+            {/* Líderes em Treinamento */}
+            {isEditing && celulaMemberOptions.length > 0 && (
+              <div className="md:col-span-2">
+                <label className="block mb-1 text-sm">Líderes em Treinamento</label>
+                <ThemeProvider theme={muiTheme}>
+                  <FormControl className="w-full">
+                    <InputLabel id="leader-in-training-label" size='small'>Selecione os líderes em treinamento</InputLabel>
+                    <Select
+                      labelId="leader-in-training-label"
+                      multiple
+                      value={leaderInTrainingIds}
+                      onChange={(e) => {
+                        const value = e.target.value as number[];
+                        setLeaderInTrainingIds(value);
+                      }}
+                      label="Selecione os líderes em treinamento"
+                      size="small"
+                      className="bg-white dark:bg-gray-800 w-full"
+                      renderValue={(selected) => {
+                        const selectedMembers = celulaMemberOptions.filter(m => selected.includes(m.id));
+                        return selectedMembers.map(m => m.name).join(', ');
+                      }}
+                    >
+                      {celulaMemberOptions
+                        .filter(m => m.id !== leaderId)
+                        .map((member) => (
+                          <MenuItem key={member.id} value={member.id}>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={leaderInTrainingIds.includes(member.id)}
+                                readOnly
+                                className="h-4 w-4"
+                              />
+                              <span>{member.name}</span>
+                            </div>
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                </ThemeProvider>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Apenas membros desta célula podem ser selecionados como líderes em treinamento
+                </p>
+              </div>
+            )}
 
             {/* Dia da Semana */}
             <div>

@@ -15,6 +15,7 @@ import { FiPlus, FiUsers, FiEdit2, FiCopy, FiTrash2 } from 'react-icons/fi';
 import { LuHistory } from 'react-icons/lu';
 import Link from 'next/link';
 import CelulaModal from '@/components/CelulaModal';
+import CelulaViewModal from '@/components/CelulaViewModal';
 
 export default function CelulasPage() {
   const [groups, setGroups] = useState<Celula[]>([]);
@@ -22,10 +23,16 @@ export default function CelulasPage() {
   const [cellHasInactive, setCellHasInactive] = useState<Record<number, boolean>>({});
   const [confirmingCelula, setConfirmingCelula] = useState<Celula | null>(null);
   const [loading, setLoading] = useState(false);
+  const hasInitialized = useRef(false);
+  const filtersInitialized = useRef(false);
 
   // Modal states
   const [showCelulaModal, setShowCelulaModal] = useState(false);
   const [editingCelula, setEditingCelula] = useState<Celula | null>(null);
+  
+  // View modal state
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingCelula, setViewingCelula] = useState<Celula | null>(null);
 
   // listing filters
   const [filterName, setFilterName] = useState('');
@@ -109,17 +116,18 @@ export default function CelulasPage() {
   }, [showFilterLeaderDropdown, showNewLeaderDropdown, showOldLeaderDropdown]);
 
   const load = async () => {
+    // Aguardar inicialização dos filtros
+    if (!filtersInitialized.current) {
+      return;
+    }
+    
     setLoading(true);
     try {
       const g = await celulasService.getCelulas();
-      const permission = user?.permission;
-
-      if (permission && !permission.isAdmin) {
-        const allowed = permission.celulaIds || [];
-        setGroups(g.filter((c) => allowed.includes(c.id)));
-      } else {
-        setGroups(g);
-      }
+      
+      // Mostrar todas as células, sem filtrar por permissão
+      setGroups(g);
+      
       // load member counts per célula
       try {
         const counts: Record<number, number> = {};
@@ -147,49 +155,101 @@ export default function CelulasPage() {
   };
 
   useEffect(() => {
-    const run = async () => { await load(); };
-    run();
-  }, []);
+    // Apenas carregar após os filtros serem inicializados
+    if (filtersInitialized.current) {
+      const run = async () => { await load(); };
+      run();
+    }
+  }, [filtersInitialized.current]);
 
   useEffect(() => {
-    const loadUsers = async () => {
+    const loadFilters = async () => {
       try {
         // Carregar apenas usuários que podem ser líderes (PRESIDENT_PASTOR, PASTOR, DISCIPULADOR, LEADER ou LEADER_IN_TRAINING)
         const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING' });
         setMembers(u || []);
-      } catch (err) {
-        console.error('failed load users', err);
-      }
-    };
-    loadUsers();
-    // load discipulados for select
-    const loadD = async () => {
-      try {
+        
+        // load discipulados for select
         const d = await discipuladosService.getDiscipulados();
         setDiscipulados(d || []);
-      } catch (err) {
-        console.error('failed load discipulados', err);
-      }
-    };
-    loadD();
-    // load redes for select
-    const loadR = async () => {
-      try {
+        
+        // load redes for select
         const r = await redesService.getRedes();
         setRedes(r || []);
+
+        // Inicializar filtros baseados no usuário logado (apenas uma vez)
+        if (!hasInitialized.current && user) {
+          hasInitialized.current = true;
+          
+          // Verificar se o usuário tem associações e selecionar a primeira
+          if (user.celula?.id) {
+            // Tem célula associada - buscar dados da célula
+            const celulasTemp = await celulasService.getCelulas();
+            const celula = celulasTemp.find(cel => cel.id === user.celula?.id);
+            setFilterLeaderId(celula?.leader?.id || null);
+            
+            if (celula?.discipuladoId) {
+              setFilterDiscipuladoId(celula.discipuladoId);
+              
+              const discipulado = d.find(disc => disc.id === celula.discipuladoId);
+              if (discipulado?.redeId) {
+                setFilterRedeId(discipulado.redeId);
+              }
+            }
+          } else {
+            // Verificar se é discipulador
+            const userDiscipulado = d.find(disc => disc.discipuladorMemberId === user.id);
+            if (userDiscipulado) {
+              setFilterDiscipuladoId(userDiscipulado.id);
+              if (userDiscipulado.redeId) {
+                setFilterRedeId(userDiscipulado.redeId);
+              }
+            } else {
+              // Verificar se é pastor de rede
+              const userRede = r.find(rede => rede.pastorMemberId === user.id);
+              if (userRede) {
+                setFilterRedeId(userRede.id);
+              }
+            }
+          }
+          
+          // Marcar que os filtros foram inicializados
+          filtersInitialized.current = true;
+        } else if (!hasInitialized.current) {
+          // Se não há usuário ainda, marcar como inicializado para evitar loop
+          filtersInitialized.current = true;
+        }
       } catch (err) {
-        console.error('failed load redes', err);
+        console.error('failed load filters', err);
+        filtersInitialized.current = true;
       }
     };
-    loadR();
-  }, []);
+    loadFilters();
+  }, [user]);
 
-  // Re-load when user/permission changes
+  // Re-load when filters change
   useEffect(() => {
-    load();
-  }, [user?.permission]);
+    if (filtersInitialized.current) {
+      load();
+    }
+  }, [filterName, filterRedeId, filterDiscipuladoId, filterLeaderId]);
 
-  const handleSaveCelula = async (data: { name: string; leaderMemberId?: number; discipuladoId?: number }) => {
+  const handleSaveCelula = async (data: { 
+    name: string; 
+    leaderMemberId?: number; 
+    discipuladoId?: number;
+    leaderInTrainingIds?: number[];
+    weekday?: number;
+    time?: string;
+    country?: string;
+    zipCode?: string;
+    street?: string;
+    streetNumber?: string;
+    neighborhood?: string;
+    city?: string;
+    complement?: string;
+    state?: string;
+  }) => {
     try {
       if (editingCelula) {
         // Edit mode
@@ -223,6 +283,16 @@ export default function CelulasPage() {
   const handleOpenEditModal = (celula: Celula) => {
     setEditingCelula(celula);
     setShowCelulaModal(true);
+  };
+
+  const handleOpenViewModal = (celula: Celula) => {
+    setViewingCelula(celula);
+    setIsViewModalOpen(true);
+  };
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false);
+    setViewingCelula(null);
   };
 
   const duplicate = async (g: Celula) => {
@@ -287,6 +357,46 @@ export default function CelulasPage() {
   };
 
   // Acompanhamento agora é uma página separada em /celulas/[id]/presence
+
+  // Funções auxiliares de permissão
+  const isAdmin = () => !user?.permission || user.permission.isAdmin;
+  const isPastor = () => user?.permission?.ministryType === 'PRESIDENT_PASTOR' || user?.permission?.ministryType === 'PASTOR';
+  const isDiscipulador = () => user?.permission?.ministryType === 'DISCIPULADOR';
+  const isCelulaLeader = (celulaId: number) => user?.id === groups.find(c => c.id === celulaId)?.leader?.id;
+  
+  // Verificar se o usuário está associado a uma célula específica
+  const isAssociatedToCelula = (celula: Celula) => {
+    if (isAdmin() || isPastor()) return true;
+    
+    // Discipulador: células do seu discipulado
+    if (isDiscipulador()) {
+      const userDiscipulado = discipulados.find(d => d.discipuladorMemberId === user?.id);
+      return userDiscipulado?.id === celula.discipuladoId;
+    }
+    
+    // Líder: apenas sua própria célula
+    return isCelulaLeader(celula.id);
+  };
+
+  // Permissões para cada ação
+  const canEdit = (celula: Celula) => {
+    if (!isAssociatedToCelula(celula)) return false;
+    return isAdmin() || isPastor() || isDiscipulador() || isCelulaLeader(celula.id);
+  };
+
+  const canMultiply = (celula: Celula) => {
+    if (!isAssociatedToCelula(celula)) return false;
+    return isAdmin() || isPastor() || isDiscipulador();
+  };
+
+  const canDelete = (celula: Celula) => {
+    if (!isAssociatedToCelula(celula)) return false;
+    return isAdmin() || isPastor() || isDiscipulador();
+  };
+
+  const canViewTracking = (celula: Celula) => {
+    return isAssociatedToCelula(celula);
+  };
 
   return (
     <div>
@@ -366,51 +476,57 @@ export default function CelulasPage() {
             .map((g) => (
               <li key={g.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border p-3 rounded ${!g.leaderMemberId ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-white dark:bg-gray-900'}`}>
                 <div className="mb-3 sm:mb-0">
-                  <div className="font-medium text-gray-900 dark:text-white">{g.name} {!g.leaderMemberId && <span className="text-xs text-red-600 dark:text-red-400 ml-2">(sem líder)</span>}</div>
+                  <button
+                    onClick={() => handleOpenViewModal(g)}
+                    className="text-left hover:underline focus:outline-none"
+                  >
+                    <div className="font-medium text-gray-900 dark:text-white">{g.name} {!g.leaderMemberId && <span className="text-xs text-red-600 dark:text-red-400 ml-2">(sem líder)</span>}</div>
+                  </button>
                   <div className="text-sm text-gray-500 dark:text-gray-400">id: {g.id}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link href={`/celulas/${g.id}/members`} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Membros" aria-label={`Membros ${g.name}`}>
                     <FiUsers className="h-6 w-6 text-blue-600" aria-hidden />
                   </Link>
-                  {(!user?.permission || user.permission.isAdmin) && (
-                    <>
-                      <button onClick={() => handleOpenEditModal(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Editar" aria-label={`Editar ${g.name}`}>
-                        <FiEdit2 className="h-6 w-6 text-yellow-500" aria-hidden />
-                      </button>
-                      <button onClick={() => openMultiply(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Multiplicar" aria-label={`Multiplicar ${g.name}`}>
-                        <FiCopy className="h-6 w-6 text-indigo-600" aria-hidden />
-                      </button>
-                      {/* delete célula - only if no members associated */}
-                      {(() => {
-                        const memberCount = cellMembersCount[g.id] ?? 0;
-                        const disabled = memberCount > 0;
-                        return (
-                          <button
-                            onClick={() => {
-                              const memberCountLocal = cellMembersCount[g.id] ?? 0;
-                              const hasInactive = cellHasInactive[g.id] ?? false;
-                              const disabledLocal = memberCountLocal > 0 || hasInactive;
-                              if (disabledLocal) {
-                                if (hasInactive) return toast.error('Não é possível apagar célula: possui membros inativos');
-                                return toast.error('Não é possível apagar célula com membros associados');
-                              }
-                              setConfirmingCelula(g);
-                            }}
-                            title={(cellHasInactive[g.id] ?? false) ? 'Não é possível apagar: possui membros inativos' : (disabled ? 'Não é possível apagar: possui membros associados' : 'Excluir célula')}
-                            disabled={(cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)}
-                            className={`p-1 rounded ${((cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)) ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900'}`}
-                            aria-label={`Excluir ${g.name}`}
-                          >
-                            <FiTrash2 className="h-6 w-6" aria-hidden />
-                          </button>
-                        );
-                      })()}
-                    </>
+                  {canEdit(g) && (
+                    <button onClick={() => handleOpenEditModal(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Editar" aria-label={`Editar ${g.name}`}>
+                      <FiEdit2 className="h-6 w-6 text-yellow-500" aria-hidden />
+                    </button>
                   )}
-                  <Link href="/report/view" className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Acompanhamento" aria-label={`Acompanhamento ${g.name}`}>
-                    <LuHistory className="h-6 w-6 text-teal-600" aria-hidden />
-                  </Link>
+                  {canMultiply(g) && (
+                    <button onClick={() => openMultiply(g)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Multiplicar" aria-label={`Multiplicar ${g.name}`}>
+                      <FiCopy className="h-6 w-6 text-indigo-600" aria-hidden />
+                    </button>
+                  )}
+                  {canDelete(g) && (() => {
+                    const memberCount = cellMembersCount[g.id] ?? 0;
+                    const disabled = memberCount > 0;
+                    return (
+                      <button
+                        onClick={() => {
+                          const memberCountLocal = cellMembersCount[g.id] ?? 0;
+                          const hasInactive = cellHasInactive[g.id] ?? false;
+                          const disabledLocal = memberCountLocal > 0 || hasInactive;
+                          if (disabledLocal) {
+                            if (hasInactive) return toast.error('Não é possível apagar célula: possui membros inativos');
+                            return toast.error('Não é possível apagar célula com membros associados');
+                          }
+                          setConfirmingCelula(g);
+                        }}
+                        title={(cellHasInactive[g.id] ?? false) ? 'Não é possível apagar: possui membros inativos' : (disabled ? 'Não é possível apagar: possui membros associados' : 'Excluir célula')}
+                        disabled={(cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)}
+                        className={`p-1 rounded ${((cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)) ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900'}`}
+                        aria-label={`Excluir ${g.name}`}
+                      >
+                        <FiTrash2 className="h-6 w-6" aria-hidden />
+                      </button>
+                    );
+                  })()}
+                  {canViewTracking(g) && (
+                    <Link href="/report/view" className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" title="Acompanhamento" aria-label={`Acompanhamento ${g.name}`}>
+                      <LuHistory className="h-6 w-6 text-teal-600" aria-hidden />
+                    </Link>
+                  )}
                 </div>
               </li>
             ))}
@@ -567,6 +683,15 @@ export default function CelulasPage() {
           </div>
         </div>
       )}
+
+      {/* CelulaViewModal */}
+      <CelulaViewModal
+        celula={viewingCelula}
+        isOpen={isViewModalOpen}
+        onClose={handleCloseViewModal}
+        discipuladorName={viewingCelula ? discipulados.find(d => d.id === viewingCelula.discipuladoId)?.discipulador?.name : undefined}
+        redeName={viewingCelula ? redes.find(r => r.id === discipulados.find(d => d.id === viewingCelula.discipuladoId)?.redeId)?.name : undefined}
+      />
 
       {confirmingCelula && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-55">

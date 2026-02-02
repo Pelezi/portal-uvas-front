@@ -10,13 +10,18 @@ import toast from 'react-hot-toast';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
 import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
 import MemberModal from '@/components/MemberModal';
+import MemberViewModal from '@/components/MemberViewModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function MembersManagementPage() {
+  const { user } = useAuth();
   const [celulas, setCelulas] = useState<Celula[]>([]);
   const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
+  const hasInitialized = useRef(false);
+  const filtersInitialized = useRef(false);
 
   // Filters
   const [filterCelulaId, setFilterCelulaId] = useState<number | null>(null);
@@ -29,6 +34,10 @@ export default function MembersManagementPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMember, setModalMember] = useState<Member | null>(null);
+  
+  // View modal state
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingMember, setViewingMember] = useState<Member | null>(null);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -71,15 +80,63 @@ export default function MembersManagementPage() {
         setCelulas(c);
         setDiscipulados(d);
         setRedes(r);
+
+        // Inicializar filtros baseados no usuário logado (apenas uma vez)
+        if (!hasInitialized.current && user) {
+          hasInitialized.current = true;
+          
+          // Verificar se o usuário tem associações e selecionar a primeira
+          if (user.celula?.id) {
+            // Tem célula associada
+            setFilterCelulaId(user.celula.id);
+            
+            // Buscar discipulado e rede da célula
+            const celula = c.find(cel => cel.id === user.celula?.id);
+            if (celula?.discipuladoId) {
+              setFilterDiscipuladoId(celula.discipuladoId);
+              
+              const discipulado = d.find(disc => disc.id === celula.discipuladoId);
+              if (discipulado?.redeId) {
+                setFilterRedeId(discipulado.redeId);
+              }
+            }
+          } else {
+            // Verificar se é discipulador
+            const userDiscipulado = d.find(disc => disc.discipuladorMemberId === user.id);
+            if (userDiscipulado) {
+              setFilterDiscipuladoId(userDiscipulado.id);
+              if (userDiscipulado.redeId) {
+                setFilterRedeId(userDiscipulado.redeId);
+              }
+            } else {
+              // Verificar se é pastor de rede
+              const userRede = r.find(rede => rede.pastorMemberId === user.id);
+              if (userRede) {
+                setFilterRedeId(userRede.id);
+              }
+            }
+          }
+          
+          // Marcar que os filtros foram inicializados
+          filtersInitialized.current = true;
+        } else if (!hasInitialized.current) {
+          // Se não há usuário ainda, marcar como inicializado para evitar loop
+          filtersInitialized.current = true;
+        }
       } catch (e) {
         console.error(e);
       }
     };
     loadFilters();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const loadMembers = async () => {
+      // Aguardar inicialização dos filtros
+      if (!filtersInitialized.current) {
+        return;
+      }
+      
       setLoading(true);
       try {
         const filters: MemberFilters = {};
@@ -103,6 +160,11 @@ export default function MembersManagementPage() {
   const openEditModal = (m: Member) => {
     setModalMember(m);
     setIsModalOpen(true);
+  };
+
+  const openViewModal = (m: Member) => {
+    setViewingMember(m);
+    setIsViewModalOpen(true);
   };
 
   const openCreateModal = () => {
@@ -171,6 +233,57 @@ export default function MembersManagementPage() {
 
   const removeMember = (member: Member) => {
     setConfirmingMember(member);
+  };
+
+  // Verifica se o usuário pode editar/deletar um membro específico
+  const canManageMember = (member: Member): boolean => {
+    if (!user) return false;
+    
+    // Admin e pastor podem gerenciar todos
+    const isAdmin = user.roles?.some((r: any) => r.role?.isAdmin);
+    const isPastor = user.ministryPosition?.type === 'PASTOR' || user.ministryPosition?.type === 'PRESIDENT_PASTOR';
+    
+    if (isAdmin || isPastor) return true;
+    
+    // Membro sem célula pode ser gerenciado
+    if (!member.celulaId) return true;
+    
+    // Verificar se o membro está na mesma rede/discipulado/célula
+    const memberCelula = celulas.find(c => c.id === member.celulaId);
+    
+    // Verificar se usuário tem célula e é a mesma célula do membro
+    if (user.celula?.id === member.celulaId) {
+      // Verificar hierarquia ministerial
+      return isLowerMinistryLevel(member);
+    }
+    
+    // Verificar se o usuário é discipulador do membro
+    if (memberCelula?.discipuladoId) {
+      const memberDiscipulado = discipulados.find(d => d.id === memberCelula.discipuladoId);
+      if (memberDiscipulado?.discipuladorMemberId === user.id) {
+        return isLowerMinistryLevel(member);
+      }
+      
+      // Verificar se está na mesma rede
+      if (memberDiscipulado?.redeId) {
+        const memberRede = redes.find(r => r.id === memberDiscipulado.redeId);
+        if (memberRede?.pastorMemberId === user.id) {
+          return isLowerMinistryLevel(member);
+        }
+      }
+    }
+    
+    return false;
+  };
+
+  // Verifica se o membro tem nível ministerial inferior ao usuário logado
+  const isLowerMinistryLevel = (member: Member): boolean => {
+    if (!user?.ministryPosition?.priority || !member.ministryPosition?.priority) {
+      return true; // Se não tem priority definido, permite
+    }
+    
+    // Priority maior = cargo menor na hierarquia
+    return member.ministryPosition.priority > user.ministryPosition.priority;
   };
 
   const performDeleteMember = async () => {
@@ -258,7 +371,15 @@ export default function MembersManagementPage() {
                   labelId="filter-celula-label"
                   value={filterCelulaId !== null ? String(filterCelulaId) : ''}
                   label="Célula"
-                  onChange={(e) => setFilterCelulaId(e.target.value === '' ? null : Number(e.target.value))}
+                  onChange={(e) => {
+                    const value = e.target.value === '' ? null : Number(e.target.value);
+                    // Se selecionar "Sem célula" (0), limpar filtros de rede e discipulado
+                    if (value === 0) {
+                      setFilterRedeId(null);
+                      setFilterDiscipuladoId(null);
+                    }
+                    setFilterCelulaId(value);
+                  }}
                   size="small"
                   className="bg-white dark:bg-gray-800"
                 >
@@ -289,7 +410,12 @@ export default function MembersManagementPage() {
                 className={`flex items-center gap-3 border p-2 rounded ${!m.celulaId ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-white dark:bg-gray-900'}`}
               >
                 <span className="flex-1">
-                  {m.name}
+                  <button
+                    onClick={() => openViewModal(m)}
+                    className="text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium"
+                  >
+                    {m.name}
+                  </button>
                   {!m.celulaId && <span className="text-xs text-red-600 dark:text-red-400 ml-2 font-semibold">(sem célula)</span>}
                   {m.celula && (
                     <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
@@ -298,24 +424,26 @@ export default function MembersManagementPage() {
                   )}
                   {!m.isActive && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">(desligado)</span>}
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openEditModal(m)}
-                    aria-label="Editar membro"
-                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-                  >
-                    <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
-                  </button>
-                  {m.celulaId && (
+                {canManageMember(m) && (
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => removeMember(m)}
-                      aria-label="Remover membro da célula"
+                      onClick={() => openEditModal(m)}
+                      aria-label="Editar membro"
                       className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                     >
-                      <FiTrash2 className="h-4 w-4 text-red-600" aria-hidden />
+                      <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
                     </button>
-                  )}
-                </div>
+                    {m.celulaId && (
+                      <button
+                        onClick={() => removeMember(m)}
+                        aria-label="Remover membro da célula"
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <FiTrash2 className="h-4 w-4 text-red-600" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -341,6 +469,16 @@ export default function MembersManagementPage() {
           }}
           onSave={handleModalSave}
           celulas={celulas}
+        />
+
+        {/* Member View Modal */}
+        <MemberViewModal
+          member={viewingMember}
+          isOpen={isViewModalOpen}
+          onClose={() => {
+            setIsViewModalOpen(false);
+            setViewingMember(null);
+          }}
         />
 
         {/* Delete confirmation modal */}

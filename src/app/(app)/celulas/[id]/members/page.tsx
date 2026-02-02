@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import Link from 'next/link';
 import MemberModal from '@/components/MemberModal';
+import MemberViewModal from '@/components/MemberViewModal';
 import AddMemberChoiceModal from '@/components/AddMemberChoiceModal';
 import { FiEdit2, FiTrash2, FiUserPlus } from 'react-icons/fi';
 
@@ -20,6 +21,8 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMember, setModalMember] = useState<Member | null>(null);
   const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingMember, setViewingMember] = useState<Member | null>(null);
 
   const celulaId = parseInt(resolvedParams.id, 10);
 
@@ -73,6 +76,11 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   const openAddModal = () => {
     setModalMember(null);
     setIsChoiceModalOpen(true);
+  };
+
+  const openViewModal = (member: Member) => {
+    setViewingMember(member);
+    setIsViewModalOpen(true);
   };
 
   const handleAddExistingMember = async (memberId: number) => {
@@ -169,7 +177,12 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
           {members.map((m) => (
             <li key={m.id} className="flex items-center justify-between border p-3 rounded bg-white dark:bg-gray-900">
               <div>
-                <div className="font-medium text-gray-900 dark:text-white">{m.name}</div>
+                <button
+                  onClick={() => openViewModal(m)}
+                  className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left"
+                >
+                  {m.name}
+                </button>
                 <div className="text-sm text-gray-500 dark:text-gray-400">id: {m.id}</div>
               </div>
               <div className="flex items-center gap-2">
@@ -209,6 +222,15 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
         onCreateNew={handleCreateNewMember}
         onAddExisting={handleAddExistingMember}
         currentCelulaId={celulaId}
+      />
+
+      <MemberViewModal
+        member={viewingMember}
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setViewingMember(null);
+        }}
       />
 
       <MemberModal

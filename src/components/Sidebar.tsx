@@ -91,7 +91,7 @@ export default function Sidebar() {
   const isLeader = perm.isAdmin || perm.pastor || perm.discipulador || perm.leader;
 
   const navItems: NavItem[] = [
-    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false, require: 'pastor' },
+    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false, require: 'discipulador' },
     { 
       label: 'Relatório', 
       icon: <FileText size={18} />, 
@@ -100,8 +100,8 @@ export default function Sidebar() {
         { href: '/report/view', label: 'Visualizar Relatório', icon: <FileText size={18} />, matchPrefix: false },
       ]
     },
-    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true, require: 'pastor' },
-    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
+    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true },
+    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
     { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
     { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'pastor' },
     { href: '/settings', label: 'Configurações', icon: <Settings size={18} />, matchPrefix: true, require: 'admin' },
