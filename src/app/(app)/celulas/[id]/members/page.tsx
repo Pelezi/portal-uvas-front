@@ -31,7 +31,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     setLoading(true);
     try {
       const m = await membersService.getMembers(celulaId);
-      setMembers(m as Member[]);
+      setMembers(m);
     } catch (err) {
       console.error(err);
       toast.error(ErrorMessages.loadMembers(err));
