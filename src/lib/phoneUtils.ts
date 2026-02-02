@@ -150,11 +150,32 @@ export function ensureCountryCode(phone: string): string {
     return trimmed;
   }
   
-  // If it's just digits, add +55
+  // If it's just digits
   const numbers = trimmed.replace(/\D/g, '');
-  if (numbers) {
-    return `+55${numbers}`;
+  if (!numbers) return '+55';
+  
+  // Check for common country code patterns
+  // Brazil: 55 + 2 (DDD) + 8-9 (number) = 12-13 digits
+  if (numbers.startsWith('55') && numbers.length >= 12 && numbers.length <= 13) {
+    return `+${numbers}`;
   }
   
-  return '+55';
+  // USA/Canada: 1 + 10 digits = 11 digits
+  if (numbers.startsWith('1') && numbers.length === 11) {
+    return `+${numbers}`;
+  }
+  
+  // UK: 44 + 10 digits = 12-13 digits
+  if (numbers.startsWith('44') && numbers.length >= 12 && numbers.length <= 13) {
+    return `+${numbers}`;
+  }
+  
+  // Other countries: if has 11-15 digits and doesn't start with 55, assume it has country code
+  // E.164 standard allows up to 15 digits total (including country code)
+  if (numbers.length >= 11 && numbers.length <= 15 && !numbers.startsWith('55')) {
+    return `+${numbers}`;
+  }
+  
+  // Otherwise, assume it's a Brazilian local number without country code
+  return `+55${numbers}`;
 }
