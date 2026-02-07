@@ -42,7 +42,7 @@ export default function ReportPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const g = await celulasService.getCelulas();
+        const g = await celulasService.getCelulas({ onlyOwnCelulas: true });
         setGroups(g);
         // If user only has one célula (group), select it automatically
         if (Array.isArray(g) && g.length === 1) {
