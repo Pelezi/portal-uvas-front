@@ -78,7 +78,7 @@ export default function CelulaPresencePage() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-semibold">Célula {celulaName ?? celulaId}</h2>
         <div className="flex items-center gap-2">
-          <button onClick={handleBack} className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded hover:bg-gray-300 dark:hover:bg-gray-600">Voltar</button>
+          <button onClick={handleBack} className="px-3 py-1 bg-gray-700 text-gray-100 rounded hover:bg-gray-600">Voltar</button>
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export default function CelulaPresencePage() {
         {presences.map((p) => {
           const isOpen = !!expanded[p.date];
           return (
-            <div key={p.date} className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+            <div key={p.date} className="border rounded-lg overflow-hidden bg-gray-800">
               <button
                 type="button"
                 onClick={() => toggle(p.date)}
@@ -103,10 +103,10 @@ export default function CelulaPresencePage() {
               </button>
 
               {isOpen && (
-                <div className="p-3 border-t bg-gray-50 dark:bg-gray-900">
+                <div className="p-3 border-t bg-gray-900">
                   <ul className="list-disc pl-5 space-y-1">
                     {(p.members || []).map((m: Member) => (
-                      <li key={m.id} className="text-sm text-gray-900 dark:text-gray-100">{m.name}</li>
+                      <li key={m.id} className="text-sm text-gray-100">{m.name}</li>
                     ))}
                   </ul>
                 </div>

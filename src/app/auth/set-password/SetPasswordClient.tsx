@@ -65,21 +65,21 @@ export default function SetPasswordClient({ token }: { token: string }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-md mx-auto mt-12 p-6 bg-white dark:bg-gray-800 rounded shadow">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Definir senha</h2>
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="max-w-md mx-auto mt-12 p-6 bg-gray-800 rounded shadow">
+        <h2 className="text-xl font-semibold mb-4 text-gray-100">Definir senha</h2>
         {/* errors are shown via toast */}
         <form onSubmit={handleSubmit}>
           <div className="mb-3">
-            <label className="block text-sm mb-1 text-gray-700 dark:text-gray-200">Senha</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full border border-gray-300 dark:border-gray-600 px-3 py-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+            <label className="block text-sm mb-1 text-gray-200">Senha</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full border border-gray-600 px-3 py-2 rounded bg-gray-700 text-gray-100" />
           </div>
           <div className="mb-3">
-            <label className="block text-sm mb-1 text-gray-700 dark:text-gray-200">Confirmar senha</label>
-            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="w-full border border-gray-300 dark:border-gray-600 px-3 py-2 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+            <label className="block text-sm mb-1 text-gray-200">Confirmar senha</label>
+            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} className="w-full border border-gray-600 px-3 py-2 rounded bg-gray-700 text-gray-100" />
           </div>
           <div className="flex justify-end">
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white px-4 py-2 rounded">Definir senha</button>
+            <button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Definir senha</button>
           </div>
         </form>
       </div>

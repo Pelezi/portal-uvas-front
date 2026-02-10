@@ -39,19 +39,19 @@ export default function SelectMatrixPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="max-w-md w-full space-y-8 p-8 bg-gray-800 rounded-lg shadow-lg">
         <div>
-          <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <h2 className="text-center text-3xl font-bold text-gray-100">
             Selecione uma Base
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-center text-sm text-gray-400">
             Você possui acesso a múltiplas bases. Selecione qual deseja acessar.
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded">
+          <div className="bg-red-900/30 border border-red-800 text-red-400 px-4 py-3 rounded">
             {error}
           </div>
         )}
@@ -62,9 +62,9 @@ export default function SelectMatrixPage() {
               key={matrix.id}
               onClick={() => handleMatrixSelect(matrix.id)}
               disabled={isLoading}
-              className="w-full flex items-center justify-between p-4 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-between p-4 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="text-lg font-medium text-gray-900 dark:text-gray-100">
+              <span className="text-lg font-medium text-gray-100">
                 {matrix.name}
               </span>
               <svg
@@ -87,7 +87,7 @@ export default function SelectMatrixPage() {
         <div className="mt-6">
           <button
             onClick={() => router.push('/auth/login')}
-            className="w-full text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+            className="w-full text-sm text-gray-400 hover:text-gray-200 transition-colors"
           >
             ← Voltar ao login
           </button>

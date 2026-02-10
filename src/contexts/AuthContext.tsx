@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // From here, response is an AuthResponse with matrix info
     const auth = response as MatrixAuthResponse;
     // Backend now returns 'member' field instead of 'user'
-    const memberData = (auth as any).member || auth.user;
+    const memberData = auth.member || auth.user;
     const mergedUser: Member = {
       ...memberData,
       permission: auth.permission ?? memberData.permission ?? null,

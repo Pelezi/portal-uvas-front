@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, FileText, Home, User, Menu, X, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, FileText, Home, User, Menu, X, Settings, ChevronDown, ChevronUp, Building } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Permission, Celula } from '@/types';
@@ -23,7 +22,7 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   matchPrefix?: boolean;
-  require?: 'leader' | 'discipulador' | 'pastor' | 'admin';
+  require?: 'leader' | 'discipulador' | 'pastorPresidente' | 'pastor' | 'admin';
   children?: Omit<NavItem, 'children'>[];
 }
 
@@ -32,8 +31,8 @@ const NavLink = ({ href, icon, label, isActive, onClick }: NavLinkProps) => (
     href={href}
     onClick={onClick}
     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
-      ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 font-medium'
-      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+      ? 'bg-blue-900 text-blue-300 font-medium'
+      : 'text-gray-300 hover:bg-gray-700'
       }`}
   >
     {icon}
@@ -45,7 +44,6 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, user, currentMatrix } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const { isSidebarOpen, toggleSidebar } = useAppStore();
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set(['Relatório']));
 
@@ -86,6 +84,7 @@ export default function Sidebar() {
   // Compute permissions
   const perm: Permission = user.permission;
   const isAdmin = perm.isAdmin;
+  const isPresidentPastor = perm.isAdmin || perm.pastorPresidente;
   const isPastor = perm.isAdmin || perm.pastor;
   const isDiscipulador = perm.isAdmin || perm.pastor || perm.discipulador;
   const isLeader = perm.isAdmin || perm.pastor || perm.discipulador || perm.leader;
@@ -104,6 +103,7 @@ export default function Sidebar() {
     { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
     { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
     { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'pastor' },
+    { href: '/congregacoes', label: 'Congregações', icon: <Building size={18} />, matchPrefix: true, require: 'pastorPresidente' },
     { href: '/settings', label: 'Configurações', icon: <Settings size={18} />, matchPrefix: true, require: 'admin' },
   ];
 
@@ -114,9 +114,9 @@ export default function Sidebar() {
       {!isSidebarOpen && (
         <button
           onClick={toggleSidebar}
-          className="fixed top-4 left-4 z-50 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg hover:bg-gray-50 dark:hover:bg-gray-700 lg:hidden transition-transform hover:scale-105"
+          className="fixed top-4 left-4 z-50 p-2 bg-gray-800 rounded-lg shadow-lg hover:bg-gray-700 lg:hidden transition-transform hover:scale-105"
         >
-          <Menu size={24} className="text-gray-900 dark:text-gray-100" />
+          <Menu size={24} className="text-gray-100" />
         </button>
       )}
 
@@ -131,23 +131,23 @@ export default function Sidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-50 flex flex-col ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'
+        className={`fixed top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-50 flex flex-col ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'
           }`}
       >
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-b border-gray-700">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Uvas</h1>
+            <h1 className="text-xl font-semibold text-gray-100">Uvas</h1>
             <button
               onClick={toggleSidebar}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded lg:hidden"
+              className="p-1 hover:bg-gray-700 rounded lg:hidden"
             >
-              <X size={20} className="text-gray-900 dark:text-gray-100" />
+              <X size={20} className="text-gray-100" />
             </button>
           </div>
           {currentMatrix && (
-            <div className="mt-2 px-2 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md">
-              <p className="text-xs text-gray-600 dark:text-gray-400">Base atual</p>
-              <p className="text-sm font-medium text-blue-600 dark:text-blue-300">{currentMatrix.name}</p>
+            <div className="mt-2 px-2 py-1.5 bg-blue-900/30 rounded-md">
+              <p className="text-xs text-gray-400">Base atual</p>
+              <p className="text-sm font-medium text-blue-300">{currentMatrix.name}</p>
             </div>
           )}
         </div>
@@ -156,6 +156,7 @@ export default function Sidebar() {
           {navItems.map((item) => {
             // permission filtering
             if (item.require === 'admin' && !isAdmin) return null;
+            if (item.require === 'pastorPresidente' && !isPresidentPastor) return null;
             if (item.require === 'pastor' && !isPastor) return null;
             if (item.require === 'discipulador' && !isDiscipulador) return null;
             if (item.require === 'leader' && !isLeader) return null;
@@ -173,8 +174,8 @@ export default function Sidebar() {
                     onClick={() => toggleDropdown(item.label)}
                     className={`flex items-center justify-between w-full gap-3 px-4 py-3 rounded-lg transition-colors ${
                       hasActiveChild
-                        ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 font-medium'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        ? 'bg-blue-900 text-blue-300 font-medium'
+                        : 'text-gray-300 hover:bg-gray-700'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -215,14 +216,14 @@ export default function Sidebar() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+        <div className="p-4 border-t border-gray-700 space-y-2">
           <Link
             href="/profile"
             onClick={handleNavClick}
             className={`flex items-center gap-3 px-4 py-2 rounded-lg w-full transition-colors relative ${
               pathname === '/profile'
-                ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 font-medium'
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                ? 'bg-blue-900 text-blue-300 font-medium'
+                : 'text-gray-300 hover:bg-gray-700'
             }`}
           >
             <User size={18} />
@@ -235,14 +236,8 @@ export default function Sidebar() {
             )}
           </Link>
           <button
-            onClick={toggleTheme}
-            className="flex items-center gap-3 px-4 py-2 rounded-lg w-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <span>{theme === 'light' ? 'Modo Escuro' : 'Modo Claro'}</span>
-          </button>
-          <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2 rounded-lg w-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="flex items-center gap-3 px-4 py-2 rounded-lg w-full text-gray-300 hover:bg-gray-700 transition-colors"
           >
             <span>Sair</span>
           </button>

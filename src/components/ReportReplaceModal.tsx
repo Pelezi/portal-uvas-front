@@ -16,9 +16,9 @@ export default function ReportReplaceModal({ open, reportType, date, onReplace, 
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-60">
-      <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
-        <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">Relatório já preenchido</h4>
-        <div className="mb-4 text-sm text-gray-700 dark:text-gray-200">
+      <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
+        <h4 className="font-semibold mb-2 text-white">Relatório já preenchido</h4>
+        <div className="mb-4 text-sm text-gray-200">
           Já existe um relatório de {reportType === 'CELULA' ? 'célula' : 'culto'} para a data {date}. 
           O que deseja fazer?
         </div>
@@ -37,7 +37,7 @@ export default function ReportReplaceModal({ open, reportType, date, onReplace, 
           </button>
           <button 
             onClick={onCancel} 
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="w-full px-3 py-2 border border-gray-600 rounded hover:bg-gray-800"
           >
             Cancelar
           </button>

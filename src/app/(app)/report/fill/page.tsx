@@ -790,7 +790,7 @@ export default function ReportPage() {
           <h2 className="text-2xl font-semibold">Relatórios Semanais</h2>
           <Link
             href="/report/view"
-            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="p-2 rounded hover:bg-gray-800"
             aria-label="Acompanhamento"
           >
             <LuHistory className="h-6 w-6 text-teal-600" aria-hidden />
@@ -816,8 +816,8 @@ export default function ReportPage() {
                 {groups.length > 1 && (
                   <MenuItem value={-1}>Suas Células</MenuItem>
                 )}
-                {user?.permission?.ministryType !== "LEADER" &&
-                  user?.permission?.ministryType !== "LEADER_IN_TRAINING" && (
+                {((user?.permission?.ministryType !== "LEADER" &&
+                  user?.permission?.ministryType !== "LEADER_IN_TRAINING") || user.permission.isAdmin) && (
                     <MenuItem value={-2}>Todas as Células</MenuItem>
                   )}
                 {allCelulas.map((g) => (
@@ -842,7 +842,7 @@ export default function ReportPage() {
               return (
                 <div
                   key={celula.id}
-                  className="border-2 border-gray-300 dark:border-gray-600 rounded-lg p-4"
+                  className="border-2 border-gray-600 rounded-lg p-4"
                 >
                   <h3 className="text-xl font-semibold mb-4">{celula.name}</h3>
                   {celularWeekReports.length > 0 ? (
@@ -856,8 +856,8 @@ export default function ReportPage() {
                               key={idx}
                               className={`p-4 rounded-lg border-2 transition-all ${
                                 isComplete
-                                  ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                                  : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                                  ? "border-green-500 bg-green-900/20"
+                                  : "border-gray-600 bg-gray-800"
                               }`}
                             >
                               <div className="flex justify-between items-center mb-3">
@@ -866,7 +866,7 @@ export default function ReportPage() {
                                     Semana de {week.startDate.format("DD/MM")} a{" "}
                                     {week.endDate.format("DD/MM/YYYY")}
                                   </h4>
-                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  <p className="text-sm text-gray-400">
                                     Domingo a Sábado
                                   </p>
                                 </div>
@@ -887,8 +887,8 @@ export default function ReportPage() {
                                   }
                                   className={`p-3 rounded-lg border-2 transition-all ${
                                     week.hasCelulaReport
-                                      ? "border-green-500 bg-green-100 dark:bg-green-800/30 text-green-800 dark:text-green-200"
-                                      : "border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500"
+                                      ? "border-green-500 bg-green-800/30 text-green-200"
+                                      : "border-gray-600 hover:border-blue-500"
                                   }`}
                                 >
                                   <div className="font-medium">Célula</div>
@@ -908,8 +908,8 @@ export default function ReportPage() {
                                   }
                                   className={`p-3 rounded-lg border-2 transition-all ${
                                     week.hasCultoReport
-                                      ? "border-green-500 bg-green-100 dark:bg-green-800/30 text-green-800 dark:text-green-200"
-                                      : "border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500"
+                                      ? "border-green-500 bg-green-800/30 text-green-200"
+                                      : "border-gray-600 hover:border-blue-500"
                                   }`}
                                 >
                                   <div className="font-medium">Culto</div>
@@ -934,7 +934,7 @@ export default function ReportPage() {
                       )}
                     </>
                   ) : (
-                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <div className="text-center py-8 text-gray-400">
                       Nenhuma semana disponível para relatórios
                     </div>
                   )}
@@ -953,8 +953,8 @@ export default function ReportPage() {
                   key={idx}
                   className={`p-4 rounded-lg border-2 transition-all ${
                     isComplete
-                      ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                      : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                      ? "border-green-500 bg-green-900/20"
+                      : "border-gray-600 bg-gray-800"
                   }`}
                 >
                   <div className="flex justify-between items-center mb-3">
@@ -963,7 +963,7 @@ export default function ReportPage() {
                         Semana de {week.startDate.format("DD/MM")} a{" "}
                         {week.endDate.format("DD/MM/YYYY")}
                       </h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-gray-400">
                         Domingo a Sábado
                       </p>
                     </div>
@@ -983,8 +983,8 @@ export default function ReportPage() {
                       }
                       className={`p-3 rounded-lg border-2 transition-all ${
                         week.hasCelulaReport
-                          ? "border-green-500 bg-green-100 dark:bg-green-800/30 text-green-800 dark:text-green-200"
-                          : "border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500"
+                          ? "border-green-500 bg-green-800/30 text-green-200"
+                          : "border-gray-600 hover:border-blue-500"
                       }`}
                     >
                       <div className="font-medium">Célula</div>
@@ -1003,8 +1003,8 @@ export default function ReportPage() {
                       }
                       className={`p-3 rounded-lg border-2 transition-all ${
                         week.hasCultoReport
-                          ? "border-green-500 bg-green-100 dark:bg-green-800/30 text-green-800 dark:text-green-200"
-                          : "border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500"
+                          ? "border-green-500 bg-green-800/30 text-green-200"
+                          : "border-gray-600 hover:border-blue-500"
                       }`}
                     >
                       <div className="font-medium">Culto</div>
@@ -1030,7 +1030,7 @@ export default function ReportPage() {
         )}
 
         {selectedCelula && weekReports.length === 0 && (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+          <div className="text-center py-12 text-gray-400">
             Nenhuma semana disponível para relatórios
           </div>
         )}
@@ -1129,14 +1129,14 @@ export default function ReportPage() {
           <h3 className="font-medium">Membros</h3>
           <button
             onClick={() => setIsChoiceModalOpen(true)}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="p-1 rounded hover:bg-gray-800"
             title="Adicionar membro"
             aria-label="Adicionar membro"
           >
             <FiPlus className="h-6 w-6 text-blue-600" aria-hidden />
           </button>
         </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+        <p className="text-sm text-gray-400 mb-2">
           Clique nos membros que foram para
           {reportType === "CELULA" ? " a célula" : " o culto"}
         </p>
@@ -1150,8 +1150,8 @@ export default function ReportPage() {
                   onClick={() => togglePresent(m.id)}
                   className={`w-full text-left flex items-center justify-between p-3 rounded-lg border transition-colors ${
                     selected
-                      ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                      : "border-gray-200 dark:border-gray-700"
+                      ? "border-green-500 bg-green-900/20"
+                      : "border-gray-700"
                   } hover:shadow-sm`}
                   aria-pressed={selected}
                 >

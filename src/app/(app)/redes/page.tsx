@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import Collapse from '@/components/Collapse';
 import CollapsibleItem from '@/components/CollapsibleItem';
 import { redesService } from '@/services/redesService';
+import { congregacoesService } from '@/services/congregacoesService';
 import { memberService } from '@/services/memberService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { celulasService } from '@/services/celulasService';
@@ -11,10 +12,11 @@ import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { FiTrash2, FiPlus } from 'react-icons/fi';
 import ModalConfirm from '@/components/ModalConfirm';
-import { Celula, Discipulado, Member, Rede } from '@/types';
+import { Celula, Discipulado, Member, Rede, Congregacao } from '@/types';
 
 export default function RedesPage() {
   const [redes, setRedes] = useState<Rede[]>([]);
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [users, setUsers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -36,6 +38,7 @@ export default function RedesPage() {
   // create modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createName, setCreateName] = useState('');
+  const [createCongregacaoId, setCreateCongregacaoId] = useState<number | null>(null);
   const [createPastorUserId, setCreatePastorUserId] = useState<number | null>(null);
   const [createPastorQuery, setCreatePastorQuery] = useState('');
   const [createPastorName, setCreatePastorName] = useState('');
@@ -49,6 +52,7 @@ export default function RedesPage() {
   // edit modal state
   const [editRedeModalOpen, setEditRedeModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editCongregacaoId, setEditCongregacaoId] = useState<number | null>(null);
   const [editPastorQuery, setEditPastorQuery] = useState('');
   const [editPastorId, setEditPastorId] = useState<number | null>(null);
   const [editPastorName, setEditPastorName] = useState('');
@@ -86,6 +90,11 @@ export default function RedesPage() {
         // Carregar apenas usuários que podem ser pastores (PRESIDENT_PASTOR ou PASTOR)
         const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR' }); 
         setUsers(u || []); 
+      } catch (err) { console.error(err); }
+      
+      try {
+        const c = await congregacoesService.getCongregacoes();
+        setCongregacoes(c || []);
       } catch (err) { console.error(err); }
     })();
     return () => {
@@ -126,8 +135,12 @@ export default function RedesPage() {
 
   const createRede = async () => {
     try {
-      await redesService.createRede({ name: createName, pastorMemberId: createPastorUserId || undefined });
-      setCreateName(''); setCreatePastorUserId(null); setCreatePastorQuery(''); setShowCreateModal(false);
+      if (!createCongregacaoId) {
+        toast.error('Selecione uma congregação');
+        return;
+      }
+      await redesService.createRede({ name: createName, congregacaoId: createCongregacaoId, pastorMemberId: createPastorUserId || undefined });
+      setCreateName(''); setCreateCongregacaoId(null); setCreatePastorUserId(null); setCreatePastorQuery(''); setShowCreateModal(false);
       await load();
       toast.success('Rede criada com sucesso!');
     } catch (err) { 
@@ -139,6 +152,7 @@ export default function RedesPage() {
   const openEditRede = (r: Rede) => {
     setEditingRedeId(r.id);
     setEditName(r.name || '');
+    setEditCongregacaoId(r.congregacaoId);
     setEditPastorId(r.pastorMemberId ?? null);
     setEditPastorName(r.pastor ? r.pastor.name : '');
     setEditPastorQuery('');
@@ -149,7 +163,7 @@ export default function RedesPage() {
   const saveEditRede = async () => {
     try {
       if (!editingRedeId) throw new Error('Rede inválida');
-      await redesService.updateRede(editingRedeId, { name: editName, pastorMemberId: editPastorId || undefined });
+      await redesService.updateRede(editingRedeId, { name: editName, congregacaoId: editCongregacaoId || undefined, pastorMemberId: editPastorId || undefined });
       setEditRedeModalOpen(false);
       toast.success('Rede atualizada com sucesso!');
       await load();
@@ -223,7 +237,7 @@ export default function RedesPage() {
       <div className="mb-6">
         <label className="block mb-2">Filtros</label>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-          <input placeholder="Nome da rede" value={filterName} onChange={(e) => setFilterName(e.target.value)} className="border p-2 rounded flex-1 bg-white dark:bg-gray-800 dark:text-white h-10" />
+          <input placeholder="Nome da rede" value={filterName} onChange={(e) => setFilterName(e.target.value)} className="border p-2 rounded flex-1 bg-gray-800 text-white h-10" />
 
           <div ref={pastorDropdownRef} className="relative w-full sm:w-80">
             <input
@@ -238,11 +252,11 @@ export default function RedesPage() {
                 // delay hiding to allow click selection
                 pastorsDropdownTimeoutRef.current = window.setTimeout(() => { setShowPastorsDropdown(false); pastorsDropdownTimeoutRef.current = null; }, 150);
               }}
-              className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+              className="border p-2 rounded w-full bg-gray-800 text-white h-10"
             />
 
             {showPastorsDropdown && (
-              <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+              <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                 {users
                   .filter(u => pastorUserIds.has(u.id))
                   .filter(u => {
@@ -251,10 +265,10 @@ export default function RedesPage() {
                     return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                   })
                   .map(u => (
-                    <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterPastorId(u.id); setFilterPastorQuery(''); setShowPastorsDropdown(false); }}>
+                    <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterPastorId(u.id); setFilterPastorQuery(''); setShowPastorsDropdown(false); }}>
                       <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                        <div className="text-sm font-medium text-white">{u.name}</div>
+                        <div className="text-xs text-gray-400">{u.email}</div>
                       </div>
                       <div className="text-xs text-green-600">Selecionar</div>
                     </div>
@@ -277,7 +291,7 @@ export default function RedesPage() {
             .filter(r => !filterName || r.name.toLowerCase().includes(filterName.toLowerCase()))
             .filter(r => !filterPastorId || r.pastorMemberId === filterPastorId)
             .map(r => (
-              <li key={r.id} className={`border p-2 rounded ${!r.pastorMemberId ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : ''}`}>
+              <li key={r.id} className={`border p-2 rounded ${!r.congregacaoId || !r.pastorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
                 <CollapsibleItem
                   isOpen={!!expandedRedes[r.id]}
                   onToggle={() => onToggleRede(r)}
@@ -292,7 +306,7 @@ export default function RedesPage() {
                             disabled={disabled}
                             title={disabled ? 'Não é possível apagar: possui discipulados associados' : 'Excluir rede'}
                             onClick={() => requestDeleteRede(r)}
-                            className={`p-1 rounded ${disabled ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900'}`}
+                            className={`p-1 rounded ${disabled ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-900'}`}
                           >
                             <FiTrash2 className="h-4 w-4" aria-hidden />
                           </button>
@@ -301,7 +315,10 @@ export default function RedesPage() {
                     })()
                   }
                   title={<>{r.name} <span className="text-sm text-gray-500">({redeDiscipuladosCount[r.id] ?? (redeDiscipuladosMap[r.id]?.length ?? 0)} Discipulados)</span></>}
-                  subtitle={<>{/* keep same pastor text */}Pastor: {r.pastor ? r.pastor.name : <span className="text-red-600 dark:text-red-400">Sem pastor</span>}</>}
+                  subtitle={<>
+                    Congregação: {r.congregacao?.name || <span className="text-red-400">Sem congregação</span>} | 
+                    Pastor: {r.pastor ? r.pastor.name : <span className="text-red-400">Sem pastor</span>}
+                  </>}
                   duration={300}
                 >
                   {(redeDiscipuladosMap[r.id] || []).length === 0 && <div className="text-xs text-gray-500">Nenhum discipulado</div>}
@@ -355,26 +372,38 @@ export default function RedesPage() {
       {/* Create modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
+          <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">Criar Rede</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-gray-500">Fechar</button>
             </div>
             <div className="space-y-3">
-              <input placeholder="Nome da rede" value={createName} onChange={(e) => setCreateName(e.target.value)} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10" />
+              <input placeholder="Nome da rede" value={createName} onChange={(e) => setCreateName(e.target.value)} className="border p-2 rounded w-full bg-gray-800 text-white h-10" />
+              
+              <select 
+                value={createCongregacaoId || ''} 
+                onChange={(e) => setCreateCongregacaoId(e.target.value ? Number(e.target.value) : null)} 
+                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
+              >
+                <option value="">Selecione uma congregação *</option>
+                {congregacoes.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
               <div ref={createPastorDropdownRef} className="relative w-full">
-                <input placeholder="Pastor" value={createPastorQuery || createPastorName} onChange={(e) => { setCreatePastorQuery(e.target.value); setShowCreatePastorsDropdown(true); setCreatePastorName(''); setCreatePastorUserId(null); }} onFocus={() => setShowCreatePastorsDropdown(true)} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10" />
+                <input placeholder="Pastor" value={createPastorQuery || createPastorName} onChange={(e) => { setCreatePastorQuery(e.target.value); setShowCreatePastorsDropdown(true); setCreatePastorName(''); setCreatePastorUserId(null); }} onFocus={() => setShowCreatePastorsDropdown(true)} className="border p-2 rounded w-full bg-gray-800 text-white h-10" />
                 {showCreatePastorsDropdown && (
-                  <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {users.filter(u => {
                       const q = (createPastorQuery || '').toLowerCase();
                       if (!q) return true;
                       return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                     }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setCreatePastorUserId(u.id); setCreatePastorName(u.name); setCreatePastorQuery(''); setShowCreatePastorsDropdown(false); }}>
+                      <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setCreatePastorUserId(u.id); setCreatePastorName(u.name); setCreatePastorQuery(''); setShowCreatePastorsDropdown(false); }}>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                          <div className="text-sm font-medium text-white">{u.name}</div>
+                          <div className="text-xs text-gray-400">{u.email}</div>
                         </div>
                         <div className="text-xs text-green-600">Selecionar</div>
                       </div>
@@ -395,26 +424,38 @@ export default function RedesPage() {
       {/* Edit rede modal */}
       {editRedeModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
+          <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">Editar Rede</h3>
               <button onClick={() => setEditRedeModalOpen(false)} className="text-gray-500">Fechar</button>
             </div>
             <div className="space-y-3">
-              <input placeholder="Nome da rede" value={editName} onChange={(e) => setEditName(e.target.value)} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10" />
+              <input placeholder="Nome da rede" value={editName} onChange={(e) => setEditName(e.target.value)} className="border p-2 rounded w-full bg-gray-800 text-white h-10" />
+              
+              <select 
+                value={editCongregacaoId || ''} 
+                onChange={(e) => setEditCongregacaoId(e.target.value ? Number(e.target.value) : null)} 
+                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
+              >
+                <option value="">Selecione uma congregação</option>
+                {congregacoes.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
               <div ref={editPastorDropdownRef} className="relative w-full">
-                <input placeholder="Pastor" value={editPastorQuery || editPastorName} onChange={(e) => { setEditPastorQuery(e.target.value); setShowEditPastorsDropdown(true); setEditPastorName(''); setEditPastorId(null); }} onFocus={() => { if (editPastorsTimeoutRef.current) { window.clearTimeout(editPastorsTimeoutRef.current); editPastorsTimeoutRef.current = null; } setShowEditPastorsDropdown(true); }} className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10" />
+                <input placeholder="Pastor" value={editPastorQuery || editPastorName} onChange={(e) => { setEditPastorQuery(e.target.value); setShowEditPastorsDropdown(true); setEditPastorName(''); setEditPastorId(null); }} onFocus={() => { if (editPastorsTimeoutRef.current) { window.clearTimeout(editPastorsTimeoutRef.current); editPastorsTimeoutRef.current = null; } setShowEditPastorsDropdown(true); }} className="border p-2 rounded w-full bg-gray-800 text-white h-10" />
                 {showEditPastorsDropdown && (
-                  <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {users.filter(u => {
                       const q = (editPastorQuery || '').toLowerCase();
                       if (!q) return true;
                       return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                     }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setEditPastorId(u.id); setEditPastorName(u.name); setEditPastorQuery(''); setShowEditPastorsDropdown(false); }}>
+                      <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setEditPastorId(u.id); setEditPastorName(u.name); setEditPastorQuery(''); setShowEditPastorsDropdown(false); }}>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                          <div className="text-sm font-medium text-white">{u.name}</div>
+                          <div className="text-xs text-gray-400">{u.email}</div>
                         </div>
                         <div className="text-xs text-green-600">Selecionar</div>
                       </div>

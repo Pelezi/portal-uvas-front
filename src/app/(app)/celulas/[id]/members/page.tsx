@@ -175,27 +175,27 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
       {!loading && (
         <ul className="space-y-3">
           {members.map((m) => (
-            <li key={m.id} className="flex items-center justify-between border p-3 rounded bg-white dark:bg-gray-900">
+            <li key={m.id} className="flex items-center justify-between border p-3 rounded bg-gray-900">
               <div>
                 <button
                   onClick={() => openViewModal(m)}
-                  className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left"
+                  className="font-medium text-white hover:text-blue-400 transition-colors text-left"
                 >
                   {m.name}
                 </button>
-                <div className="text-sm text-gray-500 dark:text-gray-400">id: {m.id}</div>
+                <div className="text-sm text-gray-400">id: {m.id}</div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => openEditModal(m)}
-                  className="p-2 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded transition-colors"
+                  className="p-2 text-yellow-600 hover:bg-yellow-900/20 rounded transition-colors"
                   title="Editar"
                 >
                   <FiEdit2 size={18} />
                 </button>
                 <button
                   onClick={() => remove(m.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                  className="p-2 text-red-600 hover:bg-red-900/20 rounded transition-colors"
                   title="Remover"
                 >
                   <FiTrash2 size={18} />

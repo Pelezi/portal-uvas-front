@@ -176,19 +176,19 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-white">Dashboard</h1>
 
       {/* Filtros */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
+      <div className="bg-gray-800 rounded-lg p-4 shadow">
         <div className="flex items-center gap-2 mb-3">
-          <Filter size={20} className="text-gray-500 dark:text-gray-400" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Filtros</h2>
+          <Filter size={20} className="text-gray-400" />
+          <h2 className="text-lg font-semibold text-white">Filtros</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Filtro de Rede - apenas para pastores */}
           {isPastor && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Rede
               </label>
               <select
@@ -198,7 +198,7 @@ export default function Dashboard() {
                   setSelectedDiscipuladoId(undefined);
                   setSelectedCelulaId(undefined);
                 }}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
                 disabled={!isPastor}
               >
                 <option value="">Todas as redes</option>
@@ -214,7 +214,7 @@ export default function Dashboard() {
           {/* Filtro de Discipulado - para pastores e discipuladores */}
           {(isPastor || isDiscipulador) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Discipulado
               </label>
               <select
@@ -226,7 +226,7 @@ export default function Dashboard() {
                     setSelectedRedeId(undefined);
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
                 disabled={!isPastor && !isDiscipulador}
               >
                 <option value="">Todos os discipulados</option>
@@ -243,7 +243,7 @@ export default function Dashboard() {
 
           {/* Filtro de Célula - para todos */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               Célula
             </label>
             <select
@@ -255,7 +255,7 @@ export default function Dashboard() {
                   setSelectedDiscipuladoId(undefined);
                 }
               }}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
               disabled={isLeader && !isPastor && !isDiscipulador}
             >
               <option value="">Todas as células</option>
@@ -284,38 +284,38 @@ export default function Dashboard() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+        <div className="bg-gray-800 rounded-lg p-6 shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Total de Membros</div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stats.total}</div>
+              <div className="text-sm text-gray-400">Total de Membros</div>
+              <div className="text-3xl font-bold text-white mt-2">{stats.total}</div>
             </div>
-            <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
-              <Users className="text-blue-600 dark:text-blue-300" size={24} />
+            <div className="p-3 bg-blue-900 rounded-full">
+              <Users className="text-blue-300" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+        <div className="bg-gray-800 rounded-lg p-6 shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Sem Célula</div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stats.withoutCelula}</div>
+              <div className="text-sm text-gray-400">Sem Célula</div>
+              <div className="text-3xl font-bold text-white mt-2">{stats.withoutCelula}</div>
             </div>
-            <div className="p-3 bg-red-100 dark:bg-red-900 rounded-full">
-              <UserX className="text-red-600 dark:text-red-300" size={24} />
+            <div className="p-3 bg-red-900 rounded-full">
+              <UserX className="text-red-300" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+        <div className="bg-gray-800 rounded-lg p-6 shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Com Célula</div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stats.total - stats.withoutCelula}</div>
+              <div className="text-sm text-gray-400">Com Célula</div>
+              <div className="text-3xl font-bold text-white mt-2">{stats.total - stats.withoutCelula}</div>
             </div>
-            <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
-              <Users className="text-green-600 dark:text-green-300" size={24} />
+            <div className="p-3 bg-green-900 rounded-full">
+              <Users className="text-green-300" size={24} />
             </div>
           </div>
         </div>
@@ -324,8 +324,8 @@ export default function Dashboard() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gender Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Distribuição por Gênero</h2>
+        <div className="bg-gray-800 rounded-lg p-6 shadow">
+          <h2 className="text-lg font-semibold mb-4 text-white">Distribuição por Gênero</h2>
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>
               <PieChart>
@@ -350,8 +350,8 @@ export default function Dashboard() {
         </div>
 
         {/* Marital Status Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Estado Civil</h2>
+        <div className="bg-gray-800 rounded-lg p-6 shadow">
+          <h2 className="text-lg font-semibold mb-4 text-white">Estado Civil</h2>
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>
               <PieChart>
@@ -377,8 +377,8 @@ export default function Dashboard() {
       </div>
 
       {/* Age Range Chart */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Distribuição por Faixa Etária</h2>
+      <div className="bg-gray-800 rounded-lg p-6 shadow">
+        <h2 className="text-lg font-semibold mb-4 text-white">Distribuição por Faixa Etária</h2>
         <div style={{ width: '100%', height: 350 }}>
           <ResponsiveContainer>
             <BarChart data={ageRangeData}>

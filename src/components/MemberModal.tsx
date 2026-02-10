@@ -71,27 +71,6 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     email: false,
   });
 
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const updateDarkMode = () => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
-    };
-    updateDarkMode();
-    window.addEventListener('storage', updateDarkMode);
-    const observer = new MutationObserver(updateDarkMode);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => {
-      window.removeEventListener('storage', updateDarkMode);
-      observer.disconnect();
-    };
-  }, []);
-
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -174,9 +153,9 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
   const muiTheme = createTheme({
     palette: {
-      mode: isDarkMode ? 'dark' : 'light',
+      mode: 'dark',
       primary: {
-        main: isDarkMode ? '#ffffffff' : '#000000ff',
+        main: '#ffffffff',
       },
     },
   });
@@ -401,16 +380,16 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
       onClick={handleBackdropClick}
     >
       <ThemeProvider theme={muiTheme}>
-        <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-4xl my-8 max-h-[90vh] flex flex-col">
-          <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
-            <h3 className="text-xl font-semibold">{isEditing ? 'Editar Membro' : 'Adicionar Novo Membro'}</h3>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+        <div className="bg-gray-900 rounded w-11/12 max-w-4xl my-8 max-h-[90vh] flex flex-col">
+          <div className="p-6 flex items-center justify-between border-b border-gray-700">
+            <h2 className="text-xl font-bold">{isEditing ? 'Editar Membro' : 'Novo Membro'}</h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {/* DADOS PESSOAIS */}
             <div className="border-b pb-3">
-              <h4 className="font-medium mb-3 text-sm text-gray-600 dark:text-gray-400">DADOS PESSOAIS</h4>
+              <h4 className="font-medium mb-3 text-sm text-gray-400">DADOS PESSOAIS</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block mb-1 text-sm">Nome *</label>
@@ -418,7 +397,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     onBlur={() => setTouched({ ...touched, name: true })}
-                    className={`border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10 ${touched.name && !name.trim() ? 'border-red-500' : ''
+                    className={`border p-2 rounded w-full bg-gray-800 text-white h-10 ${touched.name && !name.trim() ? 'border-red-500' : ''
                       }`}
                     placeholder="Nome completo"
                   />
@@ -429,7 +408,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
-                    className="w-full border p-2 rounded bg-white dark:bg-gray-800 h-10"
+                    className="w-full border p-2 rounded bg-gray-800 h-10"
                   >
                     <option value="">Selecione</option>
                     <option value="MALE">Masculino</option>
@@ -443,7 +422,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <select
                     value={maritalStatus}
                     onChange={(e) => setMaritalStatus(e.target.value)}
-                    className="w-full border p-2 rounded bg-white dark:bg-gray-800 h-10"
+                    className="w-full border p-2 rounded bg-gray-800 h-10"
                   >
                     <option value="SINGLE">Solteiro(a)</option>
                     <option value="COHABITATING">Amasiados</option>
@@ -460,7 +439,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                       <Select
                         value={spouseId ?? ''}
                         onChange={(e) => setSpouseId(e.target.value ? Number(e.target.value) : null)}
-                        className="bg-white dark:bg-gray-800"
+                        className="bg-gray-800"
                         displayEmpty
                       >
                         <MenuItem value="">Selecione o cônjuge</MenuItem>
@@ -503,7 +482,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <input
                     value={phone}
                     onChange={handlePhoneChange}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 h-10"
+                    className="border p-2 rounded w-full bg-gray-800 h-10"
                     placeholder="(11) 99999-9999"
                     maxLength={25}
                   />
@@ -513,7 +492,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
             {/* DADOS ECLESIÁSTICOS */}
             <div className="border-b pb-3">
-              <h4 className="font-medium mb-3 text-sm text-gray-600 dark:text-gray-400">DADOS ECLESIÁSTICOS</h4>
+              <h4 className="font-medium mb-3 text-sm text-gray-400">DADOS ECLESIÁSTICOS</h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
@@ -530,7 +509,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                       <TextField
                         {...params}
                         placeholder="Sem célula"
-                        className="bg-white dark:bg-gray-800"
+                        className="bg-gray-800"
                       />
                     )}
                     noOptionsText="Nenhuma célula encontrada"
@@ -550,7 +529,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                       value={ministryPositionId ?? ''}
                       onChange={(e) => setMinistryPositionId(e.target.value ? Number(e.target.value) : null)}
                       onBlur={() => setTouched({ ...touched, ministryPosition: true })}
-                      className="bg-white dark:bg-gray-800"
+                      className="bg-gray-800"
                       displayEmpty
                     >
                       <MenuItem value="">Sem cargo ministerial</MenuItem>
@@ -563,7 +542,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
                 <div>
                   <label className="block mb-1 text-sm">É batizado?</label>
-                  <label htmlFor="isBaptized" className="border rounded p-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors">
+                  <label htmlFor="isBaptized" className="border rounded p-2 flex items-center justify-between bg-gray-800 cursor-pointer hover:bg-gray-900 transition-colors">
                     <span className="text-sm font-medium"></span>
                     <div className="relative inline-block w-12 h-6">
                       <input
@@ -573,7 +552,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                         id="isBaptized"
                         className="sr-only peer"
                       />
-                      <span className="absolute inset-0 bg-gray-300 dark:bg-gray-600 rounded-full transition-all duration-300 ease-in-out peer-checked:bg-blue-600"></span>
+                      <span className="absolute inset-0 bg-gray-600 rounded-full transition-all duration-300 ease-in-out peer-checked:bg-blue-600"></span>
                       <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ease-in-out peer-checked:translate-x-6 peer-checked:shadow-md"></span>
                     </div>
                   </label>
@@ -608,7 +587,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                     <Select
                       value={winnerPathId ?? ''}
                       onChange={(e) => setWinnerPathId(e.target.value ? Number(e.target.value) : null)}
-                      className="bg-white dark:bg-gray-800"
+                      className="bg-gray-800"
                       displayEmpty
                     >
                       <MenuItem value="">Sem trilho</MenuItem>
@@ -639,7 +618,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                           .map(r => r.name)
                           .join(', ');
                       }}
-                      className="bg-white dark:bg-gray-800"
+                      className="bg-gray-800"
                       displayEmpty
                     >
                       <MenuItem disabled value="">
@@ -656,14 +635,14 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                       ))}
                     </Select>
                   </FormControl>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-xs text-gray-400 mt-1">
                     Selecione uma ou mais funções para este membro
                   </p>
                 </div>
 
                 <div>
                   <label className="block mb-1 text-sm">Apto para ser anfitrião?</label>
-                  <label htmlFor="canBeHost" className="border rounded p-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors">
+                  <label htmlFor="canBeHost" className="border rounded p-2 flex items-center justify-between bg-gray-800 cursor-pointer hover:bg-gray-900 transition-colors">
                     <span className="text-sm font-medium"></span>
                     <div className="relative inline-block w-12 h-6">
                       <input
@@ -673,7 +652,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                         id="canBeHost"
                         className="sr-only peer"
                       />
-                      <span className="absolute inset-0 bg-gray-300 dark:bg-gray-600 rounded-full transition-all duration-300 ease-in-out peer-checked:bg-blue-600"></span>
+                      <span className="absolute inset-0 bg-gray-600 rounded-full transition-all duration-300 ease-in-out peer-checked:bg-blue-600"></span>
                       <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ease-in-out peer-checked:translate-x-6 peer-checked:shadow-md"></span>
                     </div>
                   </label>
@@ -705,14 +684,14 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
             {/* ENDEREÇO */}
             <div className="border-b pb-3">
-              <h4 className="font-medium mb-3 text-sm text-gray-600 dark:text-gray-400">ENDEREÇO</h4>
+              <h4 className="font-medium mb-3 text-sm text-gray-400">ENDEREÇO</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block mb-1 text-sm">País</label>
                   <select
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
-                    className="w-full border p-2 rounded bg-white dark:bg-gray-800 h-10"
+                    className="w-full border p-2 rounded bg-gray-800 h-10"
                   >
                     <option value="Brasil">Brasil</option>
                   </select>
@@ -724,7 +703,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                     <input
                       value={zipCode}
                       onChange={handleCepChange}
-                      className="border p-2 rounded w-full bg-white dark:bg-gray-800 h-10"
+                      className="border p-2 rounded w-full bg-gray-800 h-10"
                       placeholder="12345-678"
                       maxLength={9}
                     />
@@ -741,7 +720,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <input
                     value={street}
                     onChange={(e) => setStreet(e.target.value)}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 h-10"
+                    className="border p-2 rounded w-full bg-gray-800 h-10"
                   />
                 </div>
 
@@ -750,7 +729,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <input
                     value={streetNumber}
                     onChange={(e) => setStreetNumber(e.target.value)}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 h-10"
+                    className="border p-2 rounded w-full bg-gray-800 h-10"
                   />
                 </div>
 
@@ -759,7 +738,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <input
                     value={neighborhood}
                     onChange={(e) => setNeighborhood(e.target.value)}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 h-10"
+                    className="border p-2 rounded w-full bg-gray-800 h-10"
                   />
                 </div>
 
@@ -768,7 +747,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <input
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 h-10"
+                    className="border p-2 rounded w-full bg-gray-800 h-10"
                   />
                 </div>
 
@@ -777,7 +756,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <input
                     value={complement}
                     onChange={(e) => setComplement(e.target.value)}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 h-10"
+                    className="border p-2 rounded w-full bg-gray-800 h-10"
                   />
                 </div>
 
@@ -786,7 +765,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <select
                     value={state}
                     onChange={(e) => setState(e.target.value)}
-                    className="w-full border p-2 rounded bg-white dark:bg-gray-800 h-10"
+                    className="w-full border p-2 rounded bg-gray-800 h-10"
                   >
                     <option value="">Selecione</option>
                     <option value="AC">AC</option>
@@ -823,7 +802,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
             {/* DADOS DE ACESSO */}
             <div className="border-b pb-3">
-              <h4 className="font-medium mb-3 text-sm text-gray-600 dark:text-gray-400">DADOS DE ACESSO</h4>
+              <h4 className="font-medium mb-3 text-sm text-gray-400">DADOS DE ACESSO</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block mb-1 text-sm">
@@ -834,7 +813,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onBlur={() => setTouched({ ...touched, email: true })}
-                    className={`border p-2 rounded w-full bg-white dark:bg-gray-800 h-10 ${hasSystemAccess && touched.email && !email.trim() ? 'border-red-500' : ''
+                    className={`border p-2 rounded w-full bg-gray-800 h-10 ${hasSystemAccess && touched.email && !email.trim() ? 'border-red-500' : ''
                       }`}
                     placeholder="email@example.com"
                   />
@@ -845,7 +824,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                   <div className="flex gap-2">
                     <label
                       htmlFor="hasSystemAccess"
-                      className={`border rounded p-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800 transition-colors flex-1 ${canManageSystemAccess ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900' : 'cursor-not-allowed opacity-60'
+                      className={`border rounded p-2 flex items-center justify-between bg-gray-800 transition-colors flex-1 ${canManageSystemAccess ? 'cursor-pointer hover:bg-gray-900' : 'cursor-not-allowed opacity-60'
                         }`}
                       title={!canManageSystemAccess ? 'Você não tem permissão para gerenciar acesso ao sistema' : ''}
                     >
@@ -860,8 +839,8 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                           className="sr-only peer"
                         />
                         <span className={`absolute inset-0 rounded-full transition-all duration-300 ease-in-out ${canManageSystemAccess
-                            ? 'bg-gray-300 dark:bg-gray-600 peer-checked:bg-blue-600'
-                            : 'bg-gray-400 dark:bg-gray-700 peer-checked:bg-gray-500'
+                            ? 'bg-gray-600 peer-checked:bg-blue-600'
+                            : 'bg-gray-700 peer-checked:bg-gray-500'
                           }`}></span>
                         <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ease-in-out peer-checked:translate-x-6 peer-checked:shadow-md"></span>
                       </div>
@@ -930,7 +909,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                     )}
                   </div>
                   {hasSystemAccess && (
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                    <p className="text-xs text-blue-400 mt-2">
                       {isEditing && member?.hasLoggedIn
                         ? 'Usuário já acessou o sistema'
                         : 'Um convite será enviado por email para criar a senha de acesso ao sistema'
@@ -938,7 +917,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                     </p>
                   )}
                   {!canManageSystemAccess && (
-                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                    <p className="text-xs text-orange-400 mt-2">
                       ⚠️ Apenas líderes, discipuladores, pastores e admins podem gerenciar acesso ao sistema
                     </p>
                   )}
@@ -966,11 +945,11 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
           </div>
 
           {/* Botões de ação - sticky e full width */}
-          <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t dark:border-gray-700 p-6 flex gap-3">
+          <div className="sticky bottom-0 bg-gray-900 border-t border-gray-700 p-6 flex gap-3">
             <button
               onClick={onClose}
               disabled={isSaving}
-              className="flex-1 px-4 py-3 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 border rounded hover:bg-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </button>

@@ -31,6 +31,8 @@ export interface Permission {
   leader: boolean;
   discipulador: boolean;
   pastor: boolean;
+  pastorCongregacao: boolean;
+  pastorPresidente: boolean;
   ministryType: MinistryType | null;
   celulaIds: number[] | null;
 }
@@ -113,8 +115,34 @@ export interface Discipulado {
 export interface Rede {
   id: number;
   name: string;
+  congregacaoId: number;
+  congregacao?: Congregacao | null;
   pastorMemberId?: number | null;
   pastor?: Member | null;
+}
+
+export interface Congregacao {
+  id: number;
+  name: string;
+  pastorGovernoMemberId: number;
+  vicePresidenteMemberId?: number | null;
+  isPrincipal: boolean;
+  pastorGoverno?: Member | null;
+  vicePresidente?: Member | null;
+  redes?: Rede[];
+  
+  // Address fields
+  country?: string | null;
+  zipCode?: string | null;
+  street?: string | null;
+  streetNumber?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  complement?: string | null;
+  state?: string | null;
+  
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Role {

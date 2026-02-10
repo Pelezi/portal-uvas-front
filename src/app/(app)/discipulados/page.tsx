@@ -219,19 +219,19 @@ export default function DiscipuladosPage() {
                   onChange={(e) => { setFilterDiscipuladorQuery(e.target.value); setShowFilterDiscipuladoresDropdown(true); setFilterDiscipuladorId(null); }}
                   onFocus={() => { if (filterDiscipuladorTimeoutRef.current) { window.clearTimeout(filterDiscipuladorTimeoutRef.current); filterDiscipuladorTimeoutRef.current = null; } setShowFilterDiscipuladoresDropdown(true); }}
                   onBlur={() => { filterDiscipuladorTimeoutRef.current = window.setTimeout(() => { setShowFilterDiscipuladoresDropdown(false); filterDiscipuladorTimeoutRef.current = null; }, 150); }}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                 />
                 {showFilterDiscipuladoresDropdown && (
-                  <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {users.filter(u => discipuladorIds.has(u.id)).filter(u => {
                       const q = (filterDiscipuladorQuery || '').toLowerCase();
                       if (!q) return true;
                       return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                     }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterDiscipuladorId(u.id); setFilterDiscipuladorQuery(''); setShowFilterDiscipuladoresDropdown(false); }}>
+                      <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterDiscipuladorId(u.id); setFilterDiscipuladorQuery(''); setShowFilterDiscipuladoresDropdown(false); }}>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                          <div className="text-sm font-medium text-white">{u.name}</div>
+                          <div className="text-xs text-gray-400">{u.email}</div>
                         </div>
                         <div className="text-xs text-green-600">Selecionar</div>
                       </div>
@@ -248,7 +248,7 @@ export default function DiscipuladosPage() {
                   onChange={(e) => setFilterRedeId(e.target.value ? Number(e.target.value) : null)}
                   label="Rede"
                   size="small"
-                  className="bg-white dark:bg-gray-800"
+                  className="bg-gray-800"
                 >
                   <MenuItem value="">Todas redes</MenuItem>
                   {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
@@ -269,7 +269,7 @@ export default function DiscipuladosPage() {
                 .filter(d => !filterRedeId || d.redeId === filterRedeId)
                 .filter(d => !filterDiscipuladorId || d.discipuladorMemberId === filterDiscipuladorId)
                 .map(d => (
-                  <li key={d.id} className={`border p-2 rounded ${!d.discipuladorMemberId ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : ''}`}>
+                  <li key={d.id} className={`border p-2 rounded ${!d.discipuladorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
                     <CollapsibleItem
                       isOpen={!!expandedDiscipulados[d.id]}
                       onToggle={() => onToggleDiscipulado(d)}
@@ -284,7 +284,7 @@ export default function DiscipuladosPage() {
                                 disabled={disabled}
                                 title={disabled ? 'Não é possível apagar: possui células associadas' : 'Excluir discipulado'}
                                 onClick={() => deleteDiscipulado(d)}
-                                className={`p-1 rounded ${disabled ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900'}`}
+                                className={`p-1 rounded ${disabled ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-900'}`}
                               >
                                 <FiTrash2 className="h-4 w-4" aria-hidden />
                               </button>
@@ -292,7 +292,7 @@ export default function DiscipuladosPage() {
                           );
                         })()
                       }
-                      title={<>{(users.find(u => u.id === d.discipuladorMemberId)?.name || <span className="text-red-600 dark:text-red-400">Sem discipulador</span>)} <span className="text-sm text-gray-500 ml-2">({discipuladoCellCountMap[d.id] ?? (discipuladoCelulasMap[d.id]?.length ?? 0)} células)</span></>}
+                      title={<>{(users.find(u => u.id === d.discipuladorMemberId)?.name || <span className="text-red-400">Sem discipulador</span>)} <span className="text-sm text-gray-500 ml-2">({discipuladoCellCountMap[d.id] ?? (discipuladoCelulasMap[d.id]?.length ?? 0)} células)</span></>}
                       subtitle={<>{`rede: ${d.rede.name}`}</>}
                       duration={250}
                     >
@@ -318,7 +318,7 @@ export default function DiscipuladosPage() {
         {/* Create discipulado modal */}
         {createDiscipuladoModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
+            <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">Criar Discipulado</h3>
                 <button onClick={() => setCreateDiscipuladoModalOpen(false)} className="text-gray-500">Fechar</button>
@@ -334,7 +334,7 @@ export default function DiscipuladosPage() {
                       onChange={(e) => setCreateRedeId(e.target.value ? Number(e.target.value) : null)}
                       label="Rede"
                       size="small"
-                      className="bg-white dark:bg-gray-800 w-full">
+                      className="bg-gray-800 w-full">
                       <MenuItem value="">Selecione rede</MenuItem>
                       {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
                     </Select>
@@ -353,20 +353,20 @@ export default function DiscipuladosPage() {
                     onBlur={() => {
                       createDiscipuladorTimeoutRef.current = window.setTimeout(() => { setShowCreateDiscipuladoresDropdown(false); createDiscipuladorTimeoutRef.current = null; }, 150);
                     }}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                    className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                   />
                   {showCreateDiscipuladoresDropdown && (
-                    <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                    <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                       {users.filter(u => {
                         const q = (createDiscipuladorQuery || '').toLowerCase();
                         if (!q) return true;
                         return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                       }).map(u => (
-                        <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setCreateDiscipuladorId(u.id); setCreateDiscipuladorName(u.name); setCreateDiscipuladorQuery(''); setShowCreateDiscipuladoresDropdown(false); }}>
+                        <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setCreateDiscipuladorId(u.id); setCreateDiscipuladorName(u.name); setCreateDiscipuladorQuery(''); setShowCreateDiscipuladoresDropdown(false); }}>
 
                           <div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                            <div className="text-sm font-medium text-white">{u.name}</div>
+                            <div className="text-xs text-gray-400">{u.email}</div>
                           </div>
                           <div className="text-xs text-green-600">Selecionar</div>
                         </div>
@@ -387,7 +387,7 @@ export default function DiscipuladosPage() {
         {/* Edit discipulado modal */}
         {editDiscipuladoModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
+            <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">Editar Discipulado</h3>
                 <button onClick={() => setEditDiscipuladoModalOpen(false)} className="text-gray-500">Fechar</button>
@@ -402,7 +402,7 @@ export default function DiscipuladosPage() {
                       onChange={(e) => setEditRedeId(e.target.value ? Number(e.target.value) : null)}
                       label="Rede"
                       size="small"
-                      className="bg-white dark:bg-gray-800 w-full">
+                      className="bg-gray-800 w-full">
                       <MenuItem value="">Selecione rede</MenuItem>
                       {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
                     </Select>
@@ -421,19 +421,19 @@ export default function DiscipuladosPage() {
                     onBlur={() => {
                       editDiscipuladorTimeoutRef.current = window.setTimeout(() => { setShowEditDiscipuladoresDropdown(false); editDiscipuladorTimeoutRef.current = null; }, 150);
                     }}
-                    className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                    className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                   />
                   {showEditDiscipuladoresDropdown && (
-                    <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                    <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                       {users.filter(u => {
                         const q = (editDiscipuladorQuery || '').toLowerCase();
                         if (!q) return true;
                         return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
                       }).map(u => (
-                        <div key={u.id} className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setEditDiscipuladorId(u.id); setEditDiscipuladorName(u.name); setEditDiscipuladorQuery(''); setShowEditDiscipuladoresDropdown(false); }}>
+                        <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setEditDiscipuladorId(u.id); setEditDiscipuladorName(u.name); setEditDiscipuladorQuery(''); setShowEditDiscipuladoresDropdown(false); }}>
                           <div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
+                            <div className="text-sm font-medium text-white">{u.name}</div>
+                            <div className="text-xs text-gray-400">{u.email}</div>
                           </div>
                           <div className="text-xs text-green-600">Selecionar</div>
                         </div>

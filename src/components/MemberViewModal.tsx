@@ -52,13 +52,13 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
           <h2 className="text-2xl font-semibold">Visualizar Membro</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+            className="p-2 hover:bg-gray-800 rounded-full transition-colors"
             aria-label="Fechar"
           >
             <FiX className="h-6 w-6" />
@@ -69,41 +69,41 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
         <div className="px-6 py-4 space-y-6">
           {/* Personal Information */}
           <section>
-            <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400">Informações Pessoais</h3>
+            <h3 className="text-lg font-semibold mb-3 text-blue-400">Informações Pessoais</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Nome</label>
+                <label className="text-sm font-medium text-gray-400">Nome</label>
                 <p className="text-base mt-1">{member.name}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Email</label>
+                <label className="text-sm font-medium text-gray-400">Email</label>
                 <p className="text-base mt-1">{member.email || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Telefone</label>
+                <label className="text-sm font-medium text-gray-400">Telefone</label>
                 <p className="text-base mt-1">{formatPhone(member.phone)}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Gênero</label>
+                <label className="text-sm font-medium text-gray-400">Gênero</label>
                 <p className="text-base mt-1">{getGenderLabel(member.gender)}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Data de Nascimento</label>
+                <label className="text-sm font-medium text-gray-400">Data de Nascimento</label>
                 <p className="text-base mt-1">{formatDate(member.birthDate)}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Estado Civil</label>
+                <label className="text-sm font-medium text-gray-400">Estado Civil</label>
                 <p className="text-base mt-1">{getMaritalStatusLabel(member.maritalStatus)}</p>
               </div>
               
               {member.maritalStatus === 'MARRIED' && member.spouse && (
                 <div>
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Cônjuge</label>
+                  <label className="text-sm font-medium text-gray-400">Cônjuge</label>
                   <p className="text-base mt-1">{member.spouse.name}</p>
                 </div>
               )}
@@ -112,37 +112,37 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
 
           {/* Church Information */}
           <section>
-            <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400">Informações da Igreja</h3>
+            <h3 className="text-lg font-semibold mb-3 text-blue-400">Informações da Igreja</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Cargo Ministerial</label>
+                <label className="text-sm font-medium text-gray-400">Cargo Ministerial</label>
                 <p className="text-base mt-1">{member.ministryPosition?.name || 'Sem cargo ministerial'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Data de Registro</label>
+                <label className="text-sm font-medium text-gray-400">Data de Registro</label>
                 <p className="text-base mt-1">{formatDate(member.registerDate)}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Batizado</label>
+                <label className="text-sm font-medium text-gray-400">Batizado</label>
                 <p className="text-base mt-1">{member.isBaptized ? 'Sim' : 'Não'}</p>
               </div>
               
               {member.isBaptized && (
                 <div>
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Data do Batismo</label>
+                  <label className="text-sm font-medium text-gray-400">Data do Batismo</label>
                   <p className="text-base mt-1">{formatDate(member.baptismDate)}</p>
                 </div>
               )}
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Pode Hospedar Célula</label>
+                <label className="text-sm font-medium text-gray-400">Pode Hospedar Célula</label>
                 <p className="text-base mt-1">{member.canBeHost ? 'Sim' : 'Não'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Acesso ao Sistema</label>
+                <label className="text-sm font-medium text-gray-400">Acesso ao Sistema</label>
                 <p className="text-base mt-1">{member.hasSystemAccess ? 'Sim' : 'Não'}</p>
               </div>
             </div>
@@ -150,27 +150,27 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
 
           {/* Associations */}
           <section>
-            <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400">Associações</h3>
+            <h3 className="text-lg font-semibold mb-3 text-blue-400">Associações</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Célula</label>
+                <label className="text-sm font-medium text-gray-400">Célula</label>
                 <p className="text-base mt-1">
                   {member.celula?.name || (
-                    <span className="text-red-600 dark:text-red-400">Sem célula</span>
+                    <span className="text-red-400">Sem célula</span>
                   )}
                 </p>
               </div>
               
               {member.celula?.discipulado && (
                 <div>
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Discipulado</label>
+                  <label className="text-sm font-medium text-gray-400">Discipulado</label>
                   <p className="text-base mt-1">{member.celula.discipulado.discipulador?.name || '-'}</p>
                 </div>
               )}
               
               {member.celula?.discipulado?.rede && (
                 <div>
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Rede</label>
+                  <label className="text-sm font-medium text-gray-400">Rede</label>
                   <p className="text-base mt-1">{member.celula.discipulado.rede.name}</p>
                 </div>
               )}
@@ -179,45 +179,45 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
 
           {/* Address */}
           <section>
-            <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400">Endereço</h3>
+            <h3 className="text-lg font-semibold mb-3 text-blue-400">Endereço</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">CEP</label>
+                <label className="text-sm font-medium text-gray-400">CEP</label>
                 <p className="text-base mt-1">{member.zipCode || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Rua</label>
+                <label className="text-sm font-medium text-gray-400">Rua</label>
                 <p className="text-base mt-1">{member.street || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Número</label>
+                <label className="text-sm font-medium text-gray-400">Número</label>
                 <p className="text-base mt-1">{member.streetNumber || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Complemento</label>
+                <label className="text-sm font-medium text-gray-400">Complemento</label>
                 <p className="text-base mt-1">{member.complement || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Bairro</label>
+                <label className="text-sm font-medium text-gray-400">Bairro</label>
                 <p className="text-base mt-1">{member.neighborhood || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Cidade</label>
+                <label className="text-sm font-medium text-gray-400">Cidade</label>
                 <p className="text-base mt-1">{member.city || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Estado</label>
+                <label className="text-sm font-medium text-gray-400">Estado</label>
                 <p className="text-base mt-1">{member.state || '-'}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">País</label>
+                <label className="text-sm font-medium text-gray-400">País</label>
                 <p className="text-base mt-1">{member.country || '-'}</p>
               </div>
             </div>
@@ -225,10 +225,10 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">
+        <div className="sticky bottom-0 bg-gray-900 border-t border-gray-700 px-6 py-4 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors"
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
           >
             Fechar
           </button>

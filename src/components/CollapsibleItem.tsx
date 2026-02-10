@@ -28,7 +28,7 @@ export default function CollapsibleItem({ isOpen, onToggle, onEdit, title, subti
         <div className="flex items-center gap-2">
           {right}
           {onEdit && (
-            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label="Editar" className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label="Editar" className="p-1 rounded hover:bg-gray-800">
               <FiEdit2 className="h-4 w-4 text-blue-600" aria-hidden />
             </button>
           )}

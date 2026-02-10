@@ -73,10 +73,10 @@ function RoleModal({ isOpen, role, onClose, onSave }: RoleModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={handleBackdropClick}>
-      <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
-        <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
+      <div className="bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
+        <div className="p-6 flex items-center justify-between border-b border-gray-700">
           <h3 className="text-xl font-semibold">{role ? 'Editar Função' : 'Nova Função'}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
         </div>
 
         <div className="flex-1 p-6 space-y-4">
@@ -86,7 +86,7 @@ function RoleModal({ isOpen, role, onClose, onSave }: RoleModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-              className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:border-gray-600"
+              className="w-full border p-2 rounded bg-gray-800 border-gray-600"
               placeholder="Ex: Líder de Célula"
               autoFocus
             />
@@ -105,8 +105,8 @@ function RoleModal({ isOpen, role, onClose, onSave }: RoleModalProps) {
           </div>
         </div>
 
-        <div className="p-6 border-t dark:border-gray-700 flex gap-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+        <div className="p-6 border-t border-gray-700 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-800">
             Cancelar
           </button>
           <button onClick={handleSubmit} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -174,10 +174,10 @@ function MinistryModal({ isOpen, ministry, onClose, onSave }: MinistryModalProps
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={handleBackdropClick}>
-      <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
-        <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
+      <div className="bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
+        <div className="p-6 flex items-center justify-between border-b border-gray-700">
           <h3 className="text-xl font-semibold">{ministry ? 'Editar Cargo Ministerial' : 'Novo Cargo Ministerial'}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
         </div>
 
         <div className="flex-1 p-6 space-y-4">
@@ -187,7 +187,7 @@ function MinistryModal({ isOpen, ministry, onClose, onSave }: MinistryModalProps
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-              className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:border-gray-600"
+              className="w-full border p-2 rounded bg-gray-800 border-gray-600"
               placeholder="Ex: Pastor"
               autoFocus
             />
@@ -198,7 +198,7 @@ function MinistryModal({ isOpen, ministry, onClose, onSave }: MinistryModalProps
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
-              className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:border-gray-600"
+              className="w-full border p-2 rounded bg-gray-800 border-gray-600"
             >
               {ministryTypes.map((mt) => (
                 <option key={mt.value} value={mt.value}>
@@ -209,8 +209,8 @@ function MinistryModal({ isOpen, ministry, onClose, onSave }: MinistryModalProps
           </div>
         </div>
 
-        <div className="p-6 border-t dark:border-gray-700 flex gap-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+        <div className="p-6 border-t border-gray-700 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-800">
             Cancelar
           </button>
           <button onClick={handleSubmit} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -264,10 +264,10 @@ function WinnerPathModal({ isOpen, winnerPath, onClose, onSave }: WinnerPathModa
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={handleBackdropClick}>
-      <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
-        <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
+      <div className="bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
+        <div className="p-6 flex items-center justify-between border-b border-gray-700">
           <h3 className="text-xl font-semibold">{winnerPath ? 'Editar Trilho do Vencedor' : 'Novo Trilho do Vencedor'}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
         </div>
 
         <div className="flex-1 p-6">
@@ -277,15 +277,15 @@ function WinnerPathModal({ isOpen, winnerPath, onClose, onSave }: WinnerPathModa
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-              className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:border-gray-600"
+              className="w-full border p-2 rounded bg-gray-800 border-gray-600"
               placeholder="Ex: Encontro com Deus"
               autoFocus
             />
           </div>
         </div>
 
-        <div className="p-6 border-t dark:border-gray-700 flex gap-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+        <div className="p-6 border-t border-gray-700 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-800">
             Cancelar
           </button>
           <button onClick={handleSubmit} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -334,10 +334,10 @@ function ApiKeyModal({ isOpen, onClose, onSave }: ApiKeyModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={handleBackdropClick}>
-      <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
-        <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
+      <div className="bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
+        <div className="p-6 flex items-center justify-between border-b border-gray-700">
           <h3 className="text-xl font-semibold">Nova API Key</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
         </div>
 
         <div className="flex-1 p-6 space-y-4">
@@ -347,18 +347,18 @@ function ApiKeyModal({ isOpen, onClose, onSave }: ApiKeyModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-              className="w-full border p-2 rounded bg-white dark:bg-gray-800 dark:border-gray-600"
+              className="w-full border p-2 rounded bg-gray-800 border-gray-600"
               placeholder="Ex: Integração Sistema XYZ"
               autoFocus
             />
           </div>
-          <div className="text-sm text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded">
+          <div className="text-sm text-yellow-400 bg-yellow-900/20 p-3 rounded">
             ⚠️ A chave completa será exibida apenas uma vez após a criação. Certifique-se de salvá-la em um local seguro.
           </div>
         </div>
 
-        <div className="p-6 border-t dark:border-gray-700 flex gap-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600">
+        <div className="p-6 border-t border-gray-700 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2 border rounded hover:bg-gray-700 border-gray-600">
             Cancelar
           </button>
           <button onClick={handleSubmit} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -417,14 +417,14 @@ function ApiKeyDisplayModal({ isOpen, apiKey, onClose }: ApiKeyDisplayModalProps
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={handleBackdropClick}>
-      <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-2xl flex flex-col">
-        <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
+      <div className="bg-gray-900 rounded w-11/12 max-w-2xl flex flex-col">
+        <div className="p-6 flex items-center justify-between border-b border-gray-700">
           <h3 className="text-xl font-semibold">API Key Criada com Sucesso!</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
         </div>
 
         <div className="flex-1 p-6 space-y-4">
-          <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-4 rounded font-medium">
+          <div className="text-sm text-red-400 bg-red-900/20 p-4 rounded font-medium">
             ⚠️ IMPORTANTE: Esta é a única vez que a chave completa será exibida. Certifique-se de copiá-la e armazená-la em um local seguro!
           </div>
           
@@ -435,7 +435,7 @@ function ApiKeyDisplayModal({ isOpen, apiKey, onClose }: ApiKeyDisplayModalProps
                 type="text"
                 value={apiKey}
                 readOnly
-                className="flex-1 border p-2 rounded bg-gray-50 dark:bg-gray-800 dark:border-gray-600 font-mono text-sm"
+                className="flex-1 border p-2 rounded bg-gray-800 border-gray-600 font-mono text-sm"
               />
               <button
                 onClick={copyToClipboard}
@@ -447,16 +447,16 @@ function ApiKeyDisplayModal({ isOpen, apiKey, onClose }: ApiKeyDisplayModalProps
             </div>
           </div>
 
-          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+          <div className="text-sm text-gray-400 space-y-2">
             <p><strong>Como usar:</strong></p>
-            <p>Inclua esta chave no header <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">X-API-KEY</code> em suas requisições HTTP.</p>
-            <p className="font-mono text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded break-all">
+            <p>Inclua esta chave no header <code className="bg-gray-800 px-2 py-1 rounded">X-API-KEY</code> em suas requisições HTTP.</p>
+            <p className="font-mono text-xs bg-gray-800 p-2 rounded break-all">
               curl -H &quot;X-API-KEY: {apiKey.substring(0, 20)}...&quot; https://api.example.com/external/check-phone?phone=123456789
             </p>
           </div>
         </div>
 
-        <div className="p-6 border-t dark:border-gray-700">
+        <div className="p-6 border-t border-gray-700">
           <button onClick={onClose} className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
             Entendi, fechar
           </button>
@@ -487,21 +487,21 @@ function SortableItem({ id, name, onEdit, onDelete, showAdmin, isAdmin, type }: 
   };
 
   return (
-    <li ref={setNodeRef} style={style} className="flex items-center justify-between p-3 border rounded bg-white dark:bg-gray-800 dark:border-gray-600">
+    <li ref={setNodeRef} style={style} className="flex items-center justify-between p-3 border rounded bg-gray-800 border-gray-600">
       <div className="flex items-center gap-2 flex-1">
-        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-200">
           <GripVertical size={20} />
         </button>
         <div className="flex flex-col">
-          <span className="text-gray-900 dark:text-gray-100">{name}</span>
+          <span className="text-gray-100">{name}</span>
           {type && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-gray-400">
               {getMinistryTypeLabel(type)}
             </span>
           )}
         </div>
         {showAdmin && isAdmin && (
-          <span className="ml-2 px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded">
+          <span className="ml-2 px-2 py-1 text-xs bg-purple-900 text-purple-200 rounded">
             Admin
           </span>
         )}
@@ -510,14 +510,14 @@ function SortableItem({ id, name, onEdit, onDelete, showAdmin, isAdmin, type }: 
         <button 
           onClick={onEdit} 
           aria-label="Editar" 
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="p-1 rounded hover:bg-gray-700"
         >
           <FiEdit2 className="h-4 w-4 text-yellow-500" />
         </button>
         <button 
           onClick={onDelete} 
           aria-label="Excluir" 
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="p-1 rounded hover:bg-gray-700"
         >
           <FiTrash2 className="h-4 w-4 text-red-600" />
         </button>
@@ -528,11 +528,11 @@ function SortableItem({ id, name, onEdit, onDelete, showAdmin, isAdmin, type }: 
 
 function SimpleListItem({ name, onEdit, onDelete, showAdmin, isAdmin }: { name: string; onEdit: () => void; onDelete: () => void; showAdmin?: boolean; isAdmin?: boolean }) {
   return (
-    <li className="flex items-center justify-between p-3 border rounded bg-white dark:bg-gray-800 dark:border-gray-600">
+    <li className="flex items-center justify-between p-3 border rounded bg-gray-800 border-gray-600">
       <div className="flex-1">
-        <span className="text-gray-900 dark:text-gray-100">{name}</span>
+        <span className="text-gray-100">{name}</span>
         {showAdmin && isAdmin && (
-          <span className="ml-2 px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded">
+          <span className="ml-2 px-2 py-1 text-xs bg-purple-900 text-purple-200 rounded">
             Admin
           </span>
         )}
@@ -541,14 +541,14 @@ function SimpleListItem({ name, onEdit, onDelete, showAdmin, isAdmin }: { name: 
         <button 
           onClick={onEdit} 
           aria-label="Editar" 
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="p-1 rounded hover:bg-gray-700"
         >
           <FiEdit2 className="h-4 w-4 text-yellow-500" />
         </button>
         <button 
           onClick={onDelete} 
           aria-label="Excluir" 
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="p-1 rounded hover:bg-gray-700"
         >
           <FiTrash2 className="h-4 w-4 text-red-600" />
         </button>
@@ -594,20 +594,20 @@ function ConfirmationModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={handleBackdropClick}>
-      <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
-        <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
+      <div className="bg-gray-900 rounded w-11/12 max-w-md flex flex-col">
+        <div className="p-6 flex items-center justify-between border-b border-gray-700">
           <h3 className="text-xl font-semibold">{title}</h3>
-          <button onClick={onCancel} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+          <button onClick={onCancel} className="text-gray-500 hover:text-gray-300">✕</button>
         </div>
 
         <div className="flex-1 p-6">
-          <p className="text-gray-700 dark:text-gray-300">{message}</p>
+          <p className="text-gray-300">{message}</p>
         </div>
 
-        <div className="p-6 border-t dark:border-gray-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-gray-700 flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="px-4 py-2 border dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="px-4 py-2 border border-gray-600 rounded hover:bg-gray-800"
           >
             {cancelText}
           </button>
@@ -965,13 +965,13 @@ export default function SettingsPage() {
       <h1 className="text-3xl font-bold mb-6">Configurações</h1>
 
       {/* Tabs */}
-      <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 mb-6">
+      <div className="flex gap-4 border-b border-gray-700 mb-6">
         <button
           onClick={() => setActiveTab('ministries')}
           className={`px-4 py-2 font-medium transition-colors ${
             activeTab === 'ministries'
-              ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              ? 'border-b-2 border-blue-600 text-blue-400'
+              : 'text-gray-400 hover:text-gray-100'
           }`}
         >
           Cargos Ministeriais
@@ -980,8 +980,8 @@ export default function SettingsPage() {
           onClick={() => setActiveTab('winnerPaths')}
           className={`px-4 py-2 font-medium transition-colors ${
             activeTab === 'winnerPaths'
-              ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              ? 'border-b-2 border-blue-600 text-blue-400'
+              : 'text-gray-400 hover:text-gray-100'
           }`}
         >
           Trilho do Vencedor
@@ -990,8 +990,8 @@ export default function SettingsPage() {
           onClick={() => setActiveTab('roles')}
           className={`px-4 py-2 font-medium transition-colors ${
             activeTab === 'roles'
-              ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              ? 'border-b-2 border-blue-600 text-blue-400'
+              : 'text-gray-400 hover:text-gray-100'
           }`}
         >
           Funções
@@ -1001,8 +1001,8 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('apiKeys')}
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'apiKeys'
-                ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                ? 'border-b-2 border-blue-600 text-blue-400'
+                : 'text-gray-400 hover:text-gray-100'
             }`}
           >
             API Keys
@@ -1076,18 +1076,18 @@ export default function SettingsPage() {
         <div>
           <ul className="space-y-2">
             {apiKeys.map((apiKey) => (
-              <li key={apiKey.id} className="flex items-center justify-between p-3 border rounded bg-white dark:bg-gray-800 dark:border-gray-600">
+              <li key={apiKey.id} className="flex items-center justify-between p-3 border rounded bg-gray-800 border-gray-600">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{apiKey.name}</span>
-                    <span className={`px-2 py-1 text-xs rounded ${apiKey.isActive ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>
+                    <span className="font-medium text-gray-100">{apiKey.name}</span>
+                    <span className={`px-2 py-1 text-xs rounded ${apiKey.isActive ? 'bg-green-900 text-green-200' : 'bg-gray-700 text-gray-200'}`}>
                       {apiKey.isActive ? 'Ativa' : 'Inativa'}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <div className="text-sm text-gray-400 mt-1">
                     <span className="font-mono">{apiKey.keyPreview}</span>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 mt-1">
                     Criada por {apiKey.createdBy.name} em {new Date(apiKey.createdAt).toLocaleDateString('pt-BR')}
                     {apiKey.lastUsedAt && ` • Último uso: ${new Date(apiKey.lastUsedAt).toLocaleDateString('pt-BR')}`}
                   </div>
@@ -1096,7 +1096,7 @@ export default function SettingsPage() {
                   <button 
                     onClick={() => toggleApiKey(apiKey.id)} 
                     aria-label={apiKey.isActive ? 'Desativar' : 'Ativar'}
-                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="p-1 rounded hover:bg-gray-700"
                     title={apiKey.isActive ? 'Desativar API key' : 'Ativar API key'}
                   >
                     {apiKey.isActive ? <FiEyeOff className="h-4 w-4 text-gray-600" /> : <FiEye className="h-4 w-4 text-green-600" />}
@@ -1104,7 +1104,7 @@ export default function SettingsPage() {
                   <button 
                     onClick={() => deleteApiKey(apiKey.id)} 
                     aria-label="Excluir" 
-                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="p-1 rounded hover:bg-gray-700"
                   >
                     <FiTrash2 className="h-4 w-4 text-red-600" />
                   </button>
@@ -1112,7 +1112,7 @@ export default function SettingsPage() {
               </li>
             ))}
             {apiKeys.length === 0 && (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div className="text-center py-8 text-gray-400">
                 Nenhuma API key criada ainda. Clique no botão + para criar uma.
               </div>
             )}

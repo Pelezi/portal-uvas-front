@@ -240,11 +240,10 @@ export default function MembersManagementPage() {
   const canManageMember = (member: Member): boolean => {
     if (!user) return false;
     
-    // Admin e pastor podem gerenciar todos
+    // Admin pode gerenciar todos
     const isAdmin = user.roles?.some((r: any) => r.role?.isAdmin);
-    const isPastor = user.ministryPosition?.type === 'PASTOR' || user.ministryPosition?.type === 'PRESIDENT_PASTOR';
     
-    if (isAdmin || isPastor) return true;
+    if (isAdmin) return true;
     
     // Membro sem célula pode ser gerenciado
     if (!member.celulaId) return true;
@@ -331,7 +330,7 @@ export default function MembersManagementPage() {
                     setFilterCelulaId(null);
                   }}
                   size="small"
-                  className="bg-white dark:bg-gray-800"
+                  className="bg-gray-800"
                 >
                   <MenuItem value="">Todas redes</MenuItem>
                   {redes.map(r => (<MenuItem key={r.id} value={String(r.id)}>{r.name}</MenuItem>))}
@@ -351,7 +350,7 @@ export default function MembersManagementPage() {
                     setFilterCelulaId(null);
                   }}
                   size="small"
-                  className="bg-white dark:bg-gray-800"
+                  className="bg-gray-800"
                 >
                   <MenuItem value="">Todos</MenuItem>
                   {discipulados
@@ -382,7 +381,7 @@ export default function MembersManagementPage() {
                     setFilterCelulaId(value);
                   }}
                   size="small"
-                  className="bg-white dark:bg-gray-800"
+                  className="bg-gray-800"
                 >
                   <MenuItem value="">Todas</MenuItem>
                   <MenuItem value="0">Sem célula</MenuItem>
@@ -408,29 +407,29 @@ export default function MembersManagementPage() {
             {members.map((m) => (
               <li
                 key={m.id}
-                className={`flex items-center gap-3 border p-2 rounded ${!m.celulaId ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-white dark:bg-gray-900'}`}
+                className={`flex items-center gap-3 border p-2 rounded ${!m.celulaId ? 'bg-red-900/20 border-red-700' : 'bg-gray-900'}`}
               >
                 <span className="flex-1">
                   <button
                     onClick={() => openViewModal(m)}
-                    className="text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium"
+                    className="text-left hover:text-blue-400 transition-colors font-medium"
                   >
                     {m.name}
                   </button>
-                  {!m.celulaId && <span className="text-xs text-red-600 dark:text-red-400 ml-2 font-semibold">(sem célula)</span>}
+                  {!m.celulaId && <span className="text-xs text-red-400 ml-2 font-semibold">(sem célula)</span>}
                   {m.celula && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                    <span className="text-xs text-gray-400 ml-2">
                       - {m.celula.name}
                     </span>
                   )}
-                  {!m.isActive && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">(desligado)</span>}
+                  {!m.isActive && <span className="text-xs text-gray-400 ml-2">(desligado)</span>}
                 </span>
                 {canManageMember(m) && (
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => openEditModal(m)}
                       aria-label="Editar membro"
-                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                      className="p-1 rounded hover:bg-gray-800"
                     >
                       <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
                     </button>
@@ -438,7 +437,7 @@ export default function MembersManagementPage() {
                       <button
                         onClick={() => removeMember(m)}
                         aria-label="Remover membro da célula"
-                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                        className="p-1 rounded hover:bg-gray-800"
                       >
                         <FiTrash2 className="h-4 w-4 text-red-600" aria-hidden />
                       </button>
@@ -485,10 +484,10 @@ export default function MembersManagementPage() {
         {/* Delete confirmation modal */}
         {confirmingMember && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-900 p-6 rounded w-11/12 sm:w-96">
+            <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold">Confirmação</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Tem certeza que deseja remover <strong>{confirmingMember.name}</strong> da célula? O membro não será excluído, apenas sua associação com a célula será removida.</p>
+                <p className="text-sm text-gray-400">Tem certeza que deseja remover <strong>{confirmingMember.name}</strong> da célula? O membro não será excluído, apenas sua associação com a célula será removida.</p>
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={cancelDelete} className="px-3 py-2 border rounded">Cancelar</button>

@@ -96,7 +96,7 @@ export default function ViewReportPage() {
 
         // Auto-configurar filtros baseado nas permissões do usuário
         const permission = user?.permission;
-        if (permission && !permission.isAdmin && !permission.pastor) {
+        if (permission && !permission.isAdmin) {
           const allowedCelulaIds = permission.celulaIds || [];
           
           if (permission.leader && !permission.discipulador) {
@@ -155,7 +155,7 @@ export default function ViewReportPage() {
   // Aplicar restrições de permissão
   const getPermittedRedes = () => {
     const permission = user?.permission;
-    if (!permission || permission.isAdmin || permission.pastor) {
+    if (!permission || permission.isAdmin) {
       return redes;
     }
     // Discipulador ou líder só pode ver sua rede
@@ -169,7 +169,7 @@ export default function ViewReportPage() {
 
   const getPermittedDiscipulados = () => {
     const permission = user?.permission;
-    if (!permission || permission.isAdmin || permission.pastor) {
+    if (!permission || permission.isAdmin) {
       return filteredDiscipulados;
     }
     // Discipulador ou líder
@@ -629,11 +629,10 @@ export default function ViewReportPage() {
         <div className="max-w-[95%] mx-auto p-6 space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                Visualizar Relatórios
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Visualize os relatórios de presença por mês
+            <h1 className="text-2xl font-bold text-gray-100">
+              Visualizar Relatórios
+            </h1>
+            <p className="text-gray-400 mt-1">
               </p>
             </div>
             
@@ -658,17 +657,17 @@ export default function ViewReportPage() {
           </div>
 
           {/* Filtros */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Rede */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Rede {!canChangeFilters() && '(automático)'}
                 </label>
                 <select
                   value={selectedRedeId || ''}
                   onChange={(e) => handleRedeChange(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
                   disabled={!canChangeFilters()}
                 >
                   <option value="">Todas as redes</option>
@@ -682,13 +681,13 @@ export default function ViewReportPage() {
 
               {/* Discipulado */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Discipulado {!canChangeFilters() && '(automático)'}
                 </label>
                 <select
                   value={selectedDiscipuladoId || ''}
                   onChange={(e) => handleDiscipuladoChange(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
                   disabled={!canChangeFilters()}
                 >
                   <option value="">Todos os discipulados</option>
@@ -702,13 +701,13 @@ export default function ViewReportPage() {
 
               {/* Célula */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Célula {!canChangeFilters() && '(automático)'}
                 </label>
                 <select
                   value={selectedCelulaId || ''}
                   onChange={(e) => handleCelulaChange(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
                   disabled={!canChangeFilters()}
                 >
                   <option value="">Todas as células</option>
@@ -722,7 +721,7 @@ export default function ViewReportPage() {
 
               {/* Mês */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Mês
                 </label>
                 <DatePicker
@@ -745,24 +744,24 @@ export default function ViewReportPage() {
           {isLoading ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-              <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando relatórios...</p>
+              <p className="mt-4 text-gray-400">Carregando relatórios...</p>
             </div>
           ) : celulasData.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
-              <p className="text-gray-600 dark:text-gray-400">
+            <div className="bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-12 text-center">
+              <p className="text-gray-400">
                 Nenhum relatório encontrado para os filtros selecionados
               </p>
             </div>
           ) : (
             <div className="space-y-6">
               {celulasData.map((celulaData) => (
-                <div key={celulaData.celula.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                <div key={celulaData.celula.id} className="bg-gray-800 rounded-lg shadow-sm border border-gray-700">
                   {/* Header da célula */}
-                  <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  <div className="px-6 py-4 border-b border-gray-700">
+                    <h2 className="text-xl font-bold text-gray-100">
                       {celulaData.celula.name}
                     </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm text-gray-400">
                       {getDayLabel(celulaData.celula.weekday)} {celulaData.celula.time || ''}
                     </p>
                   </div>
@@ -771,17 +770,17 @@ export default function ViewReportPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 sticky left-0 z-10">
+                        <tr className="border-b border-gray-700">
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-100 bg-gray-900 sticky left-0 z-10">
                             Membro
                           </th>
                           {celulaData.reports.map((report) => (
                             <th 
                               key={dayjs(report.date).format('YYYY-MM-DD')} 
-                              className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 min-w-[100px]"
+                              className="px-4 py-3 text-center text-sm font-semibold text-gray-100 bg-gray-900 min-w-[100px]"
                             >
                               <div>{dayjs(report.date).format('DD/MM')}</div>
-                              <div className="text-xs font-normal text-gray-600 dark:text-gray-400">
+                              <div className="text-xs font-normal text-gray-400">
                                 {getDayLabel(new Date(report.date).getDay())}
                               </div>
                               {!report.hasReport && (
@@ -790,7 +789,7 @@ export default function ViewReportPage() {
                                 </div>
                               )}
                               {report.hasReport && report.isStandardDay === false && (
-                                <div className="text-xs font-normal text-amber-600 dark:text-amber-400">
+                                <div className="text-xs font-normal text-amber-400">
                                   ⚠️ Fora do dia padrão
                                 </div>
                               )}
@@ -802,13 +801,13 @@ export default function ViewReportPage() {
                         {celulaData.allMembers.map((member, idx) => (
                           <tr 
                             key={member.id}
-                            className={`border-b border-gray-200 dark:border-gray-700 ${
-                              idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900/50'
+                            className={`border-b border-gray-700 ${
+                              idx % 2 === 0 ? 'bg-gray-800' : 'bg-gray-900/50'
                             }`}
                           >
-                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 sticky left-0 z-10 bg-inherit">
+                            <td className="px-4 py-3 text-sm text-gray-100 sticky left-0 z-10 bg-inherit">
                               <div className="font-medium">{member.name}</div>
-                              <div className="text-xs text-gray-600 dark:text-gray-400">
+                              <div className="text-xs text-gray-400">
                                 {getMinistryTypeLabel(getMemberMinistryType(member))}
                               </div>
                             </td>
@@ -845,17 +844,17 @@ export default function ViewReportPage() {
                   </div>
 
                   {/* Resumo */}
-                  <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                  <div className="px-4 py-3 bg-gray-900 border-t border-gray-700">
                     <div className="flex items-center gap-6 text-sm">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="text-green-500" size={16} />
-                        <span className="text-gray-700 dark:text-gray-300">Presente</span>
+                        <span className="text-gray-300">Presente</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <XCircle className="text-red-500" size={16} />
-                        <span className="text-gray-700 dark:text-gray-300">Ausente</span>
+                        <span className="text-gray-300">Ausente</span>
                       </div>
-                      <div className="ml-auto text-gray-600 dark:text-gray-400">
+                      <div className="ml-auto text-gray-400">
                         Total de membros: {celulaData.allMembers.length}
                       </div>
                     </div>

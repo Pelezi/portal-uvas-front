@@ -325,10 +325,10 @@ export default function CelulaModal({
       onClick={handleBackdropClick}
     >
       <ThemeProvider theme={muiTheme}>
-        <div className="bg-white dark:bg-gray-900 rounded w-11/12 max-w-4xl my-8 max-h-[90vh] flex flex-col">
-          <div className="p-6 flex items-center justify-between border-b dark:border-gray-700">
+        <div className="bg-gray-900 rounded w-11/12 max-w-4xl my-8 max-h-[90vh] flex flex-col">
+          <div className="p-6 flex items-center justify-between border-b border-gray-700">
             <h3 className="text-xl font-semibold">{isEditing ? 'Editar Célula' : 'Criar Célula'}</h3>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">✕</button>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -340,7 +340,7 @@ export default function CelulaModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onBlur={() => setTouched({ ...touched, name: true })}
-                className={`border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10 ${touched.name && !name.trim() ? 'border-red-500' : ''
+                className={`border p-2 rounded w-full bg-gray-800 text-white h-10 ${touched.name && !name.trim() ? 'border-red-500' : ''
                   }`}
               />
             </div>
@@ -358,7 +358,7 @@ export default function CelulaModal({
                   }}
                   label="Rede"
                   size="small"
-                  className="bg-white dark:bg-gray-800 w-full">
+                  className="bg-gray-800 w-full">
                   <MenuItem value="">Selecione rede</MenuItem>
                   {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
                 </Select>
@@ -379,7 +379,7 @@ export default function CelulaModal({
                   onBlur={() => setTouched({ ...touched, discipulado: true })}
                   label="Discipulado"
                   size="small"
-                  className="bg-white dark:bg-gray-800 w-full">
+                  className="bg-gray-800 w-full">
                   <MenuItem value="">Selecione discipulado</MenuItem>
                   {discipulados.filter(d => !redeId || d.redeId === redeId).map((d) => (
                     <MenuItem key={d.id} value={d.id}>{d.discipulador?.name}</MenuItem>
@@ -402,10 +402,10 @@ export default function CelulaModal({
                     setShowLeaderDropdown(true);
                   }}
                   onFocus={() => setShowLeaderDropdown(true)}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                 />
                 {showLeaderDropdown && (
-                  <div className="absolute left-0 right-0 bg-white dark:bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {members.filter(member => {
                       const q = (leaderQuery || '').toLowerCase();
                       if (!q) return true;
@@ -413,7 +413,7 @@ export default function CelulaModal({
                     }).map(member => (
                       <div
                         key={member.id}
-                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                        className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
                         onMouseDown={() => {
                           setLeaderId(member.id);
                           setLeaderName(member.name);
@@ -422,8 +422,8 @@ export default function CelulaModal({
                         }}
                       >
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{member.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{member.email}</div>
+                          <div className="text-sm font-medium text-white">{member.name}</div>
+                          <div className="text-xs text-gray-400">{member.email}</div>
                         </div>
                         <div className="text-xs text-green-600">Selecionar</div>
                       </div>
@@ -450,7 +450,7 @@ export default function CelulaModal({
                       }}
                       label="Selecione os líderes em treinamento"
                       size="small"
-                      className="bg-white dark:bg-gray-800 w-full"
+                      className="bg-gray-800 w-full"
                       renderValue={(selected) => {
                         const selectedMembers = celulaMemberOptions.filter(m => selected.includes(m.id));
                         return selectedMembers.map(m => m.name).join(', ');
@@ -474,7 +474,7 @@ export default function CelulaModal({
                     </Select>
                   </FormControl>
                 </ThemeProvider>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 mt-1">
                   Apenas membros desta célula podem ser selecionados como líderes em treinamento
                 </p>
               </div>
@@ -490,7 +490,7 @@ export default function CelulaModal({
                   onChange={(e) => setWeekday(e.target.value ? Number(e.target.value) : null)}
                   label="Dia da Semana *"
                   size="small"
-                  className="bg-white dark:bg-gray-800 w-full">
+                  className="bg-gray-800 w-full">
                   <MenuItem value="">Selecione o dia</MenuItem>
                   <MenuItem value={0}>Domingo</MenuItem>
                   <MenuItem value={1}>Segunda-feira</MenuItem>
@@ -529,7 +529,7 @@ export default function CelulaModal({
             </div>
 
             {/* Divider */}
-            <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+            <div className="border-t border-gray-700 my-4"></div>
             <h4 className="text-md font-semibold mb-3">Endereço da Célula</h4>
 
             {/* CEP */}
@@ -541,7 +541,7 @@ export default function CelulaModal({
                   value={zipCode}
                   onChange={handleCepChange}
                   maxLength={9}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                 />
                 {loadingCep && (
                   <div className="absolute right-2 top-2">
@@ -559,7 +559,7 @@ export default function CelulaModal({
                   placeholder="Nome da rua"
                   value={street}
                   onChange={(e) => setStreet(e.target.value)}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                 />
               </div>
               <div>
@@ -568,7 +568,7 @@ export default function CelulaModal({
                   placeholder="123"
                   value={streetNumber}
                   onChange={(e) => setStreetNumber(e.target.value)}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                 />
               </div>
             </div>
@@ -580,7 +580,7 @@ export default function CelulaModal({
                 placeholder="Nome do bairro"
                 value={neighborhood}
                 onChange={(e) => setNeighborhood(e.target.value)}
-                className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
               />
             </div>
 
@@ -592,7 +592,7 @@ export default function CelulaModal({
                   placeholder="Nome da cidade"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                 />
               </div>
               <div>
@@ -602,7 +602,7 @@ export default function CelulaModal({
                   value={state}
                   onChange={(e) => setState(e.target.value)}
                   maxLength={2}
-                  className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10 uppercase"
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10 uppercase"
                 />
               </div>
             </div>
@@ -614,7 +614,7 @@ export default function CelulaModal({
                 placeholder="Apartamento, bloco, etc."
                 value={complement}
                 onChange={(e) => setComplement(e.target.value)}
-                className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
               />
             </div>
 
@@ -625,16 +625,16 @@ export default function CelulaModal({
                 placeholder="País"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                className="border p-2 rounded w-full bg-white dark:bg-gray-800 dark:text-white h-10"
+                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
               />
             </div>
           </div>
 
           {/* Botões de ação - sticky e full width */}
-          <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t dark:border-gray-700 p-6 flex gap-3">
+          <div className="sticky bottom-0 bg-gray-900 border-t border-gray-700 p-6 flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-3 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 font-medium"
+              className="flex-1 px-4 py-3 border rounded hover:bg-gray-800 font-medium"
             >
               Cancelar
             </button>
