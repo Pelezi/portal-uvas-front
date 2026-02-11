@@ -23,8 +23,28 @@ export default function SelectMatrixPage() {
     setIsLoading(true);
 
     try {
-      await selectMatrix(matrixId);
-      router.push('/report/fill');
+      const result = await selectMatrix(matrixId);
+      
+      // Redireciona baseado no tipo de ministério
+      switch (result.permission?.ministryType) {
+        case 'VISITOR':
+        case 'REGULAR_ATTENDEE':
+        case 'MEMBER':
+          router.push('/profile');
+          break;
+        case 'LEADER_IN_TRAINING':
+        case 'LEADER':
+          router.push('/report/fill');
+          break;
+        case 'DISCIPULADOR':
+          router.push('/celulas');
+          break;
+        case 'PASTOR':
+          router.push('/');
+          break;
+        default:
+          router.push('/report/fill');
+      }
     } catch (err) {
       const error = err as { response?: { data?: { message?: string } } };
       const msg = error.response?.data?.message;

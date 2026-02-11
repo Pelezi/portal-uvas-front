@@ -52,10 +52,24 @@ export default function LoginPage() {
       }
 
       switch (result.permission?.ministryType) {
-        
+        case 'VISITOR':
+        case 'REGULAR_ATTENDEE':
+        case 'MEMBER':
+          router.push('/profile');
+          break;
+        case 'LEADER_IN_TRAINING':
+        case 'LEADER':
+          router.push('/report/fill');
+          break;
+        case 'DISCIPULADOR':
+          router.push('/celulas');
+          break;
+        case 'PASTOR':
+          router.push('/');
+          break;
+        default:
+          router.push('/report/fill');
       }
-      // Successfully logged in with single matrix
-      router.push('/report/fill');
     } catch (err) {
       const error = err as { response?: { data?: { message?: string } } };
       const msg = error.response?.data?.message;

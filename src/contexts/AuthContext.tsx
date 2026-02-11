@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Member, SetPasswordResponse, AuthResponse, Matrix, MatrixAuthResponse } from '@/types';
+import { Member, AuthResponse, Matrix, MatrixAuthResponse } from '@/types';
 import { authService } from '@/services/authService';
 
 interface AuthContextType {
@@ -11,8 +11,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   requireMatrixSelection: boolean;
-  login: (email: string, password: string) => Promise<Member | SetPasswordResponse | MatrixAuthResponse>;
-  selectMatrix: (matrixId: number) => Promise<void>;
+  login: (email: string, password: string) => Promise<Member | MatrixAuthResponse>;
+  selectMatrix: (matrixId: number) => Promise<{ member: Member; permission: any }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -61,11 +61,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     const response = await authService.login(email, password);
     
-    // If backend returned a setPasswordUrl (user has no password), bubble it up so the UI can redirect.
-    if ('setPasswordUrl' in response) {
-      return response as SetPasswordResponse;
-    }
-
     // Check if requires matrix selection
     if ('requireMatrixSelection' in response && response.requireMatrixSelection) {
       setMatrices(response.matrices || []);
@@ -115,6 +110,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authService.setCurrentUser(mergedUser);
     authService.setCurrentMatrix(response.currentMatrix);
     authService.setMatrices(response.matrices);
+    
+    return {
+      member: mergedUser,
+      permission: response.permission ?? response.member.permission ?? null,
+    };
   };
 
   const logout = () => {
