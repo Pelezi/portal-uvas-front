@@ -35,6 +35,9 @@ export interface Permission {
   pastorPresidente: boolean;
   ministryType: MinistryType | null;
   celulaIds: number[] | null;
+  congregacaoIds: number[] | null;
+  redeIds: number[] | null;
+  discipuladoIds: number[] | null;
 }
 
 export interface AuthResponse {
@@ -57,6 +60,7 @@ export type LoginResponse = AuthResponse | SetPasswordResponse;
 export interface Matrix {
   id: number;
   name: string;
+  whatsappApiKey?: string | null;
   createdAt?: string;
   updatedAt?: string;
   domains?: MatrixDomain[];
@@ -119,6 +123,7 @@ export interface Rede {
   congregacao?: Congregacao | null;
   pastorMemberId?: number | null;
   pastor?: Member | null;
+  isKids?: boolean;
 }
 
 export interface Congregacao {
@@ -126,9 +131,11 @@ export interface Congregacao {
   name: string;
   pastorGovernoMemberId: number;
   vicePresidenteMemberId?: number | null;
+  kidsLeaderMemberId?: number | null;
   isPrincipal: boolean;
   pastorGoverno?: Member | null;
   vicePresidente?: Member | null;
+  kidsLeader?: Member | null;
   redes?: Rede[];
   
   // Address fields
@@ -168,6 +175,15 @@ export interface WinnerPath {
   priority?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface MemberSocialMedia {
+  id: number;
+  memberId: number;
+  type: string;  // INSTAGRAM, FACEBOOK, TWITTER, WHATSAPP, LINKEDIN, TIKTOK, YOUTUBE, etc.
+  username: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApiKey {
@@ -213,6 +229,7 @@ export interface Member {
     priority: number;
   } | null;
   winnerPathId?: number | null;
+  winnerPath?: WinnerPath | null;
   canBeHost?: boolean;
   
   // Address
@@ -235,6 +252,17 @@ export interface Member {
   
   // Roles
   roles?: Array<{ id: number; role: Role }>;
+  
+  // Social Media
+  socialMedia?: MemberSocialMedia[];
+  
+  // Leadership positions
+  ledCelulas?: Celula[];
+  viceLedCelulas?: Celula[];
+  discipulados?: Discipulado[];
+  redes?: Rede[];
+  congregacoesPastorGoverno?: Congregacao[];
+  congregacoesVicePresidente?: Congregacao[];
   
   // Permission (populated after login)
   permission?: Permission | null;
@@ -265,6 +293,7 @@ export interface MemberFilters {
   celulaId?: number;
   discipuladoId?: number;
   redeId?: number;
+  congregacaoId?: number;
 }
 
 // Type for MUI Select events

@@ -14,6 +14,7 @@ import { Congregacao, Member, Rede } from '@/types';
 export default function CongregacoesPage() {
   const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [users, setUsers] = useState<Member[]>([]);
+  const [kidsLeaders, setKidsLeaders] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
 
   // expansion & cache maps
@@ -59,6 +60,13 @@ export default function CongregacoesPage() {
       try {
         const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR' });
         setUsers(u || []);
+        
+        // Carregar lista de mulheres com cargo ministerial de tipo PASTOR ou acima para rede kids
+        const kidsLeadersList = await memberService.list({ 
+          ministryType: 'PRESIDENT_PASTOR,PASTOR',
+          gender: 'FEMALE'
+        });
+        setKidsLeaders(kidsLeadersList || []);
       } catch (err) {
         console.error(err);
       }
@@ -142,6 +150,7 @@ export default function CongregacoesPage() {
       name: c.name,
       pastorGovernoMemberId: c.pastorGovernoMemberId,
       vicePresidenteMemberId: c.vicePresidenteMemberId || undefined,
+      kidsLeaderMemberId: c.kidsLeaderMemberId || undefined,
       isPrincipal: c.isPrincipal,
       country: c.country || '',
       zipCode: c.zipCode || '',
@@ -327,6 +336,20 @@ export default function CongregacoesPage() {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm mb-1">Responsável pela Rede Kids</label>
+                <select
+                  value={createData.kidsLeaderMemberId || ''}
+                  onChange={(e) => setCreateData(prev => ({ ...prev, kidsLeaderMemberId: e.target.value ? Number(e.target.value) : undefined }))}
+                  className="w-full border rounded px-3 py-2 bg-gray-800 text-white h-10"
+                >
+                  <option value="">Selecione...</option>
+                  {kidsLeaders.map(k => (
+                    <option key={k.id} value={k.id}>{k.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -488,6 +511,20 @@ export default function CongregacoesPage() {
                   <option value="">Selecione...</option>
                   {users.map(u => (
                     <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1">Responsável pela Rede Kids</label>
+                <select
+                  value={editData.kidsLeaderMemberId || ''}
+                  onChange={(e) => setEditData(prev => ({ ...prev, kidsLeaderMemberId: e.target.value ? Number(e.target.value) : undefined }))}
+                  className="w-full border rounded px-3 py-2 bg-gray-800 text-white h-10"
+                >
+                  <option value="">Selecione...</option>
+                  {kidsLeaders.map(k => (
+                    <option key={k.id} value={k.id}>{k.name}</option>
                   ))}
                 </select>
               </div>

@@ -16,11 +16,12 @@ import {
 } from 'recharts';
 import { membersService } from '@/services/membersService';
 import { redesService } from '@/services/redesService';
+import { congregacoesService } from '@/services/congregacoesService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { celulasService } from '@/services/celulasService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Users, UserX, Filter } from 'lucide-react';
-import { Rede, Discipulado, Celula } from '@/types';
+import { Rede, Discipulado, Celula, Congregacao } from '@/types';
 
 const COLORS = ['#4f46e5', '#06b6d4', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
 
@@ -38,11 +39,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   
   // Estados para filtros
+  const [selectedCongregacaoId, setSelectedCongregacaoId] = useState<number | undefined>(undefined);
   const [selectedRedeId, setSelectedRedeId] = useState<number | undefined>(undefined);
   const [selectedDiscipuladoId, setSelectedDiscipuladoId] = useState<number | undefined>(undefined);
   const [selectedCelulaId, setSelectedCelulaId] = useState<number | undefined>(undefined);
   
   // Estados para opções de filtros
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
   const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
   const [celulas, setCelulas] = useState<Celula[]>([]);
@@ -57,8 +60,12 @@ export default function Dashboard() {
     const fetchFilterOptions = async () => {
       try {
         if (isPastor) {
-          // Pastores podem ver todas as redes
-          const redesData = await redesService.getRedes();
+          // Pastores podem ver todas as congregações e redes
+          const [congregacoesData, redesData] = await Promise.all([
+            congregacoesService.getCongregacoes(),
+            redesService.getRedes()
+          ]);
+          setCongregacoes(congregacoesData);
           setRedes(redesData);
         }
         
@@ -108,8 +115,8 @@ export default function Dashboard() {
       try {
         setLoading(true);
         
-        // Construir filtros baseado em permissões
-        const filters: { celulaId?: number; discipuladoId?: number; redeId?: number } = {};
+        // Construir filtros baseado em seleções
+        const filters: { celulaId?: number; discipuladoId?: number; redeId?: number; congregacaoId?: number } = {};
         
         if (selectedCelulaId !== undefined) {
           filters.celulaId = selectedCelulaId;
@@ -117,6 +124,8 @@ export default function Dashboard() {
           filters.discipuladoId = selectedDiscipuladoId;
         } else if (selectedRedeId !== undefined) {
           filters.redeId = selectedRedeId;
+        } else if (selectedCongregacaoId !== undefined) {
+          filters.congregacaoId = selectedCongregacaoId;
         }
         
         const data = await membersService.getStatistics(filters);
@@ -129,7 +138,7 @@ export default function Dashboard() {
     };
 
     fetchStats();
-  }, [selectedRedeId, selectedDiscipuladoId, selectedCelulaId]);
+  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, redes]);
 
   if (loading) {
     return (
@@ -185,6 +194,33 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-white">Filtros</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Filtro de Congregação - apenas para pastores */}
+          {isPastor && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Congregação
+              </label>
+              <select
+                value={selectedCongregacaoId || ''}
+                onChange={(e) => {
+                  setSelectedCongregacaoId(e.target.value ? Number(e.target.value) : undefined);
+                  setSelectedRedeId(undefined);
+                  setSelectedDiscipuladoId(undefined);
+                  setSelectedCelulaId(undefined);
+                }}
+                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
+                disabled={!isPastor}
+              >
+                <option value="">Todas as congregações</option>
+                {congregacoes.map((congregacao) => (
+                  <option key={congregacao.id} value={congregacao.id}>
+                    {congregacao.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Filtro de Rede - apenas para pastores */}
           {isPastor && (
             <div>
@@ -194,15 +230,24 @@ export default function Dashboard() {
               <select
                 value={selectedRedeId || ''}
                 onChange={(e) => {
-                  setSelectedRedeId(e.target.value ? Number(e.target.value) : undefined);
+                  const redeId = e.target.value ? Number(e.target.value) : undefined;
+                  setSelectedRedeId(redeId);
                   setSelectedDiscipuladoId(undefined);
                   setSelectedCelulaId(undefined);
+                  
+                  // Auto-preencher congregação
+                  if (redeId) {
+                    const rede = redes.find(r => r.id === redeId);
+                    if (rede?.congregacaoId) {
+                      setSelectedCongregacaoId(rede.congregacaoId);
+                    }
+                  }
                 }}
                 className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
                 disabled={!isPastor}
               >
                 <option value="">Todas as redes</option>
-                {redes.map((rede) => (
+                {redes.filter(rede => !selectedCongregacaoId || rede.congregacaoId === selectedCongregacaoId).map((rede) => (
                   <option key={rede.id} value={rede.id}>
                     {rede.name}
                   </option>
@@ -220,10 +265,20 @@ export default function Dashboard() {
               <select
                 value={selectedDiscipuladoId || ''}
                 onChange={(e) => {
-                  setSelectedDiscipuladoId(e.target.value ? Number(e.target.value) : undefined);
+                  const discipuladoId = e.target.value ? Number(e.target.value) : undefined;
+                  setSelectedDiscipuladoId(discipuladoId);
                   setSelectedCelulaId(undefined);
-                  if (e.target.value) {
-                    setSelectedRedeId(undefined);
+                  
+                  // Auto-preencher rede e congregação
+                  if (discipuladoId) {
+                    const discipulado = discipulados.find(d => d.id === discipuladoId);
+                    if (discipulado?.redeId) {
+                      setSelectedRedeId(discipulado.redeId);
+                      const rede = redes.find(r => r.id === discipulado.redeId);
+                      if (rede?.congregacaoId) {
+                        setSelectedCongregacaoId(rede.congregacaoId);
+                      }
+                    }
                   }
                 }}
                 className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
@@ -249,10 +304,23 @@ export default function Dashboard() {
             <select
               value={selectedCelulaId || ''}
               onChange={(e) => {
-                setSelectedCelulaId(e.target.value ? Number(e.target.value) : undefined);
-                if (e.target.value) {
-                  setSelectedRedeId(undefined);
-                  setSelectedDiscipuladoId(undefined);
+                const celulaId = e.target.value ? Number(e.target.value) : undefined;
+                setSelectedCelulaId(celulaId);
+                
+                // Auto-preencher discipulado, rede e congregação
+                if (celulaId) {
+                  const celula = celulas.find(c => c.id === celulaId);
+                  if (celula?.discipuladoId) {
+                    setSelectedDiscipuladoId(celula.discipuladoId);
+                    const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+                    if (discipulado?.redeId) {
+                      setSelectedRedeId(discipulado.redeId);
+                      const rede = redes.find(r => r.id === discipulado.redeId);
+                      if (rede?.congregacaoId) {
+                        setSelectedCongregacaoId(rede.congregacaoId);
+                      }
+                    }
+                  }
                 }
               }}
               className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"

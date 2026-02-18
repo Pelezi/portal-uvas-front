@@ -29,15 +29,18 @@ export interface MemberInput {
   state?: string;
   hasSystemAccess?: boolean;
   roleIds?: number[];
+  // Social media
+  socialMedia?: Array<{ type: string; username: string }>;
 }
 
 export const memberService = {
-  async list(filters?: { celulaId?: number; discipuladoId?: number; redeId?: number; ministryType?: string }): Promise<Member[]> {
+  async list(filters?: { celulaId?: number; discipuladoId?: number; redeId?: number; ministryType?: string; gender?: string }): Promise<Member[]> {
     const params = new URLSearchParams();
     if (filters?.celulaId) params.append('celulaId', filters.celulaId.toString());
     if (filters?.discipuladoId) params.append('discipuladoId', filters.discipuladoId.toString());
     if (filters?.redeId) params.append('redeId', filters.redeId.toString());
     if (filters?.ministryType) params.append('ministryType', filters.ministryType);
+    if (filters?.gender) params.append('gender', filters.gender);
     
     const url = params.toString() ? `/members?${params.toString()}` : '/members';
     const response = await apiClient.get(url);
@@ -76,6 +79,28 @@ export const memberService = {
 
   async updateOwnEmail(email: string): Promise<Member> {
     const response = await apiClient.put('/members/profile/email', { email });
+    return response.data;
+  },
+
+  async updateOwnProfile(data: {
+    name?: string;
+    maritalStatus?: string;
+    spouseId?: number | null;
+    birthDate?: string;
+    phone?: string;
+    photoUrl?: string;
+    country?: string;
+    zipCode?: string;
+    street?: string;
+    streetNumber?: string;
+    neighborhood?: string;
+    city?: string;
+    complement?: string;
+    state?: string;
+    // Social media
+    socialMedia?: Array<{ type: string; username: string }>;
+  }): Promise<Member> {
+    const response = await apiClient.put('/members/profile/me', data);
     return response.data;
   },
 

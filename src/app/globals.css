@@ -1,13 +1,6 @@
 @import "tailwindcss";
 
-@variant dark (&:where(.dark, .dark *));
-
 :root {
-  --background: #ffffff;
-  --foreground: #111827;
-}
-
-:root.dark {
   --background: #0a0a0a;
   --foreground: #f3f4f6;
 }
@@ -125,18 +118,10 @@ a:hover {
 }
 
 /* Smooth amount color transitions */
-.amount-positive {
-  color: #059669;
-}
-
-:root.dark .amount-positive {
+:root .amount-positive {
   color: #34d399;
 }
 
-.amount-negative {
-  color: #dc2626;
-}
-
-:root.dark .amount-negative {
+:root .amount-negative {
   color: #f87171;
 }

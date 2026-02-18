@@ -50,6 +50,55 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
     return gender ? labels[gender] || gender : '-';
   };
 
+  // Retorna as tags de liderança do membro
+  const getLeadershipInfo = (member: Member): { label: string; color: string }[] => {
+    const tags: { label: string; color: string }[] = [];
+    
+    // Pastor de Governo de Congregação
+    if (member.congregacoesPastorGoverno && member.congregacoesPastorGoverno.length > 0) {
+      member.congregacoesPastorGoverno.forEach(cong => {
+        tags.push({ label: `Pastor de Governo - ${cong.name}`, color: 'text-purple-400' });
+      });
+    }
+    
+    // Vice-Presidente de Congregação
+    if (member.congregacoesVicePresidente && member.congregacoesVicePresidente.length > 0) {
+      member.congregacoesVicePresidente.forEach(cong => {
+        tags.push({ label: `Vice-Presidente - ${cong.name}`, color: 'text-purple-400' });
+      });
+    }
+    
+    // Pastor de Rede
+    if (member.redes && member.redes.length > 0) {
+      member.redes.forEach(rede => {
+        tags.push({ label: `Pastor de Rede - ${rede.name}`, color: 'text-blue-400' });
+      });
+    }
+    
+    // Discipulador
+    if (member.discipulados && member.discipulados.length > 0) {
+      member.discipulados.forEach(disc => {
+        tags.push({ label: `Discipulador - Rede: ${disc.rede.name}`, color: 'text-green-400' });
+      });
+    }
+    
+    // Líder de Célula
+    if (member.ledCelulas && member.ledCelulas.length > 0) {
+      member.ledCelulas.forEach(cel => {
+        tags.push({ label: `Líder - ${cel.name}`, color: 'text-yellow-400' });
+      });
+    }
+    
+    // Vice-Líder de Célula
+    if (member.viceLedCelulas && member.viceLedCelulas.length > 0) {
+      member.viceLedCelulas.forEach(cel => {
+        tags.push({ label: `Líder em Treinamento - ${cel.name}`, color: 'text-yellow-400' });
+      });
+    }
+    
+    return tags;
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -156,7 +205,13 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
                 <label className="text-sm font-medium text-gray-400">Célula</label>
                 <p className="text-base mt-1">
                   {member.celula?.name || (
-                    <span className="text-red-400">Sem célula</span>
+                    <>
+                      {getLeadershipInfo(member).length > 0 ? (
+                        <span className="text-gray-400">-</span>
+                      ) : (
+                        <span className="text-red-400">Sem célula</span>
+                      )}
+                    </>
                   )}
                 </p>
               </div>
@@ -175,6 +230,20 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
                 </div>
               )}
             </div>
+            
+            {/* Leadership Positions */}
+            {getLeadershipInfo(member).length > 0 && (
+              <div className="mt-4">
+                <label className="text-sm font-medium text-gray-400 mb-2 block">Posições de Liderança</label>
+                <div className="flex flex-wrap gap-2">
+                  {getLeadershipInfo(member).map((tag, idx) => (
+                    <span key={idx} className={`text-sm ${tag.color} bg-gray-800 px-3 py-1 rounded-full font-semibold`}>
+                      {tag.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Address */}

@@ -2,8 +2,13 @@ import api from '@/lib/apiClient';
 import { Discipulado } from '@/types';
 
 export const discipuladosService = {
-  getDiscipulados: async (): Promise<Discipulado[]> => {
-    const res = await api.get<Discipulado[]>('/discipulados');
+  getDiscipulados: async (filters?: { congregacaoId?: number; redeId?: number; discipuladorMemberId?: number }): Promise<Discipulado[]> => {
+    const params = new URLSearchParams();
+    if (filters?.congregacaoId) params.append('congregacaoId', filters.congregacaoId.toString());
+    if (filters?.redeId) params.append('redeId', filters.redeId.toString());
+    if (filters?.discipuladorMemberId) params.append('discipuladorMemberId', filters.discipuladorMemberId.toString());
+    const queryString = params.toString();
+    const res = await api.get<Discipulado[]>(`/discipulados${queryString ? `?${queryString}` : ''}`);
     return res.data;
   },
 

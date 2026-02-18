@@ -3,9 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { celulasService } from '@/services/celulasService';
 import { redesService } from '@/services/redesService';
+import { congregacoesService } from '@/services/congregacoesService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { reportsService } from '@/services/reportsService';
-import { Celula, Member, Rede, Discipulado } from '@/types';
+import { Celula, Member, Rede, Discipulado, Congregacao } from '@/types';
 import toast from 'react-hot-toast';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -45,11 +46,13 @@ export default function ViewReportPage() {
   const { user, isLoading: authLoading } = useAuth();
   
   // Listas de opções
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
   const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
   const [celulas, setCelulas] = useState<Celula[]>([]);
   
   // Filtros selecionados (cada um pode ter apenas um valor ou null)
+  const [selectedCongregacaoId, setSelectedCongregacaoId] = useState<number | null>(null);
   const [selectedRedeId, setSelectedRedeId] = useState<number | null>(null);
   const [selectedDiscipuladoId, setSelectedDiscipuladoId] = useState<number | null>(null);
   const [selectedCelulaId, setSelectedCelulaId] = useState<number | null>(null);
@@ -58,24 +61,9 @@ export default function ViewReportPage() {
   const [celulasData, setCelulasData] = useState<CelulaReportData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
   const muiTheme = createTheme({
     palette: {
-      mode: isDarkMode ? 'dark' : 'light',
+      mode: 'dark',
     },
   });
 
@@ -84,12 +72,14 @@ export default function ViewReportPage() {
     const loadData = async () => {
       if (authLoading) return;
       try {
-        const [redesData, discipuladosData, celulasData] = await Promise.all([
+        const [congregacoesData, redesData, discipuladosData, celulasData] = await Promise.all([
+          congregacoesService.getCongregacoes(),
           redesService.getRedes(),
           discipuladosService.getDiscipulados(),
           celulasService.getCelulas()
         ]);
 
+        setCongregacoes(congregacoesData);
         setRedes(redesData);
         setDiscipulados(discipuladosData);
         setCelulas(celulasData);
@@ -105,13 +95,17 @@ export default function ViewReportPage() {
               const celulaId = allowedCelulaIds[0];
               setSelectedCelulaId(celulaId);
               
-              // Encontrar discipulado e rede automaticamente
+              // Encontrar discipulado, rede e congregação automaticamente
               const celula = celulasData.find(c => c.id === celulaId);
               if (celula?.discipuladoId) {
                 setSelectedDiscipuladoId(celula.discipuladoId);
                 const discipulado = discipuladosData.find(d => d.id === celula.discipuladoId);
                 if (discipulado?.redeId) {
                   setSelectedRedeId(discipulado.redeId);
+                  const rede = redesData.find(r => r.id === discipulado.redeId);
+                  if (rede?.congregacaoId) {
+                    setSelectedCongregacaoId(rede.congregacaoId);
+                  }
                 }
               }
             }
@@ -121,6 +115,10 @@ export default function ViewReportPage() {
             if (userDiscipulado) {
               setSelectedDiscipuladoId(userDiscipulado.id);
               setSelectedRedeId(userDiscipulado.redeId);
+              const rede = redesData.find(r => r.id === userDiscipulado.redeId);
+              if (rede?.congregacaoId) {
+                setSelectedCongregacaoId(rede.congregacaoId);
+              }
             }
           }
         }
@@ -153,41 +151,215 @@ export default function ViewReportPage() {
   const filteredCelulas = getFilteredCelulas();
 
   // Aplicar restrições de permissão
+  const getPermittedCongregacoes = () => {
+    const permission = user?.permission;
+    
+    if (!permission) {
+      return [];
+    }
+
+    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
+      return congregacoes;
+    }
+    
+    const allowedCongregacaoIds = new Set<number>();
+    
+    // Se tem congregacaoIds na permissão, adicionar diretamente
+    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
+      permission.congregacaoIds.forEach(id => allowedCongregacaoIds.add(id));
+    }
+    
+    // Se tem redeIds, buscar congregações através de redes
+    if (permission.redeIds && permission.redeIds.length > 0) {
+      redes.forEach(r => {
+        if (r.congregacaoId && permission.redeIds?.includes(r.id)) {
+          allowedCongregacaoIds.add(r.congregacaoId);
+        }
+      });
+    }
+    
+    // Se tem discipuladoIds, buscar congregações através de discipulados -> redes
+    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
+      const redesInDiscipulados = redes.filter(r => {
+        const discipuladosInRede = discipulados.filter(d => d.redeId === r.id);
+        return discipuladosInRede.some(d => permission.discipuladoIds?.includes(d.id));
+      });
+      redesInDiscipulados.forEach(r => {
+        if (r.congregacaoId) {
+          allowedCongregacaoIds.add(r.congregacaoId);
+        }
+      });
+    }
+    
+    // Se tem celulaIds, buscar congregações através de células -> discipulados -> redes
+    if (permission.celulaIds && permission.celulaIds.length > 0) {
+      const allowedCelulas = celulas.filter(c => permission.celulaIds?.includes(c.id));
+      const discipuladoIds = [...new Set(allowedCelulas.map(c => c.discipuladoId).filter(Boolean))];
+      const redesInDiscipulados = redes.filter(r => {
+        const discipuladosInRede = discipulados.filter(d => d.redeId === r.id);
+        return discipuladosInRede.some(d => discipuladoIds.includes(d.id));
+      });
+      redesInDiscipulados.forEach(r => {
+        if (r.congregacaoId) {
+          allowedCongregacaoIds.add(r.congregacaoId);
+        }
+      });
+    }
+    
+    return congregacoes.filter(c => allowedCongregacaoIds.has(c.id));
+  };
+
   const getPermittedRedes = () => {
     const permission = user?.permission;
-    if (!permission || permission.isAdmin) {
+    if (!permission) {
+      return [];
+    }
+    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
       return redes;
     }
-    // Discipulador ou líder só pode ver sua rede
-    const allowedCelulaIds = permission.celulaIds || [];
-    const allowedCelulas = celulas.filter(c => allowedCelulaIds.includes(c.id));
-    const allowedDiscipuladoIds = [...new Set(allowedCelulas.map(c => c.discipuladoId).filter(Boolean))];
-    const allowedDiscipulados = discipulados.filter(d => allowedDiscipuladoIds.includes(d.id));
-    const allowedRedeIds = [...new Set(allowedDiscipulados.map(d => d.redeId))];
-    return redes.filter(r => allowedRedeIds.includes(r.id));
+    
+    const allowedRedeIds = new Set<number>();
+    
+    // Se tem congregacaoIds na permissão, adicionar todas as redes dessas congregações
+    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
+      redes.forEach(r => {
+        if (r.congregacaoId && permission.congregacaoIds?.includes(r.congregacaoId)) {
+          allowedRedeIds.add(r.id);
+        }
+      });
+    }
+    
+    // Se tem redeIds na permissão, adicionar diretamente
+    if (permission.redeIds && permission.redeIds.length > 0) {
+      permission.redeIds.forEach(id => allowedRedeIds.add(id));
+    }
+    
+    // Se tem discipuladoIds, buscar as redes desses discipulados
+    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
+      discipulados.forEach(d => {
+        if (permission.discipuladoIds?.includes(d.id)) {
+          allowedRedeIds.add(d.redeId);
+        }
+      });
+    }
+    
+    // Se tem celulaIds, buscar redes através de células -> discipulados -> redes
+    if (permission.celulaIds && permission.celulaIds.length > 0) {
+      const allowedCelulas = celulas.filter(c => permission.celulaIds?.includes(c.id));
+      const discipuladoIds = [...new Set(allowedCelulas.map(c => c.discipuladoId).filter(Boolean))];
+      const allowedDiscipulados = discipulados.filter(d => discipuladoIds.includes(d.id));
+      allowedDiscipulados.forEach(d => allowedRedeIds.add(d.redeId));
+    }
+    
+    return redes.filter(r => allowedRedeIds.has(r.id));
   };
 
   const getPermittedDiscipulados = () => {
     const permission = user?.permission;
-    if (!permission || permission.isAdmin) {
+    if (!permission) {
+      return [];
+    }
+    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
       return filteredDiscipulados;
     }
-    // Discipulador ou líder
-    const allowedCelulaIds = permission.celulaIds || [];
-    const allowedCelulas = celulas.filter(c => allowedCelulaIds.includes(c.id));
-    const allowedDiscipuladoIds = [...new Set(allowedCelulas.map(c => c.discipuladoId).filter(Boolean))];
-    return filteredDiscipulados.filter(d => allowedDiscipuladoIds.includes(d.id));
+    
+    const allowedDiscipuladoIds = new Set<number>();
+    
+    // Se tem congregacaoIds, buscar discipulados através de congregações -> redes -> discipulados
+    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
+      const redesInCongregacoes = redes.filter(r => 
+        r.congregacaoId && permission.congregacaoIds?.includes(r.congregacaoId)
+      );
+      const redeIds = redesInCongregacoes.map(r => r.id);
+      filteredDiscipulados.forEach(d => {
+        if (redeIds.includes(d.redeId)) {
+          allowedDiscipuladoIds.add(d.id);
+        }
+      });
+    }
+    
+    // Se tem redeIds, buscar discipulados dessas redes
+    if (permission.redeIds && permission.redeIds.length > 0) {
+      filteredDiscipulados.forEach(d => {
+        if (permission.redeIds?.includes(d.redeId)) {
+          allowedDiscipuladoIds.add(d.id);
+        }
+      });
+    }
+    
+    // Se tem discipuladoIds, adicionar diretamente
+    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
+      permission.discipuladoIds.forEach(id => allowedDiscipuladoIds.add(id));
+    }
+    
+    // Se tem celulaIds, buscar discipulados através de células
+    if (permission.celulaIds && permission.celulaIds.length > 0) {
+      const allowedCelulas = celulas.filter(c => permission.celulaIds?.includes(c.id));
+      allowedCelulas.forEach(c => {
+        if (c.discipuladoId) {
+          allowedDiscipuladoIds.add(c.discipuladoId);
+        }
+      });
+    }
+    
+    return filteredDiscipulados.filter(d => allowedDiscipuladoIds.has(d.id));
   };
 
   const getPermittedCelulas = () => {
     const permission = user?.permission;
-    if (!permission || permission.isAdmin) {
+    if (!permission) {
+      return [];
+    }
+    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
       return filteredCelulas;
     }
-    const allowedIds = permission.celulaIds || [];
-    return filteredCelulas.filter(c => allowedIds.includes(c.id));
+    
+    const allowedCelulaIds = new Set<number>();
+    
+    // Se tem congregacaoIds, buscar células através de congregações -> redes -> discipulados -> células
+    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
+      const redesInCongregacoes = redes.filter(r => 
+        r.congregacaoId && permission.congregacaoIds?.includes(r.congregacaoId)
+      );
+      const redeIds = redesInCongregacoes.map(r => r.id);
+      const discipuladosInRedes = discipulados.filter(d => redeIds.includes(d.redeId));
+      const discipuladoIds = discipuladosInRedes.map(d => d.id);
+      filteredCelulas.forEach(c => {
+        if (c.discipuladoId && discipuladoIds.includes(c.discipuladoId)) {
+          allowedCelulaIds.add(c.id);
+        }
+      });
+    }
+    
+    // Se tem redeIds, buscar células através de redes -> discipulados -> células
+    if (permission.redeIds && permission.redeIds.length > 0) {
+      const discipuladosInRedes = discipulados.filter(d => permission.redeIds?.includes(d.redeId));
+      const discipuladoIds = discipuladosInRedes.map(d => d.id);
+      filteredCelulas.forEach(c => {
+        if (c.discipuladoId && discipuladoIds.includes(c.discipuladoId)) {
+          allowedCelulaIds.add(c.id);
+        }
+      });
+    }
+    
+    // Se tem discipuladoIds, buscar células desses discipulados
+    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
+      filteredCelulas.forEach(c => {
+        if (c.discipuladoId && permission.discipuladoIds?.includes(c.discipuladoId)) {
+          allowedCelulaIds.add(c.id);
+        }
+      });
+    }
+    
+    // Se tem celulaIds, adicionar diretamente
+    if (permission.celulaIds && permission.celulaIds.length > 0) {
+      permission.celulaIds.forEach(id => allowedCelulaIds.add(id));
+    }
+    
+    return filteredCelulas.filter(c => allowedCelulaIds.has(c.id));
   };
 
+  const permittedCongregacoes = getPermittedCongregacoes();
   const permittedRedes = getPermittedRedes();
   const permittedDiscipulados = getPermittedDiscipulados();
   const permittedCelulas = getPermittedCelulas();
@@ -205,15 +377,17 @@ export default function ViewReportPage() {
         const year = selectedMonth.year();
         const month = selectedMonth.month() + 1;
 
-        let filters: { redeId?: number; discipuladoId?: number; celulaId?: number } = {};
+        let filters: { congregacaoId?: number; redeId?: number; discipuladoId?: number; celulaId?: number } = {};
 
-        // Aplicar filtros na ordem de prioridade: célula > discipulado > rede
+        // Aplicar filtros na ordem de prioridade: célula > discipulado > rede > congregação
         if (selectedCelulaId) {
           filters.celulaId = selectedCelulaId;
         } else if (selectedDiscipuladoId) {
           filters.discipuladoId = selectedDiscipuladoId;
         } else if (selectedRedeId) {
           filters.redeId = selectedRedeId;
+        } else if (selectedCongregacaoId) {
+          filters.congregacaoId = selectedCongregacaoId;
         }
         // Se nenhum filtro, o backend retornará todas as células permitidas
 
@@ -229,7 +403,15 @@ export default function ViewReportPage() {
     };
 
     loadReports();
-  }, [selectedRedeId, selectedDiscipuladoId, selectedCelulaId, selectedMonth]);
+  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, selectedMonth]);
+
+  // Atualizar rede, discipulado e célula quando congregação muda
+  const handleCongregacaoChange = (congregacaoId: number | null) => {
+    setSelectedCongregacaoId(congregacaoId);
+    setSelectedRedeId(null);
+    setSelectedDiscipuladoId(null);
+    setSelectedCelulaId(null);
+  };
 
   // Atualizar discipulado e célula quando rede muda
   const handleRedeChange = (redeId: number | null) => {
@@ -620,7 +802,7 @@ export default function ViewReportPage() {
     const permission = user?.permission;
     if (!permission) return false;
     if (permission.isAdmin) return true;
-    return permission.pastor || permission.discipulador;
+    return permission.pastor || permission.discipulador || permission.pastorPresidente;
   };
 
   return (
@@ -659,6 +841,26 @@ export default function ViewReportPage() {
           {/* Filtros */}
           <div className="bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Congregação */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Congregação {!canChangeFilters() && '(automático)'}
+                </label>
+                <select
+                  value={selectedCongregacaoId || ''}
+                  onChange={(e) => handleCongregacaoChange(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
+                  disabled={!canChangeFilters()}
+                >
+                  <option value="">Todas as congregações</option>
+                  {permittedCongregacoes.map((congregacao) => (
+                    <option key={congregacao.id} value={congregacao.id}>
+                      {congregacao.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Rede */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -671,7 +873,7 @@ export default function ViewReportPage() {
                   disabled={!canChangeFilters()}
                 >
                   <option value="">Todas as redes</option>
-                  {permittedRedes.map((r) => (
+                  {permittedRedes.filter(r => !selectedCongregacaoId || r.congregacaoId === selectedCongregacaoId).map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
                     </option>

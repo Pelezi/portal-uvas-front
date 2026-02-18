@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Celula, Member, Discipulado, Rede } from '@/types';
+import { Celula, Member, Discipulado, Rede, Congregacao } from '@/types';
+import { congregacoesService } from '@/services/congregacoesService';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
@@ -48,6 +49,8 @@ export default function CelulaModal({
 
   // Estados
   const [name, setName] = useState('');
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
+  const [congregacaoId, setCongregacaoId] = useState<number | null>(null);
   const [redeId, setRedeId] = useState<number | null>(null);
   const [discipuladoId, setDiscipuladoId] = useState<number | null>(null);
   const [leaderQuery, setLeaderQuery] = useState('');
@@ -76,28 +79,10 @@ export default function CelulaModal({
     discipulado: false,
   });
 
+  // Kids validation
+  const [genderError, setGenderError] = useState('');
+
   const leaderDropdownRef = useRef<HTMLDivElement>(null);
-
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const updateDarkMode = () => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
-    };
-    updateDarkMode();
-    window.addEventListener('storage', updateDarkMode);
-    const observer = new MutationObserver(updateDarkMode);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => {
-      window.removeEventListener('storage', updateDarkMode);
-      observer.disconnect();
-    };
-  }, []);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -129,12 +114,25 @@ export default function CelulaModal({
 
   const muiTheme = createTheme({
     palette: {
-      mode: isDarkMode ? 'dark' : 'light',
+      mode: 'dark',
       primary: {
-        main: isDarkMode ? '#ffffffff' : '#000000ff',
+        main: '#ffffffff',
       },
     },
   });
+
+  // Carregar congregações
+  useEffect(() => {
+    const loadCongregacoes = async () => {
+      try {
+        const data = await congregacoesService.getCongregacoes();
+        setCongregacoes(data || []);
+      } catch (error) {
+        console.error('Error loading congregações:', error);
+      }
+    };
+    loadCongregacoes();
+  }, []);
 
   useEffect(() => {
     if (celula) {
@@ -157,11 +155,15 @@ export default function CelulaModal({
       setComplement(celula.complement || '');
       setState(celula.state || '');
 
-      // Encontrar a rede através do discipulado
+      // Encontrar a rede e congregação através do discipulado
       if (celula.discipuladoId) {
         const disc = discipulados.find(d => d.id === celula.discipuladoId);
         if (disc) {
           setRedeId(disc.redeId);
+          const rede = redes.find(r => r.id === disc.redeId);
+          if (rede) {
+            setCongregacaoId(rede.congregacaoId);
+          }
         }
       }
     } else {
@@ -195,8 +197,41 @@ export default function CelulaModal({
     loadCelulaMembers();
   }, [celula]);
 
+  // Validar gênero quando rede Kids é selecionada
+  useEffect(() => {
+    if (!redeId && !discipuladoId) {
+      setGenderError('');
+      return;
+    }
+    
+    // Encontrar a rede - pode vir direto do redeId ou do discipulado
+    let selectedRede = redes.find(r => r.id === redeId);
+    
+    // Se não tem redeId mas tem discipuladoId, buscar a rede do discipulado
+    if (!selectedRede && discipuladoId) {
+      const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+      if (selectedDiscipulado) {
+        selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+      }
+    }
+    
+    // Validar se é rede Kids e se o líder selecionado é feminino
+    if (selectedRede?.isKids && leaderId) {
+      const selectedMember = members.find(m => m.id === leaderId);
+      if (selectedMember && selectedMember.gender !== 'FEMALE') {
+        setLeaderId(null);
+        setLeaderName('');
+        setLeaderQuery('');
+        setGenderError('Redes Kids só podem ter líderes do gênero feminino');
+      }
+    } else {
+      setGenderError('');
+    }
+  }, [redeId, discipuladoId, leaderId, redes, discipulados, members]);
+
   const resetForm = () => {
     setName('');
+    setCongregacaoId(null);
     setRedeId(null);
     setDiscipuladoId(null);
     setLeaderQuery('');
@@ -215,6 +250,7 @@ export default function CelulaModal({
     setComplement('');
     setState('');
     setTouched({ name: false, discipulado: false });
+    setGenderError('');
   };
 
   const formatCep = (value: string) => {
@@ -345,6 +381,29 @@ export default function CelulaModal({
               />
             </div>
 
+            {/* Congregação */}
+            <div>
+              <FormControl className="w-full">
+                <InputLabel id="congregacao-label" size='small'>Congregação *</InputLabel>
+                <Select
+                  labelId="congregacao-label"
+                  value={congregacaoId ?? ''}
+                  onChange={(e) => {
+                    setCongregacaoId(e.target.value ? Number(e.target.value) : null);
+                    setRedeId(null);
+                    setDiscipuladoId(null);
+                  }}
+                  label="Congregação"
+                  size="small"
+                  className="bg-gray-800 w-full">
+                  <MenuItem value="">Selecione congregação</MenuItem>
+                  {congregacoes.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </div>
+
             {/* Rede */}
             <div>
               <FormControl className="w-full">
@@ -353,14 +412,24 @@ export default function CelulaModal({
                   labelId="rede-label"
                   value={redeId ?? ''}
                   onChange={(e) => {
-                    setRedeId(e.target.value ? Number(e.target.value) : null);
+                    const selectedRedeId = e.target.value ? Number(e.target.value) : null;
+                    setRedeId(selectedRedeId);
                     setDiscipuladoId(null);
+                    // Auto-preencher congregação quando rede é selecionada
+                    if (selectedRedeId) {
+                      const rede = redes.find(r => r.id === selectedRedeId);
+                      if (rede?.congregacaoId) {
+                        setCongregacaoId(rede.congregacaoId);
+                      }
+                    }
                   }}
                   label="Rede"
                   size="small"
                   className="bg-gray-800 w-full">
                   <MenuItem value="">Selecione rede</MenuItem>
-                  {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                  {redes.filter(r => !congregacaoId || r.congregacaoId === congregacaoId).map((r) => (
+                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </div>
@@ -375,7 +444,21 @@ export default function CelulaModal({
                 <Select
                   labelId="discipulado-label"
                   value={discipuladoId ?? ''}
-                  onChange={(e) => setDiscipuladoId(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => {
+                    const selectedDiscipuladoId = e.target.value ? Number(e.target.value) : null;
+                    setDiscipuladoId(selectedDiscipuladoId);
+                    // Auto-preencher rede e congregação quando discipulado é selecionado
+                    if (selectedDiscipuladoId) {
+                      const discipulado = discipulados.find(d => d.id === selectedDiscipuladoId);
+                      if (discipulado?.redeId) {
+                        setRedeId(discipulado.redeId);
+                        const rede = redes.find(r => r.id === discipulado.redeId);
+                        if (rede?.congregacaoId) {
+                          setCongregacaoId(rede.congregacaoId);
+                        }
+                      }
+                    }
+                  }}
                   onBlur={() => setTouched({ ...touched, discipulado: true })}
                   label="Discipulado"
                   size="small"
@@ -404,9 +487,26 @@ export default function CelulaModal({
                   onFocus={() => setShowLeaderDropdown(true)}
                   className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                 />
+                {genderError && <div className="text-red-500 text-xs mt-1">{genderError}</div>}
                 {showLeaderDropdown && (
                   <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {members.filter(member => {
+                      // Encontrar a rede - pode vir direto do redeId ou do discipulado
+                      let selectedRede = redes.find(r => r.id === redeId);
+                      
+                      // Se não tem redeId mas tem discipuladoId, buscar a rede do discipulado
+                      if (!selectedRede && discipuladoId) {
+                        const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+                        if (selectedDiscipulado) {
+                          selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+                        }
+                      }
+                      
+                      // Se a rede selecionada for Kids, filtrar apenas membros do gênero feminino
+                      if (selectedRede?.isKids && member.gender !== 'FEMALE') {
+                        return false;
+                      }
+                      
                       const q = (leaderQuery || '').toLowerCase();
                       if (!q) return true;
                       return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));

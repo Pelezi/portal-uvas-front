@@ -5,6 +5,7 @@ export interface CreateCongregacaoInput {
   name: string;
   pastorGovernoMemberId: number;
   vicePresidenteMemberId?: number;
+  kidsLeaderMemberId?: number;
   isPrincipal?: boolean;
   country?: string;
   zipCode?: string;
@@ -20,6 +21,7 @@ export interface UpdateCongregacaoInput {
   name?: string;
   pastorGovernoMemberId?: number;
   vicePresidenteMemberId?: number;
+  kidsLeaderMemberId?: number;
   isPrincipal?: boolean;
   country?: string;
   zipCode?: string;

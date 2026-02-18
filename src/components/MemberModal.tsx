@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Member, Celula, Ministry, WinnerPath, Role } from '@/types';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, ThemeProvider, Checkbox, ListItemText, OutlinedInput, Autocomplete, TextField } from '@mui/material';
+import { Member, Celula, Ministry, WinnerPath, Role, Congregacao, Rede, Discipulado } from '@/types';
+import { createTheme, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, ThemeProvider, Checkbox, ListItemText, OutlinedInput, Autocomplete, TextField, Switch, FormControlLabel } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -11,6 +11,9 @@ import 'dayjs/locale/pt-br';
 import toast from 'react-hot-toast';
 import { configService } from '@/services/configService';
 import { memberService } from '@/services/memberService';
+import { congregacoesService } from '@/services/congregacoesService';
+import { redesService } from '@/services/redesService';
+import { discipuladosService } from '@/services/discipuladosService';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPhoneForDisplay, formatPhoneForInput, stripPhoneFormatting, ensureCountryCode } from '@/lib/phoneUtils';
 
@@ -54,6 +57,9 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
   const [hasSystemAccess, setHasSystemAccess] = useState(false);
   const [isActive, setIsActive] = useState(true);
 
+  // Social Media state - array of { type, username }
+  const [socialMedia, setSocialMedia] = useState<Array<{ type: string; username: string }>>([]);
+
   // Config data
   const [ministries, setMinistries] = useState<Ministry[]>([]);
   const [winnerPaths, setWinnerPaths] = useState<WinnerPath[]>([]);
@@ -63,6 +69,14 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
   const [loadingCep, setLoadingCep] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isResendingInvite, setIsResendingInvite] = useState(false);
+
+  // Filtros em cascata para célula
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
+  const [redes, setRedes] = useState<Rede[]>([]);
+  const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
+  const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
+  const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
+  const [filterDiscipuladoId, setFilterDiscipuladoId] = useState<number | null>(null);
 
   // Validação
   const [touched, setTouched] = useState({
@@ -90,16 +104,22 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
   useEffect(() => {
     const loadConfigData = async () => {
       try {
-        const [ministriesData, winnerPathsData, rolesData, membersData] = await Promise.all([
+        const [ministriesData, winnerPathsData, rolesData, membersData, congregacoesData, redesData, discipuladosData] = await Promise.all([
           configService.getMinistries(),
           configService.getWinnerPaths(),
           configService.getRoles(),
           memberService.list(),
+          congregacoesService.getCongregacoes(),
+          redesService.getRedes(),
+          discipuladosService.getDiscipulados(),
         ]);
         setMinistries(ministriesData);
         setWinnerPaths(winnerPathsData);
         setRoles(rolesData);
         setAllMembers(membersData);
+        setCongregacoes(congregacoesData || []);
+        setRedes(redesData || []);
+        setDiscipulados(discipuladosData || []);
       } catch (err) {
         console.error('Failed to load config data:', err);
       }
@@ -155,7 +175,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     palette: {
       mode: 'dark',
       primary: {
-        main: '#ffffffff',
+        main: '#3b82f6', 
       },
     },
   });
@@ -189,6 +209,9 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
         setHasSystemAccess(member.hasSystemAccess ?? false);
         setIsActive(member.isActive ?? true);
         setSelectedRoleIds(member.roles?.map(mr => mr.role.id) ?? []);
+        
+        // Initialize social media from array
+        setSocialMedia(member.socialMedia?.map(sm => ({ type: sm.type, username: sm.username })) ?? []);
       } else {
         resetForm();
         // Set initial celula if provided
@@ -198,6 +221,82 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
       }
     }
   }, [member, isOpen, initialCelulaId]);
+
+  // Auto-preencher filtros quando célula é selecionada
+  useEffect(() => {
+    if (celulaId && celulas.length > 0 && discipulados.length > 0 && redes.length > 0) {
+      const celula = celulas.find(c => c.id === celulaId);
+      if (celula?.discipuladoId) {
+        setFilterDiscipuladoId(celula.discipuladoId);
+
+        const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+        if (discipulado?.redeId) {
+          setFilterRedeId(discipulado.redeId);
+
+          const rede = redes.find(r => r.id === discipulado.redeId);
+          if (rede?.congregacaoId) {
+            setFilterCongregacaoId(rede.congregacaoId);
+          }
+        }
+      }
+    }
+  }, [celulaId, celulas, discipulados, redes]);
+
+  // Auto-preencher filtros baseado nas permissões do usuário quando não estiver editando
+  useEffect(() => {
+    if (!isEditing && isOpen && user?.permission && user.permission.ministryType !== 'PRESIDENT_PASTOR' && !user.permission.isAdmin && congregacoes.length > 0 && redes.length > 0 && discipulados.length > 0 && celulas.length > 0) {
+      const permission = user.permission;
+
+      // Se usuário tem apenas uma congregação permitida
+      if (permission.congregacaoIds && permission.congregacaoIds.length === 1 && !filterCongregacaoId) {
+        const allowedCongregacaoId = permission.congregacaoIds[0];
+        const congregacaoExists = congregacoes.find(c => c.id === allowedCongregacaoId);
+        if (congregacaoExists) {
+          setFilterCongregacaoId(allowedCongregacaoId);
+        }
+      }
+
+      // Se usuário tem apenas uma rede permitida
+      if (permission.redeIds && permission.redeIds.length === 1 && !filterRedeId) {
+        const allowedRedeId = permission.redeIds[0];
+        const rede = redes.find(r => r.id === allowedRedeId);
+        if (rede) {
+          setFilterRedeId(allowedRedeId);
+          // Auto-preencher congregação se ainda não estiver preenchida
+          if (rede.congregacaoId && !filterCongregacaoId) {
+            setFilterCongregacaoId(rede.congregacaoId);
+          }
+        }
+      }
+
+      // Se usuário tem apenas um discipulado permitido
+      if (permission.discipuladoIds && permission.discipuladoIds.length === 1 && !filterDiscipuladoId) {
+        const allowedDiscipuladoId = permission.discipuladoIds[0];
+        const discipulado = discipulados.find(d => d.id === allowedDiscipuladoId);
+        if (discipulado) {
+          setFilterDiscipuladoId(allowedDiscipuladoId);
+          // Auto-preencher rede se ainda não estiver preenchida
+          if (discipulado.redeId && !filterRedeId) {
+            setFilterRedeId(discipulado.redeId);
+            // Auto-preencher congregação se ainda não estiver preenchida
+            const rede = redes.find(r => r.id === discipulado.redeId);
+            if (rede?.congregacaoId && !filterCongregacaoId) {
+              setFilterCongregacaoId(rede.congregacaoId);
+            }
+          }
+        }
+      }
+
+      // Se usuário tem apenas uma célula permitida
+      if (permission.celulaIds && permission.celulaIds.length === 1 && !celulaId) {
+        const allowedCelulaId = permission.celulaIds[0];
+        const celula = celulas.find(c => c.id === allowedCelulaId);
+        if (celula) {
+          setCelulaId(allowedCelulaId);
+        }
+      }
+    }
+  }, [isEditing, isOpen, user, congregacoes, redes, discipulados, celulas, filterCongregacaoId, filterRedeId, filterDiscipuladoId, celulaId]);
 
   const resetForm = () => {
     setName('');
@@ -226,7 +325,13 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     setHasSystemAccess(false);
     setIsActive(true);
     setSelectedRoleIds([]);
+    setFilterCongregacaoId(null);
+    setFilterRedeId(null);
+    setFilterDiscipuladoId(null);
     setTouched({ name: false, ministryPosition: false, email: false });
+    
+    // Reset social media
+    setSocialMedia([]);
   };
 
   const formatCep = (value: string) => {
@@ -313,6 +418,9 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     const strippedPhone = phone ? stripPhoneFormatting(phone) : '';
     const phoneToSend = strippedPhone && strippedPhone !== '55' ? strippedPhone : undefined;
 
+    // Preparar redes sociais: apenas as que têm type e username preenchidos
+    const validSocialMedia = socialMedia.filter(sm => sm.type.trim() && sm.username.trim());
+
     const data: Partial<Member> & { roleIds?: number[] } = {
       name,
       maritalStatus: maritalStatus as any,
@@ -339,7 +447,9 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
       hasSystemAccess,
       isActive,
       roleIds: selectedRoleIds,
-    };
+      // Social media
+      socialMedia: validSocialMedia.length > 0 ? validSocialMedia : undefined,
+    } as any;
 
     data.celulaId = celulaId;
 
@@ -392,53 +502,65 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
               <h4 className="font-medium mb-3 text-sm text-gray-400">DADOS PESSOAIS</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-sm">Nome *</label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Nome *"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     onBlur={() => setTouched({ ...touched, name: true })}
-                    className={`border p-2 rounded w-full bg-gray-800 text-white h-10 ${touched.name && !name.trim() ? 'border-red-500' : ''
-                      }`}
+                    error={touched.name && !name.trim()}
                     placeholder="Nome completo"
+                    className="bg-gray-800"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Sexo</label>
-                  <select
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="w-full border p-2 rounded bg-gray-800 h-10"
-                  >
-                    <option value="">Selecione</option>
-                    <option value="MALE">Masculino</option>
-                    <option value="FEMALE">Feminino</option>
-                    <option value="OTHER">Outro</option>
-                  </select>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="gender-label">Gênero</InputLabel>
+                    <Select
+                      labelId="gender-label"
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                      label="Gênero"
+                      className="bg-gray-800"
+                    >
+                      <MenuItem value="">Selecione</MenuItem>
+                      <MenuItem value="MALE">Masculino</MenuItem>
+                      <MenuItem value="FEMALE">Feminino</MenuItem>
+                      <MenuItem value="OTHER">Outro</MenuItem>
+                    </Select>
+                  </FormControl>
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Estado Civil</label>
-                  <select
-                    value={maritalStatus}
-                    onChange={(e) => setMaritalStatus(e.target.value)}
-                    className="w-full border p-2 rounded bg-gray-800 h-10"
-                  >
-                    <option value="SINGLE">Solteiro(a)</option>
-                    <option value="COHABITATING">Amasiados</option>
-                    <option value="MARRIED">Casado(a)</option>
-                    <option value="DIVORCED">Divorciado(a)</option>
-                    <option value="WIDOWED">Viúvo(a)</option>
-                  </select>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="marital-status-label">Estado Civil</InputLabel>
+                    <Select
+                      labelId="marital-status-label"
+                      value={maritalStatus}
+                      onChange={(e) => setMaritalStatus(e.target.value)}
+                      label="Estado Civil"
+                      className="bg-gray-800"
+                    >
+                      <MenuItem value="SINGLE">Solteiro(a)</MenuItem>
+                      <MenuItem value="COHABITATING">Amasiados</MenuItem>
+                      <MenuItem value="MARRIED">Casado(a)</MenuItem>
+                      <MenuItem value="DIVORCED">Divorciado(a)</MenuItem>
+                      <MenuItem value="WIDOWED">Viúvo(a)</MenuItem>
+                    </Select>
+                  </FormControl>
                 </div>
 
                 {maritalStatus === 'MARRIED' && (
                   <div className="md:col-span-1">
-                    <label className="block mb-1 text-sm">Cônjuge</label>
                     <FormControl fullWidth size="small">
+                      <InputLabel id="spouse-label">Cônjuge</InputLabel>
                       <Select
+                        labelId="spouse-label"
                         value={spouseId ?? ''}
                         onChange={(e) => setSpouseId(e.target.value ? Number(e.target.value) : null)}
+                        label="Cônjuge"
                         className="bg-gray-800"
                         displayEmpty
                       >
@@ -454,12 +576,12 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                 )}
 
                 <div>
-                  <label className="block mb-1 text-sm">Data de Nascimento</label>
                   <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
                     <DatePicker
                       value={birthDate}
                       onChange={(newValue: Dayjs | null) => setBirthDate(newValue)}
                       format="DD/MM/YYYY"
+                      label="Data de Nascimento"
                       localeText={{
                         toolbarTitle: 'Selecionar data',
                         cancelButtonLabel: 'Cancelar',
@@ -478,13 +600,149 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
 
                 <div>
-                  <label className="block mb-1 text-sm">Telefone</label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Telefone"
                     value={phone}
                     onChange={handlePhoneChange}
-                    className="border p-2 rounded w-full bg-gray-800 h-10"
                     placeholder="(11) 99999-9999"
-                    maxLength={25}
+                    inputProps={{ maxLength: 25 }}
+                    className="bg-gray-800"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* CÉLULA */}
+            <div className="border-b pb-3">
+              <h4 className="font-medium mb-3 text-sm text-gray-400">CÉLULA</h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Congregação */}
+                <div>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="filter-congregacao-label">Congregação</InputLabel>
+                    <Select
+                      labelId="filter-congregacao-label"
+                      value={filterCongregacaoId ?? ''}
+                      onChange={(e) => {
+                        setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null);
+                        setFilterRedeId(null);
+                        setFilterDiscipuladoId(null);
+                      }}
+                      label="Congregação"
+                      className="bg-gray-800"
+                    >
+                      <MenuItem value="">Todas as congregações</MenuItem>
+                      {congregacoes.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </div>
+
+                {/* Rede */}
+                <div>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="filter-rede-label">Rede</InputLabel>
+                    <Select
+                      labelId="filter-rede-label"
+                      value={filterRedeId ?? ''}
+                      onChange={(e) => {
+                        const selectedRedeId = e.target.value ? Number(e.target.value) : null;
+                        setFilterRedeId(selectedRedeId);
+                        setFilterDiscipuladoId(null);
+                        // Auto-preencher congregação quando rede é selecionada
+                        if (selectedRedeId) {
+                          const rede = redes.find(r => r.id === selectedRedeId);
+                          if (rede?.congregacaoId) {
+                            setFilterCongregacaoId(rede.congregacaoId);
+                          }
+                        }
+                      }}
+                      label="Rede"
+                      className="bg-gray-800"
+                    >
+                      <MenuItem value="">Todas as redes</MenuItem>
+                      {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map((r) => (
+                        <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </div>
+
+                {/* Discipulado */}
+                <div>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="filter-discipulado-label">Discipulado</InputLabel>
+                    <Select
+                      labelId="filter-discipulado-label"
+                      value={filterDiscipuladoId ?? ''}
+                      onChange={(e) => {
+                        const selectedDiscipuladoId = e.target.value ? Number(e.target.value) : null;
+                        setFilterDiscipuladoId(selectedDiscipuladoId);
+                        // Auto-preencher rede e congregação quando discipulado é selecionado
+                        if (selectedDiscipuladoId) {
+                          const discipulado = discipulados.find(d => d.id === selectedDiscipuladoId);
+                          if (discipulado?.redeId) {
+                            setFilterRedeId(discipulado.redeId);
+                            const rede = redes.find(r => r.id === discipulado.redeId);
+                            if (rede?.congregacaoId) {
+                              setFilterCongregacaoId(rede.congregacaoId);
+                            }
+                          }
+                        }
+                      }}
+                      label="Discipulado"
+                      className="bg-gray-800"
+                    >
+                      <MenuItem value="">Todos os discipulados</MenuItem>
+                      {discipulados.filter(d => !filterRedeId || d.redeId === filterRedeId).map((d) => (
+                        <MenuItem key={d.id} value={d.id}>{d.discipulador?.name || `Discipulado ${d.id}`}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </div>
+
+                {/* Célula */}
+                <div>
+                  <Autocomplete
+                    size="small"
+                    options={celulas.filter(c => {
+                      // Filtrar células baseado nos filtros superiores
+                      if (filterDiscipuladoId && c.discipuladoId !== filterDiscipuladoId) return false;
+                      if (filterRedeId && !filterDiscipuladoId) {
+                        // Se tem filtro de rede mas não de discipulado, verificar se a célula pertence a um discipulado da rede
+                        const celulaDiscipulado = discipulados.find(d => d.id === c.discipuladoId);
+                        if (!celulaDiscipulado || celulaDiscipulado.redeId !== filterRedeId) return false;
+                      }
+                      if (filterCongregacaoId && !filterRedeId && !filterDiscipuladoId) {
+                        // Se tem filtro de congregação mas não de rede/discipulado, verificar hierarquia
+                        const celulaDiscipulado = discipulados.find(d => d.id === c.discipuladoId);
+                        if (!celulaDiscipulado) return false;
+                        const celulaRede = redes.find(r => r.id === celulaDiscipulado.redeId);
+                        if (!celulaRede || celulaRede.congregacaoId !== filterCongregacaoId) return false;
+                      }
+                      return true;
+                    })}
+                    getOptionLabel={(option) => option.name}
+                    value={celulas.find(c => c.id === celulaId) || null}
+                    onChange={(event, newValue) => {
+                      setCelulaId(newValue ? newValue.id : null);
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Célula"
+                        placeholder="Sem célula"
+                        className="bg-gray-800"
+                      />
+                    )}
+                    noOptionsText="Nenhuma célula encontrada"
+                    clearText="Limpar"
+                    openText="Abrir"
+                    closeText="Fechar"
                   />
                 </div>
               </div>
@@ -496,43 +754,20 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-sm">Célula</label>
-                  <Autocomplete
-                    size="small"
-                    options={celulas}
-                    getOptionLabel={(option) => option.name}
-                    value={celulas.find(c => c.id === celulaId) || null}
-                    onChange={(event, newValue) => {
-                      setCelulaId(newValue ? newValue.id : null);
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        placeholder="Sem célula"
-                        className="bg-gray-800"
-                      />
-                    )}
-                    noOptionsText="Nenhuma célula encontrada"
-                    clearText="Limpar"
-                    openText="Abrir"
-                    closeText="Fechar"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 text-sm">Cargo Ministerial *</label>
                   <FormControl
                     fullWidth
                     size="small"
                     error={touched.ministryPosition && !ministryPositionId}
                   >
+                    <InputLabel id="ministry-position-label">Cargo Ministerial *</InputLabel>
                     <Select
+                      labelId="ministry-position-label"
                       value={ministryPositionId ?? ''}
                       onChange={(e) => setMinistryPositionId(e.target.value ? Number(e.target.value) : null)}
                       onBlur={() => setTouched({ ...touched, ministryPosition: true })}
+                      label="Cargo Ministerial *"
                       className="bg-gray-800"
-                      displayEmpty
                     >
-                      <MenuItem value="">Sem cargo ministerial</MenuItem>
                       {allowedMinistries.map(m => (
                         <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
                       ))}
@@ -541,35 +776,41 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">É batizado?</label>
-                  <label htmlFor="isBaptized" className="border rounded p-2 flex items-center justify-between bg-gray-800 cursor-pointer hover:bg-gray-900 transition-colors">
-                    <span className="text-sm font-medium"></span>
-                    <div className="relative inline-block w-12 h-6">
-                      <input
-                        type="checkbox"
+                  <FormControlLabel
+                    control={
+                      <Switch
                         checked={isBaptized}
                         onChange={(e) => setIsBaptized(e.target.checked)}
-                        id="isBaptized"
-                        className="sr-only peer"
+                        color="primary"
                       />
-                      <span className="absolute inset-0 bg-gray-600 rounded-full transition-all duration-300 ease-in-out peer-checked:bg-blue-600"></span>
-                      <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ease-in-out peer-checked:translate-x-6 peer-checked:shadow-md"></span>
-                    </div>
-                  </label>
+                    }
+                    label="É batizado?"
+                    className="border rounded bg-gray-800 px-2 py-1 m-0 w-full flex justify-between"
+                    labelPlacement="start"
+                    sx={{
+                      marginLeft: 0,
+                      '& .MuiFormControlLabel-label': {
+                        flex: 1,
+                        fontSize: '0.875rem'
+                      }
+                    }}
+                  />
                 </div>
 
                 {isBaptized && (
                   <div>
-                    <label className="block mb-1 text-sm">Data de Batismo</label>
                     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
                       <DatePicker
                         value={baptismDate}
                         onChange={(newValue: Dayjs | null) => setBaptismDate(newValue)}
-                        format="DD/MM/YYYY" localeText={{
+                        format="DD/MM/YYYY"
+                        label="Data de Batismo"
+                        localeText={{
                           toolbarTitle: 'Selecionar data',
                           cancelButtonLabel: 'Cancelar',
                           okButtonLabel: 'OK',
-                        }} slotProps={{
+                        }}
+                        slotProps={{
                           textField: {
                             fullWidth: true,
                             size: 'small',
@@ -582,15 +823,15 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                 )}
 
                 <div>
-                  <label className="block mb-1 text-sm">Trilho do Vencedor</label>
                   <FormControl fullWidth size="small">
+                    <InputLabel id="winner-path-label">Trilho do Vencedor</InputLabel>
                     <Select
+                      labelId="winner-path-label"
                       value={winnerPathId ?? ''}
                       onChange={(e) => setWinnerPathId(e.target.value ? Number(e.target.value) : null)}
+                      label="Trilho do Vencedor"
                       className="bg-gray-800"
-                      displayEmpty
                     >
-                      <MenuItem value="">Sem trilho</MenuItem>
                       {winnerPaths.map(w => (
                         <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>
                       ))}
@@ -599,16 +840,17 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block mb-1 text-sm">Funções</label>
                   <FormControl fullWidth size="small">
+                    <InputLabel id="roles-label">Funções</InputLabel>
                     <Select<number[]>
+                      labelId="roles-label"
                       multiple
                       value={selectedRoleIds}
                       onChange={(e: SelectChangeEvent<number[]>) => {
                         const value = e.target.value;
                         setSelectedRoleIds(typeof value === 'string' ? [] : value);
                       }}
-                      input={<OutlinedInput />}
+                      input={<OutlinedInput label="Funções" />}
                       renderValue={(selected) => {
                         if (selected.length === 0) {
                           return <em className="text-gray-400">Selecione as funções</em>;
@@ -619,11 +861,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                           .join(', ');
                       }}
                       className="bg-gray-800"
-                      displayEmpty
                     >
-                      <MenuItem disabled value="">
-                        <em>Selecione as funções</em>
-                      </MenuItem>
                       {roles.map((role) => (
                         <MenuItem key={role.id} value={role.id}>
                           <Checkbox checked={selectedRoleIds.includes(role.id)} />
@@ -641,35 +879,41 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Apto para ser anfitrião?</label>
-                  <label htmlFor="canBeHost" className="border rounded p-2 flex items-center justify-between bg-gray-800 cursor-pointer hover:bg-gray-900 transition-colors">
-                    <span className="text-sm font-medium"></span>
-                    <div className="relative inline-block w-12 h-6">
-                      <input
-                        type="checkbox"
+                  <FormControlLabel
+                    control={
+                      <Switch
                         checked={canBeHost}
                         onChange={(e) => setCanBeHost(e.target.checked)}
-                        id="canBeHost"
-                        className="sr-only peer"
+                        color="primary"
                       />
-                      <span className="absolute inset-0 bg-gray-600 rounded-full transition-all duration-300 ease-in-out peer-checked:bg-blue-600"></span>
-                      <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ease-in-out peer-checked:translate-x-6 peer-checked:shadow-md"></span>
-                    </div>
-                  </label>
+                    }
+                    label="Apto para ser anfitrião?"
+                    className="border rounded bg-gray-800 px-2 py-1 m-0 w-full flex justify-between"
+                    labelPlacement="start"
+                    sx={{
+                      marginLeft: 0,
+                      '& .MuiFormControlLabel-label': {
+                        flex: 1,
+                        fontSize: '0.875rem'
+                      }
+                    }}
+                  />
                 </div>
 
 
                 <div>
-                  <label className="block mb-1 text-sm">Data de Ingresso</label>
                   <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
                     <DatePicker
                       value={registerDate}
                       onChange={(newValue: Dayjs | null) => setRegisterDate(newValue)}
-                      format="DD/MM/YYYY" localeText={{
+                      format="DD/MM/YYYY"
+                      label="Data de Ingresso"
+                      localeText={{
                         toolbarTitle: 'Selecionar data',
                         cancelButtonLabel: 'Cancelar',
                         okButtonLabel: 'OK',
-                      }} slotProps={{
+                      }}
+                      slotProps={{
                         textField: {
                           fullWidth: true,
                           size: 'small',
@@ -687,25 +931,31 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
               <h4 className="font-medium mb-3 text-sm text-gray-400">ENDEREÇO</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-sm">País</label>
-                  <select
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className="w-full border p-2 rounded bg-gray-800 h-10"
-                  >
-                    <option value="Brasil">Brasil</option>
-                  </select>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="country-label">País</InputLabel>
+                    <Select
+                      labelId="country-label"
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                      label="País"
+                      className="bg-gray-800"
+                    >
+                      <MenuItem value="Brasil">Brasil</MenuItem>
+                    </Select>
+                  </FormControl>
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">CEP</label>
                   <div className="relative">
-                    <input
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="CEP"
                       value={zipCode}
                       onChange={handleCepChange}
-                      className="border p-2 rounded w-full bg-gray-800 h-10"
                       placeholder="12345-678"
-                      maxLength={9}
+                      inputProps={{ maxLength: 9 }}
+                      className="bg-gray-800"
                     />
                     {loadingCep && (
                       <div className="absolute right-2 top-2">
@@ -716,87 +966,188 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Rua</label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Rua"
                     value={street}
                     onChange={(e) => setStreet(e.target.value)}
-                    className="border p-2 rounded w-full bg-gray-800 h-10"
+                    className="bg-gray-800"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Número</label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Número"
                     value={streetNumber}
                     onChange={(e) => setStreetNumber(e.target.value)}
-                    className="border p-2 rounded w-full bg-gray-800 h-10"
+                    className="bg-gray-800"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Bairro</label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Bairro"
                     value={neighborhood}
                     onChange={(e) => setNeighborhood(e.target.value)}
-                    className="border p-2 rounded w-full bg-gray-800 h-10"
+                    className="bg-gray-800"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Cidade</label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Cidade"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="border p-2 rounded w-full bg-gray-800 h-10"
+                    className="bg-gray-800"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Complemento</label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Complemento"
                     value={complement}
                     onChange={(e) => setComplement(e.target.value)}
-                    className="border p-2 rounded w-full bg-gray-800 h-10"
+                    className="bg-gray-800"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">UF</label>
-                  <select
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    className="w-full border p-2 rounded bg-gray-800 h-10"
-                  >
-                    <option value="">Selecione</option>
-                    <option value="AC">AC</option>
-                    <option value="AL">AL</option>
-                    <option value="AP">AP</option>
-                    <option value="AM">AM</option>
-                    <option value="BA">BA</option>
-                    <option value="CE">CE</option>
-                    <option value="DF">DF</option>
-                    <option value="ES">ES</option>
-                    <option value="GO">GO</option>
-                    <option value="MA">MA</option>
-                    <option value="MT">MT</option>
-                    <option value="MS">MS</option>
-                    <option value="MG">MG</option>
-                    <option value="PA">PA</option>
-                    <option value="PB">PB</option>
-                    <option value="PR">PR</option>
-                    <option value="PE">PE</option>
-                    <option value="PI">PI</option>
-                    <option value="RJ">RJ</option>
-                    <option value="RN">RN</option>
-                    <option value="RS">RS</option>
-                    <option value="RO">RO</option>
-                    <option value="RR">RR</option>
-                    <option value="SC">SC</option>
-                    <option value="SP">SP</option>
-                    <option value="SE">SE</option>
-                    <option value="TO">TO</option>
-                  </select>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="state-label">UF</InputLabel>
+                    <Select
+                      labelId="state-label"
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      label="UF"
+                      className="bg-gray-800"
+                    >
+                      <MenuItem value="">Selecione</MenuItem>
+                      <MenuItem value="AC">AC</MenuItem>
+                      <MenuItem value="AL">AL</MenuItem>
+                      <MenuItem value="AP">AP</MenuItem>
+                      <MenuItem value="AM">AM</MenuItem>
+                      <MenuItem value="BA">BA</MenuItem>
+                      <MenuItem value="CE">CE</MenuItem>
+                      <MenuItem value="DF">DF</MenuItem>
+                      <MenuItem value="ES">ES</MenuItem>
+                      <MenuItem value="GO">GO</MenuItem>
+                      <MenuItem value="MA">MA</MenuItem>
+                      <MenuItem value="MT">MT</MenuItem>
+                      <MenuItem value="MS">MS</MenuItem>
+                      <MenuItem value="MG">MG</MenuItem>
+                      <MenuItem value="PA">PA</MenuItem>
+                      <MenuItem value="PB">PB</MenuItem>
+                      <MenuItem value="PR">PR</MenuItem>
+                      <MenuItem value="PE">PE</MenuItem>
+                      <MenuItem value="PI">PI</MenuItem>
+                      <MenuItem value="RJ">RJ</MenuItem>
+                      <MenuItem value="RN">RN</MenuItem>
+                      <MenuItem value="RS">RS</MenuItem>
+                      <MenuItem value="RO">RO</MenuItem>
+                      <MenuItem value="RR">RR</MenuItem>
+                      <MenuItem value="SC">SC</MenuItem>
+                      <MenuItem value="SP">SP</MenuItem>
+                      <MenuItem value="SE">SE</MenuItem>
+                      <MenuItem value="TO">TO</MenuItem>
+                    </Select>
+                  </FormControl>
                 </div>
+              </div>
+            </div>
+
+            {/* REDES SOCIAIS */}
+            <div className="border-b pb-3">
+              <h4 className="font-medium mb-3 text-sm text-gray-400">REDES SOCIAIS</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-300">
+                    Adicione as redes sociais
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSocialMedia([...socialMedia, { type: 'INSTAGRAM', username: '' }])}
+                    className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
+                  >
+                    + Adicionar Rede Social
+                  </button>
+                </div>
+                
+                {socialMedia.length === 0 && (
+                  <p className="text-sm text-gray-500 italic">Nenhuma rede social adicionada</p>
+                )}
+                
+                {socialMedia.map((social, index) => (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-start">
+                    <div className="md:col-span-2">
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Tipo</InputLabel>
+                        <Select
+                          value={social.type}
+                          onChange={(e) => {
+                            const updated = [...socialMedia];
+                            updated[index].type = e.target.value;
+                            setSocialMedia(updated);
+                          }}
+                          label="Tipo"
+                          className="bg-gray-800"
+                        >
+                          <MenuItem value="INSTAGRAM">Instagram</MenuItem>
+                          <MenuItem value="FACEBOOK">Facebook</MenuItem>
+                          <MenuItem value="TWITTER">Twitter/X</MenuItem>
+                          <MenuItem value="WHATSAPP">WhatsApp</MenuItem>
+                          <MenuItem value="LINKEDIN">LinkedIn</MenuItem>
+                          <MenuItem value="TIKTOK">TikTok</MenuItem>
+                          <MenuItem value="YOUTUBE">YouTube</MenuItem>
+                          <MenuItem value="TELEGRAM">Telegram</MenuItem>
+                          <MenuItem value="DISCORD">Discord</MenuItem>
+                          <MenuItem value="THREADS">Threads</MenuItem>
+                          <MenuItem value="SNAPCHAT">Snapchat</MenuItem>
+                          <MenuItem value="PINTEREST">Pinterest</MenuItem>
+                          <MenuItem value="TWITCH">Twitch</MenuItem>
+                          <MenuItem value="OUTRO">Outro</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </div>
+                    <div className="md:col-span-2">
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Username/URL/Número"
+                        value={social.username}
+                        onChange={(e) => {
+                          const updated = [...socialMedia];
+                          updated[index].username = e.target.value;
+                          setSocialMedia(updated);
+                        }}
+                        placeholder={
+                          social.type === 'WHATSAPP' ? '+55 11 99999-9999' : 
+                          social.type === 'INSTAGRAM' || social.type === 'TWITTER' || social.type === 'TIKTOK' 
+                            ? '@username' 
+                            : 'username ou URL'
+                        }
+                        className="bg-gray-800"
+                      />
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setSocialMedia(socialMedia.filter((_, i) => i !== index))}
+                        className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -805,52 +1156,50 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
               <h4 className="font-medium mb-3 text-sm text-gray-400">DADOS DE ACESSO</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-sm">
-                    Email {hasSystemAccess && '*'}
-                  </label>
-                  <input
+                  <TextField
+                    fullWidth
+                    size="small"
                     type="email"
+                    label={`Email ${hasSystemAccess ? '*' : ''}`}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onBlur={() => setTouched({ ...touched, email: true })}
-                    className={`border p-2 rounded w-full bg-gray-800 h-10 ${hasSystemAccess && touched.email && !email.trim() ? 'border-red-500' : ''
-                      }`}
+                    error={hasSystemAccess && touched.email && !email.trim()}
                     placeholder="email@example.com"
+                    className="bg-gray-800"
                   />
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm">Acesso ao sistema</label>
                   <div className="flex gap-2">
-                    <label
-                      htmlFor="hasSystemAccess"
-                      className={`border rounded p-2 flex items-center justify-between bg-gray-800 transition-colors flex-1 ${canManageSystemAccess ? 'cursor-pointer hover:bg-gray-900' : 'cursor-not-allowed opacity-60'
-                        }`}
-                      title={!canManageSystemAccess ? 'Você não tem permissão para gerenciar acesso ao sistema' : ''}
-                    >
-                      <span className="text-sm font-medium"></span>
-                      <div className="relative inline-block w-12 h-6">
-                        <input
-                          type="checkbox"
+                    <FormControlLabel
+                      control={
+                        <Switch
                           checked={hasSystemAccess}
                           onChange={(e) => canManageSystemAccess && setHasSystemAccess(e.target.checked)}
-                          id="hasSystemAccess"
                           disabled={!canManageSystemAccess}
-                          className="sr-only peer"
+                          color="primary"
                         />
-                        <span className={`absolute inset-0 rounded-full transition-all duration-300 ease-in-out ${canManageSystemAccess
-                            ? 'bg-gray-600 peer-checked:bg-blue-600'
-                            : 'bg-gray-700 peer-checked:bg-gray-500'
-                          }`}></span>
-                        <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ease-in-out peer-checked:translate-x-6 peer-checked:shadow-md"></span>
-                      </div>
-                    </label>
+                      }
+                      label="Acesso ao sistema"
+                      className={`border rounded bg-gray-800 px-2 py-1 m-0 flex-1 flex justify-between ${!canManageSystemAccess ? 'opacity-60' : ''
+                        }`}
+                      labelPlacement="start"
+                      title={!canManageSystemAccess ? 'Você não tem permissão para gerenciar acesso ao sistema' : ''}
+                      sx={{
+                        marginLeft: 0,
+                        '& .MuiFormControlLabel-label': {
+                          flex: 1,
+                          fontSize: '0.875rem'
+                        }
+                      }}
+                    />
                     {isEditing && hasSystemAccess && member?.hasSystemAccess && (
                       <button
                         type="button"
                         onClick={async () => {
                           if (!member?.id || member?.hasLoggedIn || !canManageSystemAccess) return;
-                          
+
                           setIsResendingInvite(true);
                           try {
                             // Verificar se email ou phone mudaram
@@ -858,27 +1207,27 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                             const originalPhone = member.phone ? ensureCountryCode(member.phone) : '';
                             const currentEmail = email;
                             const currentPhone = stripPhoneFormatting(phone);
-                            
+
                             const emailChanged = originalEmail !== currentEmail;
                             const phoneChanged = originalPhone !== currentPhone;
-                            
+
                             // Se mudaram, salvar primeiro
                             if (emailChanged || phoneChanged) {
                               const updateData: Partial<Member> = {};
-                              
+
                               if (emailChanged) {
                                 updateData.email = currentEmail;
                               }
-                              
+
                               if (phoneChanged) {
                                 updateData.phone = currentPhone;
                               }
-                              
+
                               // Salvar as mudanças
                               await onSave(updateData);
                               toast.success('Dados atualizados antes de reenviar o convite');
                             }
-                            
+
                             // Reenviar convite
                             const response = await memberService.resendInvite(member.id);
                             const message = response.whatsappSent
@@ -900,8 +1249,8 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                               : 'Reenviar convite por email e WhatsApp'
                         }
                         className={`border rounded p-2 text-sm font-medium flex-1 transition-colors ${member?.hasLoggedIn || !canManageSystemAccess || isResendingInvite
-                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed opacity-60'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                          ? 'bg-gray-400 text-gray-700 cursor-not-allowed opacity-60'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
                           }`}
                       >
                         {isResendingInvite ? 'Reenviando...' : 'Reenviar Convite'}

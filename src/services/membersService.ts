@@ -2,7 +2,7 @@ import api from '@/lib/apiClient';
 import { Member } from '@/types';
 
 export const membersService = {
-  getAllMembers: async (filters?: { celulaId?: number | null; discipuladoId?: number; redeId?: number }): Promise<Member[]> => {
+  getAllMembers: async (filters?: { celulaId?: number | null; discipuladoId?: number; redeId?: number; congregacaoId?: number }): Promise<Member[]> => {
     const params = new URLSearchParams();
     // celulaId = 0 significa "sem célula"
     if (filters?.celulaId !== undefined && filters?.celulaId !== null) {
@@ -10,6 +10,7 @@ export const membersService = {
     }
     if (filters?.discipuladoId) params.append('discipuladoId', filters.discipuladoId.toString());
     if (filters?.redeId) params.append('redeId', filters.redeId.toString());
+    if (filters?.congregacaoId) params.append('congregacaoId', filters.congregacaoId.toString());
     const queryString = params.toString();
     const res = await api.get<Member[]>(`/members${queryString ? `?${queryString}` : ''}`);
     return res.data;
@@ -39,7 +40,7 @@ export const membersService = {
     await api.delete(`/members/${memberId}`);
   },
 
-  getStatistics: async (filters?: { celulaId?: number; discipuladoId?: number; redeId?: number }): Promise<{
+  getStatistics: async (filters?: { celulaId?: number; discipuladoId?: number; redeId?: number; congregacaoId?: number }): Promise<{
     total: number;
     withoutCelula: number;
     gender: { male: number; female: number; other: number; notInformed: number };
@@ -50,6 +51,7 @@ export const membersService = {
     if (filters?.celulaId !== undefined) params.append('celulaId', filters.celulaId.toString());
     if (filters?.discipuladoId) params.append('discipuladoId', filters.discipuladoId.toString());
     if (filters?.redeId) params.append('redeId', filters.redeId.toString());
+    if (filters?.congregacaoId) params.append('congregacaoId', filters.congregacaoId.toString());
     const queryString = params.toString();
     const res = await api.get(`/members/statistics${queryString ? `?${queryString}` : ''}`);
     return res.data;

@@ -32,7 +32,7 @@ export const matrixService = {
     return response.data;
   },
 
-  async update(id: number, data: { name?: string; domains?: string[] }): Promise<Matrix> {
+  async update(id: number, data: { name?: string; domains?: string[]; whatsappApiKey?: string }): Promise<Matrix> {
     const response = await api.put(`/matrix/${id}`, data);
     return response.data;
   },

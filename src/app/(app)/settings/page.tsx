@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { configService } from '@/services/configService';
-import { Role, Ministry, WinnerPath, ApiKey } from '@/types';
+import { matrixService } from '@/services/matrixService';
+import { Role, Ministry, WinnerPath, ApiKey, Matrix } from '@/types';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -12,7 +13,7 @@ import { GripVertical } from 'lucide-react';
 import { FiEdit2, FiTrash2, FiPlus, FiCopy, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
 
-type TabType = 'ministries' | 'winnerPaths' | 'roles' | 'apiKeys';
+type TabType = 'ministries' | 'winnerPaths' | 'roles' | 'apiKeys' | 'integrations';
 
 const getMinistryTypeLabel = (type?: string) => {
   const labels: Record<string, string> = {
@@ -628,7 +629,7 @@ function ConfirmationModal({
 }
 
 export default function SettingsPage() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, currentMatrix: authCurrentMatrix, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('ministries');
   
   // Roles
@@ -652,6 +653,11 @@ export default function SettingsPage() {
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [isApiKeyDisplayModalOpen, setIsApiKeyDisplayModalOpen] = useState(false);
 
+  // Matrix/Integrations
+  const [currentMatrix, setCurrentMatrix] = useState<Matrix | null>(null);
+  const [whatsappApiKey, setWhatsappApiKey] = useState<string>('');
+  const [isSavingWhatsappKey, setIsSavingWhatsappKey] = useState(false);
+
   // Confirmation Modal
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
@@ -672,6 +678,7 @@ export default function SettingsPage() {
     loadRoles();
     loadMinistries();
     loadWinnerPaths();
+    loadCurrentMatrix();
     if (user?.isOwner) {
       loadApiKeys();
     }
@@ -957,6 +964,36 @@ export default function SettingsPage() {
     });
   };
 
+  // Matrix/Integrations functions
+  const loadCurrentMatrix = async () => {
+    try {
+      if (authCurrentMatrix?.id) {
+        const matrix = await matrixService.getById(authCurrentMatrix.id);
+        setCurrentMatrix(matrix);
+        setWhatsappApiKey(matrix.whatsappApiKey || '');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao carregar configurações da igreja');
+    }
+  };
+
+  const saveWhatsappApiKey = async () => {
+    if (!currentMatrix) return;
+    
+    setIsSavingWhatsappKey(true);
+    try {
+      await matrixService.update(currentMatrix.id, { whatsappApiKey });
+      toast.success('API Key do WhatsApp salva com sucesso!');
+      loadCurrentMatrix();
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao salvar API Key do WhatsApp');
+    } finally {
+      setIsSavingWhatsappKey(false);
+    }
+  };
+
   const isAdmin = user?.permission?.isAdmin || false;
   const isOwner = user?.isOwner || false;
 
@@ -996,6 +1033,18 @@ export default function SettingsPage() {
         >
           Funções
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab('integrations')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              activeTab === 'integrations'
+                ? 'border-b-2 border-blue-600 text-blue-400'
+                : 'text-gray-400 hover:text-gray-100'
+            }`}
+          >
+            Integrações
+          </button>
+        )}
         {isOwner && (
           <button
             onClick={() => setActiveTab('apiKeys')}
@@ -1068,6 +1117,44 @@ export default function SettingsPage() {
               />
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Integrations Tab */}
+      {activeTab === 'integrations' && isAdmin && (
+        <div className="max-w-2xl">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Configurações de Integrações</h2>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block mb-2 text-sm font-medium">
+                  WhatsApp Manager API Key
+                  <span className="text-gray-400 font-normal ml-2">(Opcional)</span>
+                </label>
+                <p className="text-sm text-gray-400 mb-3">
+                  Chave de API para autenticação com o serviço WhatsApp Manager. Esta chave será usada para enviar mensagens automáticas de convite e redefinição de senha.
+                </p>
+                <input
+                  type="password"
+                  value={whatsappApiKey}
+                  onChange={(e) => setWhatsappApiKey(e.target.value)}
+                  className="w-full border p-3 rounded bg-gray-900 border-gray-600 text-gray-100 placeholder-gray-500 font-mono"
+                  placeholder="sk-xxxxxxxxxxxxx"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={saveWhatsappApiKey}
+                  disabled={isSavingWhatsappKey}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSavingWhatsappKey ? 'Salvando...' : 'Salvar Configurações'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

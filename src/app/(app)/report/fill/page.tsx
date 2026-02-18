@@ -4,7 +4,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { celulasService } from "@/services/celulasService";
 import { membersService } from "@/services/membersService";
 import { reportsService } from "@/services/reportsService";
-import { Celula, Member } from "@/types";
+import { discipuladosService } from "@/services/discipuladosService";
+import { redesService } from "@/services/redesService";
+import { congregacoesService } from "@/services/congregacoesService";
+import { Celula, Member, Discipulado, Rede, Congregacao } from "@/types";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { LuHistory } from "react-icons/lu";
@@ -42,6 +45,9 @@ export default function ReportPage() {
   const lastLoadedUserIdRef = useRef<number | null>(null);
   const [groups, setGroups] = useState<Celula[]>([]);
   const [allCelulas, setAllCelulas] = useState<Celula[]>([]);
+  const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
+  const [redes, setRedes] = useState<Rede[]>([]);
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
   const [selectedCelula, setSelectedCelula] = useState<Celula | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -65,13 +71,11 @@ export default function ReportPage() {
     Map<number, number>
   >(new Map());
   const [reloadTrigger, setReloadTrigger] = useState(0);
-
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== "undefined") {
-      return document.documentElement.classList.contains("dark");
-    }
-    return false;
-  });
+  
+  // Filtros
+  const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
+  const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
+  const [filterDiscipuladoId, setFilterDiscipuladoId] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -127,6 +131,25 @@ export default function ReportPage() {
     };
     load();
   }, [user, isLoading]);
+
+  // Carregar listas de discipulados, redes e congregações
+  useEffect(() => {
+    const loadFilters = async () => {
+      try {
+        const [d, r, cong] = await Promise.all([
+          discipuladosService.getDiscipulados(),
+          redesService.getRedes(),
+          congregacoesService.getCongregacoes()
+        ]);
+        setDiscipulados(d);
+        setRedes(r);
+        setCongregacoes(cong);
+      } catch (e) {
+        console.error("Erro ao carregar filtros:", e);
+      }
+    };
+    loadFilters();
+  }, []);
 
   // Função para carregar células do usuário (líder ou vice-líder)
   const loadOwnCelulas = async (): Promise<Celula[]> => {
@@ -471,23 +494,6 @@ export default function ReportPage() {
     }
   }, [selectedGroup, groups, allCelulas]);
 
-  useEffect(() => {
-    const updateDarkMode = () => {
-      setIsDarkMode(document.documentElement.classList.contains("dark"));
-    };
-    updateDarkMode();
-    window.addEventListener("storage", updateDarkMode);
-    const observer = new MutationObserver(updateDarkMode);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => {
-      window.removeEventListener("storage", updateDarkMode);
-      observer.disconnect();
-    };
-  }, []);
-
   const reloadMembers = async () => {
     if (selectedGroup === null) return;
     try {
@@ -760,13 +766,9 @@ export default function ReportPage() {
           ...(isValid &&
             celula?.weekday !== null &&
             celula?.weekday !== undefined && {
-              backgroundColor: isDarkMode
-                ? "rgba(96, 165, 250, 0.2)"
-                : "rgba(59, 130, 246, 0.1)",
+              backgroundColor: "rgba(96, 165, 250, 0.2)",
               "&:hover": {
-                backgroundColor: isDarkMode
-                  ? "rgba(96, 165, 250, 0.3)"
-                  : "rgba(59, 130, 246, 0.2)",
+                backgroundColor: "rgba(96, 165, 250, 0.3)",
               },
             }),
         }}
@@ -774,11 +776,103 @@ export default function ReportPage() {
     );
   };
 
+  // Função auxiliar para filtrar células baseado nos filtros selecionados
+  const getFilteredCelulas = () => {
+    const celulasToFilter = selectedGroup === -1 ? groups : allCelulas;
+    
+    return celulasToFilter.filter(celula => {
+      // Filtrar por discipulado
+      if (filterDiscipuladoId && celula.discipuladoId !== filterDiscipuladoId) {
+        return false;
+      }
+      
+      // Filtrar por rede
+      if (filterRedeId) {
+        const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+        if (!discipulado || discipulado.redeId !== filterRedeId) {
+          return false;
+        }
+      }
+      
+      // Filtrar por congregação
+      if (filterCongregacaoId) {
+        const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+        if (!discipulado) return false;
+        const rede = redes.find(r => r.id === discipulado.redeId);
+        if (!rede || rede.congregacaoId !== filterCongregacaoId) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  };
+
+  // Função auxiliar para agrupar células por Congregação, Rede e Discipulado
+  const getCelulasGroupedByHierarchy = () => {
+    const filteredCelulas = getFilteredCelulas();
+    
+    // Agrupar por Congregação > Rede > Discipulado
+    const congregacoesMap = new Map<number, { 
+      congregacao: Congregacao; 
+      redesMap: Map<number, { 
+        rede: Rede; 
+        discipuladosMap: Map<number, { 
+          discipulado: Discipulado; 
+          celulas: Celula[] 
+        }> 
+      }> 
+    }>();
+    
+    filteredCelulas.forEach(celula => {
+      const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+      if (!discipulado) return;
+      
+      const rede = redes.find(r => r.id === discipulado.redeId);
+      if (!rede) return;
+      
+      const congregacao = congregacoes.find(c => c.id === rede.congregacaoId);
+      if (!congregacao) return;
+      
+      // Criar ou obter a entrada da Congregação
+      if (!congregacoesMap.has(congregacao.id)) {
+        congregacoesMap.set(congregacao.id, {
+          congregacao,
+          redesMap: new Map()
+        });
+      }
+      
+      const congregacaoEntry = congregacoesMap.get(congregacao.id)!;
+      
+      // Criar ou obter a entrada da Rede
+      if (!congregacaoEntry.redesMap.has(rede.id)) {
+        congregacaoEntry.redesMap.set(rede.id, {
+          rede,
+          discipuladosMap: new Map()
+        });
+      }
+      
+      const redeEntry = congregacaoEntry.redesMap.get(rede.id)!;
+      
+      // Criar ou obter a entrada do Discipulado
+      if (!redeEntry.discipuladosMap.has(discipulado.id)) {
+        redeEntry.discipuladosMap.set(discipulado.id, {
+          discipulado,
+          celulas: []
+        });
+      }
+      
+      redeEntry.discipuladosMap.get(discipulado.id)!.celulas.push(celula);
+    });
+    
+    return congregacoesMap;
+  };
+
   const muiTheme = createTheme({
     palette: {
-      mode: isDarkMode ? "dark" : "light",
+      mode: 'dark',
       primary: {
-        main: isDarkMode ? "#ffffffff" : "#000000ff",
+        main: '#ffffffff',
       },
     },
   });
@@ -828,119 +922,242 @@ export default function ReportPage() {
               </Select>
             </FormControl>
           </div>
+
+          {/* Filtros de Discipulado, Rede e Congregação */}
+          {(selectedGroup === -1 || selectedGroup === -2) && (
+            <div className="mb-6">
+              <label className="block mb-2 text-sm text-gray-400">Filtros</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <FormControl fullWidth size="small">
+                  <InputLabel id="filter-congregacao-label">Congregação</InputLabel>
+                  <Select
+                    labelId="filter-congregacao-label"
+                    value={filterCongregacaoId !== null ? String(filterCongregacaoId) : ''}
+                    label="Congregação"
+                    onChange={(e) => {
+                      setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null);
+                      setFilterRedeId(null);
+                      setFilterDiscipuladoId(null);
+                    }}
+                  >
+                    <MenuItem value="">Todas congregações</MenuItem>
+                    {congregacoes.map(c => (
+                      <MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth size="small">
+                  <InputLabel id="filter-rede-label">Rede</InputLabel>
+                  <Select
+                    labelId="filter-rede-label"
+                    value={filterRedeId !== null ? String(filterRedeId) : ''}
+                    label="Rede"
+                    onChange={(e) => {
+                      const redeId = e.target.value ? Number(e.target.value) : null;
+                      setFilterRedeId(redeId);
+                      setFilterDiscipuladoId(null);
+                      
+                      // Auto-preencher congregação
+                      if (redeId) {
+                        const rede = redes.find(r => r.id === redeId);
+                        if (rede?.congregacaoId) {
+                          setFilterCongregacaoId(rede.congregacaoId);
+                        }
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todas redes</MenuItem>
+                    {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map(r => (
+                      <MenuItem key={r.id} value={String(r.id)}>{r.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth size="small">
+                  <InputLabel id="filter-discipulado-label">Discipulado</InputLabel>
+                  <Select
+                    labelId="filter-discipulado-label"
+                    value={filterDiscipuladoId !== null ? String(filterDiscipuladoId) : ''}
+                    label="Discipulado"
+                    onChange={(e) => {
+                      const discipuladoId = e.target.value ? Number(e.target.value) : null;
+                      setFilterDiscipuladoId(discipuladoId);
+                      
+                      // Auto-preencher rede e congregação
+                      if (discipuladoId) {
+                        const discipulado = discipulados.find(d => d.id === discipuladoId);
+                        if (discipulado?.redeId) {
+                          setFilterRedeId(discipulado.redeId);
+                          const rede = redes.find(r => r.id === discipulado.redeId);
+                          if (rede?.congregacaoId) {
+                            setFilterCongregacaoId(rede.congregacaoId);
+                          }
+                        }
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    {discipulados
+                      .filter(d => !filterRedeId || d.redeId === filterRedeId)
+                      .map(d => (
+                        <MenuItem key={d.id} value={String(d.id)}>
+                          {d.discipulador.name}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </div>
+            </div>
+          )}
         </ThemeProvider>
 
         {(selectedGroup === -1 || selectedGroup === -2) && (
-          <div className="space-y-6">
-            {(selectedGroup === -1 ? groups : allCelulas).map((celula) => {
-              const celularWeekReports =
-                allCelulasWeekReports.get(celula.id) || [];
-              const visibleCount = visibleWeeksCountMap.get(celula.id) || 4;
-              const visibleReports = celularWeekReports.slice(0, visibleCount);
-              const hasMore = visibleCount < celularWeekReports.length;
+          <div className="space-y-10">
+            {Array.from(getCelulasGroupedByHierarchy().entries()).map(([congregacaoId, congregacaoEntry]) => (
+              <div key={`congregacao-${congregacaoId}`} className="space-y-8">
+                {/* Cabeçalho da Congregação */}
+                <div className="border-b-4 border-purple-600 pb-3">
+                  <h2 className="text-3xl font-bold text-purple-400">
+                    {congregacaoEntry.congregacao.name}
+                  </h2>
+                </div>
 
-              return (
-                <div
-                  key={celula.id}
-                  className="border-2 border-gray-600 rounded-lg p-4"
-                >
-                  <h3 className="text-xl font-semibold mb-4">{celula.name}</h3>
-                  {celularWeekReports.length > 0 ? (
-                    <>
-                      <div className="space-y-4">
-                        {visibleReports.map((week, idx) => {
-                          const isComplete =
-                            week.hasCelulaReport && week.hasCultoReport;
-                          return (
-                            <div
-                              key={idx}
-                              className={`p-4 rounded-lg border-2 transition-all ${
-                                isComplete
-                                  ? "border-green-500 bg-green-900/20"
-                                  : "border-gray-600 bg-gray-800"
-                              }`}
-                            >
-                              <div className="flex justify-between items-center mb-3">
-                                <div>
-                                  <h4 className="font-semibold text-lg">
-                                    Semana de {week.startDate.format("DD/MM")} a{" "}
-                                    {week.endDate.format("DD/MM/YYYY")}
-                                  </h4>
-                                  <p className="text-sm text-gray-400">
-                                    Domingo a Sábado
-                                  </p>
-                                </div>
-                                {isComplete && (
-                                  <FiCheck className="h-8 w-8 text-green-600" />
+                {/* Redes dentro da Congregação */}
+                {Array.from(congregacaoEntry.redesMap.entries()).map(([redeId, redeEntry]) => (
+                  <div key={`rede-${redeId}`} className="space-y-6 pl-4">
+                    {/* Cabeçalho da Rede */}
+                    <div className="border-b-2 border-blue-500 pb-2">
+                      <h3 className="text-2xl font-bold text-blue-400">
+                        {redeEntry.rede.name}
+                      </h3>
+                    </div>
+
+                    {/* Discipulados dentro da Rede */}
+                    {Array.from(redeEntry.discipuladosMap.entries()).map(([discipuladoId, discipuladoEntry]) => (
+                      <div key={`discipulado-${discipuladoId}`} className="space-y-4">
+                        {/* Cabeçalho do Discipulado */}
+                        <div className="border-l-4 border-teal-500 pl-4">
+                          <h4 className="text-xl font-semibold text-teal-300">
+                            Discipulado: {discipuladoEntry.discipulado.discipulador.name}
+                          </h4>
+                        </div>
+
+                        {/* Grid de Células (3 colunas no desktop) */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pl-6">
+                          {discipuladoEntry.celulas.map((celula) => {
+                            const celularWeekReports =
+                              allCelulasWeekReports.get(celula.id) || [];
+                            const visibleCount = visibleWeeksCountMap.get(celula.id) || 4;
+                            const visibleReports = celularWeekReports.slice(0, visibleCount);
+                            const hasMore = visibleCount < celularWeekReports.length;
+
+                            return (
+                              <div
+                                key={celula.id}
+                                className="border-2 border-gray-600 rounded-lg p-4"
+                              >
+                                <h5 className="text-lg font-semibold mb-4">{celula.name}</h5>
+                                {celularWeekReports.length > 0 ? (
+                                  <>
+                                    <div className="space-y-3">
+                                      {visibleReports.map((week, idx) => {
+                                        const isComplete =
+                                          week.hasCelulaReport && week.hasCultoReport;
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className={`p-3 rounded-lg border-2 transition-all ${
+                                              isComplete
+                                                ? "border-green-500 bg-green-900/20"
+                                                : "border-gray-600 bg-gray-800"
+                                            }`}
+                                          >
+                                            <div className="flex justify-between items-start mb-2">
+                                              <div className="flex-1">
+                                                <p className="font-medium text-sm">
+                                                  {week.startDate.format("DD/MM")} a{" "}
+                                                  {week.endDate.format("DD/MM/YYYY")}
+                                                </p>
+                                              </div>
+                                              {isComplete && (
+                                                <FiCheck className="h-5 w-5 text-green-600 shrink-0 ml-2" />
+                                              )}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <button
+                                                onClick={() =>
+                                                  handleWeekCardClick(
+                                                    "CELULA",
+                                                    week.startDate,
+                                                    week.endDate,
+                                                    celula.id,
+                                                  )
+                                                }
+                                                className={`p-2 rounded border-2 transition-all text-sm ${
+                                                  week.hasCelulaReport
+                                                    ? "border-green-500 bg-green-800/30 text-green-200"
+                                                    : "border-gray-600 hover:border-blue-500"
+                                                }`}
+                                              >
+                                                <div className="font-medium">Célula</div>
+                                                {week.hasCelulaReport && (
+                                                  <FiCheck className="h-4 w-4 mx-auto mt-1" />
+                                                )}
+                                              </button>
+
+                                              <button
+                                                onClick={() =>
+                                                  handleWeekCardClick(
+                                                    "CULTO",
+                                                    week.startDate,
+                                                    week.endDate,
+                                                    celula.id,
+                                                  )
+                                                }
+                                                className={`p-2 rounded border-2 transition-all text-sm ${
+                                                  week.hasCultoReport
+                                                    ? "border-green-500 bg-green-800/30 text-green-200"
+                                                    : "border-gray-600 hover:border-blue-500"
+                                                }`}
+                                              >
+                                                <div className="font-medium">Culto</div>
+                                                {week.hasCultoReport && (
+                                                  <FiCheck className="h-4 w-4 mx-auto mt-1" />
+                                                )}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    {hasMore && (
+                                      <div className="mt-3 text-center">
+                                        <button
+                                          onClick={() => loadMoreWeeksForCelula(celula.id)}
+                                          className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                                        >
+                                          Carregar mais
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="text-center py-6 text-gray-400 text-sm">
+                                    Nenhuma semana disponível
+                                  </div>
                                 )}
                               </div>
-
-                              <div className="grid grid-cols-2 gap-3">
-                                <button
-                                  onClick={() =>
-                                    handleWeekCardClick(
-                                      "CELULA",
-                                      week.startDate,
-                                      week.endDate,
-                                      celula.id,
-                                    )
-                                  }
-                                  className={`p-3 rounded-lg border-2 transition-all ${
-                                    week.hasCelulaReport
-                                      ? "border-green-500 bg-green-800/30 text-green-200"
-                                      : "border-gray-600 hover:border-blue-500"
-                                  }`}
-                                >
-                                  <div className="font-medium">Célula</div>
-                                  {week.hasCelulaReport && (
-                                    <FiCheck className="h-5 w-5 mx-auto mt-1" />
-                                  )}
-                                </button>
-
-                                <button
-                                  onClick={() =>
-                                    handleWeekCardClick(
-                                      "CULTO",
-                                      week.startDate,
-                                      week.endDate,
-                                      celula.id,
-                                    )
-                                  }
-                                  className={`p-3 rounded-lg border-2 transition-all ${
-                                    week.hasCultoReport
-                                      ? "border-green-500 bg-green-800/30 text-green-200"
-                                      : "border-gray-600 hover:border-blue-500"
-                                  }`}
-                                >
-                                  <div className="font-medium">Culto</div>
-                                  {week.hasCultoReport && (
-                                    <FiCheck className="h-5 w-5 mx-auto mt-1" />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {hasMore && (
-                        <div className="mt-4 text-center">
-                          <button
-                            onClick={() => loadMoreWeeksForCelula(celula.id)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                          >
-                            Carregar mais
-                          </button>
+                            );
+                          })}
                         </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-center py-8 text-gray-400">
-                      Nenhuma semana disponível para relatórios
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         )}
 

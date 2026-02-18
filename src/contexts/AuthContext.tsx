@@ -125,13 +125,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRequireMatrixSelection(false);
   };
 
-  // Poll for permission updates every 5 minutes
+  // Poll for permission updates every 1 hour
   useEffect(() => {
     if (!user) return;
 
     const interval = setInterval(() => {
       refreshUser();
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 60 * 60 * 1000); // 1 hour
 
     return () => clearInterval(interval);
   }, [user, refreshUser]);

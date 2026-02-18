@@ -5,10 +5,11 @@ import { celulasService } from '@/services/celulasService';
 import { membersService } from '@/services/membersService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
-import { Celula, Member, Discipulado, Rede } from '@/types';
+import { congregacoesService } from '@/services/congregacoesService';
+import { Celula, Member, Discipulado, Rede, Congregacao } from '@/types';
 import { memberService } from '@/services/memberService';
 import { useAuth } from '@/contexts/AuthContext';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
+import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, TextField, Autocomplete, Button } from '@mui/material';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { FiPlus, FiUsers, FiEdit2, FiCopy, FiTrash2 } from 'react-icons/fi';
@@ -36,15 +37,14 @@ export default function CelulasPage() {
 
   // listing filters
   const [filterName, setFilterName] = useState('');
+  const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
   const [filterDiscipuladoId, setFilterDiscipuladoId] = useState<number | null>(null);
-  const [filterLeaderQuery, setFilterLeaderQuery] = useState('');
   const [filterLeaderId, setFilterLeaderId] = useState<number | null>(null);
-  const [showFilterLeaderDropdown, setShowFilterLeaderDropdown] = useState(false);
-  const filterLeaderDropdownRef = useRef<HTMLDivElement>(null);
 
   const [members, setMembers] = useState<Member[]>([]);
   const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
 
   // Multiply: open modal to pick members for the new celula and call backend
@@ -64,41 +64,16 @@ export default function CelulasPage() {
   const oldLeaderDropdownRef = useRef<HTMLDivElement>(null);
 
   const { user, isLoading: authLoading } = useAuth();
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const updateDarkMode = () => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
-    };
-    updateDarkMode();
-    window.addEventListener('storage', updateDarkMode);
-    const observer = new MutationObserver(updateDarkMode);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => {
-      window.removeEventListener('storage', updateDarkMode);
-      observer.disconnect();
-    };
-  }, []);
 
   const muiTheme = createTheme({
     palette: {
-      mode: isDarkMode ? 'dark' : 'light',
+      mode: 'dark',
     },
   });
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (showFilterLeaderDropdown) {
-        if (filterLeaderDropdownRef.current && !filterLeaderDropdownRef.current.contains(target)) {
-          setShowFilterLeaderDropdown(false);
-        }
-      }
       if (showNewLeaderDropdown) {
         if (newLeaderDropdownRef.current && !newLeaderDropdownRef.current.contains(target)) {
           setShowNewLeaderDropdown(false);
@@ -113,7 +88,7 @@ export default function CelulasPage() {
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterLeaderDropdown, showNewLeaderDropdown, showOldLeaderDropdown]);
+  }, [showNewLeaderDropdown, showOldLeaderDropdown]);
 
   const load = async () => {
     // Aguardar inicialização dos filtros e autenticação
@@ -123,7 +98,15 @@ export default function CelulasPage() {
     
     setLoading(true);
     try {
-      const g = await celulasService.getCelulas();
+      const filters: any = {};
+      
+      if (filterName) filters.name = filterName;
+      if (filterLeaderId) filters.leaderMemberId = filterLeaderId;
+      if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
+      if (filterRedeId) filters.redeId = filterRedeId;
+      if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+      
+      const g = await celulasService.getCelulas(filters);
       
       // Mostrar todas as células, sem filtrar por permissão
       setGroups(g);
@@ -178,6 +161,10 @@ export default function CelulasPage() {
         const r = await redesService.getRedes();
         setRedes(r || []);
 
+        // load congregacoes for select
+        const cong = await congregacoesService.getCongregacoes();
+        setCongregacoes(cong || []);
+
         // Inicializar filtros baseados no usuário logado (apenas uma vez)
         if (!hasInitialized.current && user) {
           hasInitialized.current = true;
@@ -195,6 +182,11 @@ export default function CelulasPage() {
               const discipulado = d.find(disc => disc.id === celula.discipuladoId);
               if (discipulado?.redeId) {
                 setFilterRedeId(discipulado.redeId);
+                
+                const rede = r.find(rd => rd.id === discipulado.redeId);
+                if (rede?.congregacaoId) {
+                  setFilterCongregacaoId(rede.congregacaoId);
+                }
               }
             }
           } else {
@@ -204,12 +196,20 @@ export default function CelulasPage() {
               setFilterDiscipuladoId(userDiscipulado.id);
               if (userDiscipulado.redeId) {
                 setFilterRedeId(userDiscipulado.redeId);
+                
+                const rede = r.find(rd => rd.id === userDiscipulado.redeId);
+                if (rede?.congregacaoId) {
+                  setFilterCongregacaoId(rede.congregacaoId);
+                }
               }
             } else {
               // Verificar se é pastor de rede
               const userRede = r.find(rede => rede.pastorMemberId === user.id);
               if (userRede) {
                 setFilterRedeId(userRede.id);
+                if (userRede.congregacaoId) {
+                  setFilterCongregacaoId(userRede.congregacaoId);
+                }
               }
             }
           }
@@ -233,7 +233,7 @@ export default function CelulasPage() {
     if (filtersInitialized.current && !authLoading) {
       load();
     }
-  }, [filterName, filterRedeId, filterDiscipuladoId, filterLeaderId, authLoading]);
+  }, [filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterLeaderId, authLoading]);
 
   const handleSaveCelula = async (data: { 
     name: string; 
@@ -403,12 +403,38 @@ export default function CelulasPage() {
     <div>
       <h2 className="text-2xl font-semibold mb-4">Gerenciar Células</h2>
 
-      <div className="mb-6">
-        <label className="block mb-2">Filtros</label>
-        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-          <input placeholder="Nome da célula" value={filterName} onChange={(e) => setFilterName(e.target.value)} className="border p-2 rounded flex-1 bg-gray-800 text-white h-10" />
+      <ThemeProvider theme={muiTheme}>
+        <div className="mb-6">
+          <label className="block mb-2">Filtros</label>
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            <TextField
+              size="small"
+              label="Nome da célula"
+              placeholder="Digite o nome"
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              className="flex-1 bg-gray-800"
+              InputProps={{
+                className: 'bg-gray-800',
+              }}
+            />
 
-          <ThemeProvider theme={muiTheme}>
+            <div className="w-full sm:w-48">
+              <FormControl fullWidth>
+                <InputLabel
+                  id="filter-congregacao-label"
+                  size='small'
+                >Congregação</InputLabel>
+                <Select
+                  labelId="filter-congregacao-label" value={filterCongregacaoId ?? ''} label="Congregação" onChange={(e) => { setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null); setFilterRedeId(null); setFilterDiscipuladoId(null); }} size="small" className="bg-gray-800">
+                  <MenuItem value="">Todas congregações</MenuItem>
+                  {congregacoes.map(c => (
+                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </div>
+
             <div className="w-full sm:w-48">
               <FormControl fullWidth>
                 <InputLabel
@@ -418,7 +444,9 @@ export default function CelulasPage() {
                 <Select
                   labelId="filter-rede-label" value={filterRedeId ?? ''} label="Rede" onChange={(e) => { setFilterRedeId(e.target.value ? Number(e.target.value) : null); setFilterDiscipuladoId(null); }} size="small" className="bg-gray-800">
                   <MenuItem value="">Todas redes</MenuItem>
-                  {redes.map(r => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                  {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map(r => (
+                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </div>
@@ -432,30 +460,69 @@ export default function CelulasPage() {
                 </Select>
               </FormControl>
             </div>
-          </ThemeProvider>
 
-          <div ref={filterLeaderDropdownRef} className="relative w-full sm:w-64">
-            <input placeholder="Líder" value={filterLeaderQuery || (filterLeaderId ? members.find(member => member.id === filterLeaderId)?.name : '')} onChange={(e) => { setFilterLeaderQuery(e.target.value); setShowFilterLeaderDropdown(true); setFilterLeaderId(null); }} onFocus={() => setShowFilterLeaderDropdown(true)} className="border p-2 rounded w-full bg-gray-800 text-white h-10" />
-            {showFilterLeaderDropdown && (
-              <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                {members.filter(member => {
-                  const q = (filterLeaderQuery || '').toLowerCase();
-                  if (!q) return true;
-                  return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
-                }).map(member => (
-                  <div key={member.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterLeaderId(member.id); setFilterLeaderQuery(''); setShowFilterLeaderDropdown(false); }}>
+            <div className="w-full sm:w-64">
+              <Autocomplete
+                size="small"
+                options={members.filter(member => {
+                  // Filtrar líderes baseado nas células filtradas
+                  const filteredCells = groups.filter(celula => {
+                    if (filterCongregacaoId) {
+                      const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+                      if (!discipulado) return false;
+                      const rede = redes.find(r => r.id === discipulado.redeId);
+                      if (!rede || rede.congregacaoId !== filterCongregacaoId) return false;
+                    }
+                    if (filterRedeId) {
+                      const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+                      if (!discipulado || discipulado.redeId !== filterRedeId) return false;
+                    }
+                    if (filterDiscipuladoId && celula.discipuladoId !== filterDiscipuladoId) return false;
+                    return true;
+                  });
+                  
+                  // Mostrar apenas líderes das células filtradas
+                  return filteredCells.some(c => c.leaderMemberId === member.id);
+                })}
+                getOptionLabel={(option) => option.name}
+                value={members.find(m => m.id === filterLeaderId) || null}
+                onChange={(event, newValue) => setFilterLeaderId(newValue?.id || null)}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Líder" 
+                    placeholder="Selecione um líder"
+                    className="bg-gray-800" 
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
                     <div>
-                      <div className="text-sm font-medium text-white">{member.name}</div>
-                      <div className="text-xs text-gray-400">{member.email}</div>
+                      <div className="text-sm font-medium">{option.name}</div>
+                      <div className="text-xs text-gray-400">{option.email}</div>
                     </div>
-                    <div className="text-xs text-green-600">Selecionar</div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  </li>
+                )}
+              />
+            </div>
+
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                setFilterName('');
+                setFilterCongregacaoId(null);
+                setFilterRedeId(null);
+                setFilterDiscipuladoId(null);
+                setFilterLeaderId(null);
+              }}
+              className="h-10 whitespace-nowrap"
+            >
+              Limpar Filtros
+            </Button>
           </div>
         </div>
-      </div>
+      </ThemeProvider>
 
       <div>
         <h3 className="font-medium mb-2">Células existentes</h3>
@@ -465,16 +532,7 @@ export default function CelulasPage() {
           </div>
         ) : (
         <ul className="space-y-3">
-          {groups
-            .filter(g => !filterName || (g.name || '').toLowerCase().includes(filterName.toLowerCase()))
-            .filter(g => {
-              if (!filterRedeId) return true;
-              const d = discipulados.find(x => x.id === g.discipuladoId);
-              return d ? d.redeId === filterRedeId : false;
-            })
-            .filter(g => !filterDiscipuladoId || g.discipuladoId === filterDiscipuladoId)
-            .filter(g => !filterLeaderId || g.leader?.id === filterLeaderId)
-            .map((g) => (
+          {groups.map((g) => (
               <li key={g.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border p-3 rounded ${!g.leaderMemberId ? 'bg-red-900/20 border-red-700' : 'bg-gray-900'}`}>
                 <div className="mb-3 sm:mb-0">
                   <button

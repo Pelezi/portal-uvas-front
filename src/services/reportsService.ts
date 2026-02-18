@@ -62,12 +62,14 @@ export const reportsService = {
     year: number, 
     month: number, 
     filters: { 
+      congregacaoId?: number;
       redeId?: number; 
       discipuladoId?: number; 
       celulaId?: number;
     }
   ): Promise<MultipleCelulasReportsResponse> => {
     const params = new URLSearchParams();
+    if (filters.congregacaoId) params.append('congregacaoId', filters.congregacaoId.toString());
     if (filters.redeId) params.append('redeId', filters.redeId.toString());
     if (filters.discipuladoId) params.append('discipuladoId', filters.discipuladoId.toString());
     if (filters.celulaId) params.append('celulaId', filters.celulaId.toString());

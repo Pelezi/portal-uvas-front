@@ -65,6 +65,7 @@ export default function LoginPage() {
           router.push('/celulas');
           break;
         case 'PASTOR':
+        case 'PRESIDENT_PASTOR':
           router.push('/');
           break;
         default:

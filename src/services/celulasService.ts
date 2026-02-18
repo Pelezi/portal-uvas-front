@@ -3,11 +3,13 @@ import { Celula } from "@/types";
 
 export const celulasService = {
   getCelulas: async (options?: {
+    name?: string;
     viceLeaderMemberId?: number;
     leaderMemberId?: number;
     discipuladoId?: number;
     redeId?: number;
-    onlyOwnCelulas?: boolean;
+    congregacaoId?: number;
+    all?: boolean;
     celulaIds?: number[];
   }): Promise<Celula[]> => {
     const params: Record<string, string | number | boolean> = {};

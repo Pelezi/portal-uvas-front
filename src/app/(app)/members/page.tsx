@@ -4,10 +4,11 @@ import React, { useEffect, useState, useRef } from 'react';
 import { celulasService } from '@/services/celulasService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
+import { congregacoesService } from '@/services/congregacoesService';
 import { membersService } from '@/services/membersService';
-import { Celula, Member, Discipulado, Rede, MemberFilters } from '@/types';
+import { Celula, Member, Discipulado, Rede, Congregacao, MemberFilters } from '@/types';
 import toast from 'react-hot-toast';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
+import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, Button } from '@mui/material';
 import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
 import MemberModal from '@/components/MemberModal';
 import MemberViewModal from '@/components/MemberViewModal';
@@ -17,6 +18,7 @@ export default function MembersManagementPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [celulas, setCelulas] = useState<Celula[]>([]);
   const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,7 @@ export default function MembersManagementPage() {
   // Filters
   const [filterCelulaId, setFilterCelulaId] = useState<number | null>(null);
   const [filterDiscipuladoId, setFilterDiscipuladoId] = useState<number | null>(null);
+  const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
 
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -39,32 +42,11 @@ export default function MembersManagementPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingMember, setViewingMember] = useState<Member | null>(null);
 
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const updateDarkMode = () => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
-    };
-    updateDarkMode();
-    window.addEventListener('storage', updateDarkMode);
-    const observer = new MutationObserver(updateDarkMode);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => {
-      window.removeEventListener('storage', updateDarkMode);
-      observer.disconnect();
-    };
-  }, []);
-
   const muiTheme = createTheme({
     palette: {
-      mode: isDarkMode ? 'dark' : 'light',
+      mode: 'dark',
       primary: {
-        main: isDarkMode ? '#ffffffff' : '#000000ff',
+        main: '#ffffffff',
       },
     },
   });
@@ -73,14 +55,16 @@ export default function MembersManagementPage() {
     const loadFilters = async () => {
       if (authLoading) return;
       try {
-        const [c, d, r] = await Promise.all([
+        const [c, d, r, cong] = await Promise.all([
           celulasService.getCelulas(),
           discipuladosService.getDiscipulados(),
-          redesService.getRedes()
+          redesService.getRedes(),
+          congregacoesService.getCongregacoes()
         ]);
         setCelulas(c);
         setDiscipulados(d);
         setRedes(r);
+        setCongregacoes(cong);
 
         // Inicializar filtros baseados no usuário logado (apenas uma vez)
         if (!hasInitialized.current && user) {
@@ -99,6 +83,11 @@ export default function MembersManagementPage() {
               const discipulado = d.find(disc => disc.id === celula.discipuladoId);
               if (discipulado?.redeId) {
                 setFilterRedeId(discipulado.redeId);
+                
+                const rede = r.find(rd => rd.id === discipulado.redeId);
+                if (rede?.congregacaoId) {
+                  setFilterCongregacaoId(rede.congregacaoId);
+                }
               }
             }
           } else {
@@ -108,12 +97,20 @@ export default function MembersManagementPage() {
               setFilterDiscipuladoId(userDiscipulado.id);
               if (userDiscipulado.redeId) {
                 setFilterRedeId(userDiscipulado.redeId);
+                
+                const rede = r.find(rd => rd.id === userDiscipulado.redeId);
+                if (rede?.congregacaoId) {
+                  setFilterCongregacaoId(rede.congregacaoId);
+                }
               }
             } else {
               // Verificar se é pastor de rede
               const userRede = r.find(rede => rede.pastorMemberId === user.id);
               if (userRede) {
                 setFilterRedeId(userRede.id);
+                if (userRede.congregacaoId) {
+                  setFilterCongregacaoId(userRede.congregacaoId);
+                }
               }
             }
           }
@@ -145,6 +142,7 @@ export default function MembersManagementPage() {
         if (filterCelulaId !== null) filters.celulaId = filterCelulaId;
         if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
         if (filterRedeId) filters.redeId = filterRedeId;
+        if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
 
         const m = await membersService.getAllMembers(filters);
         setMembers(m);
@@ -156,7 +154,7 @@ export default function MembersManagementPage() {
       }
     };
     loadMembers();
-  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, authLoading]);
+  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, authLoading]);
 
   const openEditModal = (m: Member) => {
     setModalMember(m);
@@ -198,6 +196,7 @@ export default function MembersManagementPage() {
       if (filterCelulaId !== null) filters.celulaId = filterCelulaId;
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
+      if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       const refreshed = await membersService.getAllMembers(filters);
       setMembers(refreshed);
       setIsModalOpen(false);
@@ -286,6 +285,43 @@ export default function MembersManagementPage() {
     return member.ministryPosition.priority > user.ministryPosition.priority;
   };
 
+  // Retorna as tags de liderança do membro
+  const getLeadershipTags = (member: Member): { label: string; color: string }[] => {
+    const tags: { label: string; color: string }[] = [];
+    
+    // Pastor de Governo de Congregação
+    if (member.congregacoesPastorGoverno && member.congregacoesPastorGoverno.length > 0) {
+      tags.push({ label: 'Pastor de Governo', color: 'text-purple-400' });
+    }
+    
+    // Vice-Presidente de Congregação
+    if (member.congregacoesVicePresidente && member.congregacoesVicePresidente.length > 0) {
+      tags.push({ label: 'Vice-Presidente', color: 'text-purple-400' });
+    }
+    
+    // Pastor de Rede
+    if (member.redes && member.redes.length > 0) {
+      tags.push({ label: 'Pastor de Rede', color: 'text-blue-400' });
+    }
+    
+    // Discipulador
+    if (member.discipulados && member.discipulados.length > 0) {
+      tags.push({ label: 'Discipulador', color: 'text-green-400' });
+    }
+    
+    // Líder de Célula
+    if (member.ledCelulas && member.ledCelulas.length > 0) {
+      tags.push({ label: 'Líder de Célula', color: 'text-yellow-400' });
+    }
+    
+    // Vice-Líder de Célula
+    if (member.viceLedCelulas && member.viceLedCelulas.length > 0) {
+      tags.push({ label: 'Líder em Treinamento', color: 'text-yellow-400' });
+    }
+    
+    return tags;
+  };
+
   const performDeleteMember = async () => {
     const member = confirmingMember;
     if (!member) return;
@@ -298,6 +334,7 @@ export default function MembersManagementPage() {
       if (filterCelulaId !== null) filters.celulaId = filterCelulaId;
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
+      if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       const refreshed = await membersService.getAllMembers(filters);
       setMembers(refreshed);
       setConfirmingMember(null);
@@ -319,21 +356,56 @@ export default function MembersManagementPage() {
           <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
             <div className="w-full sm:w-48">
               <FormControl fullWidth>
-                <InputLabel id="filter-rede-label" size='small'>Rede</InputLabel>
+                <InputLabel id="filter-congregacao-label" size='small'>Congregação</InputLabel>
                 <Select
-                  labelId="filter-rede-label"
-                  value={filterRedeId !== null ? String(filterRedeId) : ''}
-                  label="Rede"
+                  labelId="filter-congregacao-label"
+                  value={filterCongregacaoId !== null ? String(filterCongregacaoId) : ''}
+                  label="Congregação"
                   onChange={(e) => {
-                    setFilterRedeId(e.target.value ? Number(e.target.value) : null);
+                    setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null);
+                    setFilterRedeId(null);
                     setFilterDiscipuladoId(null);
                     setFilterCelulaId(null);
                   }}
                   size="small"
                   className="bg-gray-800"
                 >
+                  <MenuItem value="">Todas congregações</MenuItem>
+                  {congregacoes.map(c => (
+                    <MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </div>
+
+            <div className="w-full sm:w-48">
+              <FormControl fullWidth>
+                <InputLabel id="filter-rede-label" size='small'>Rede</InputLabel>
+                <Select
+                  labelId="filter-rede-label"
+                  value={filterRedeId !== null ? String(filterRedeId) : ''}
+                  label="Rede"
+                  onChange={(e) => {
+                    const redeId = e.target.value ? Number(e.target.value) : null;
+                    setFilterRedeId(redeId);
+                    setFilterDiscipuladoId(null);
+                    setFilterCelulaId(null);
+                    
+                    // Auto-preencher congregação
+                    if (redeId) {
+                      const rede = redes.find(r => r.id === redeId);
+                      if (rede?.congregacaoId) {
+                        setFilterCongregacaoId(rede.congregacaoId);
+                      }
+                    }
+                  }}
+                  size="small"
+                  className="bg-gray-800"
+                >
                   <MenuItem value="">Todas redes</MenuItem>
-                  {redes.map(r => (<MenuItem key={r.id} value={String(r.id)}>{r.name}</MenuItem>))}
+                  {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map(r => (
+                    <MenuItem key={r.id} value={String(r.id)}>{r.name}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </div>
@@ -346,8 +418,21 @@ export default function MembersManagementPage() {
                   value={filterDiscipuladoId !== null ? String(filterDiscipuladoId) : ''}
                   label="Discipulado"
                   onChange={(e) => {
-                    setFilterDiscipuladoId(e.target.value ? Number(e.target.value) : null);
+                    const discipuladoId = e.target.value ? Number(e.target.value) : null;
+                    setFilterDiscipuladoId(discipuladoId);
                     setFilterCelulaId(null);
+                    
+                    // Auto-preencher rede e congregação
+                    if (discipuladoId) {
+                      const discipulado = discipulados.find(d => d.id === discipuladoId);
+                      if (discipulado?.redeId) {
+                        setFilterRedeId(discipulado.redeId);
+                        const rede = redes.find(r => r.id === discipulado.redeId);
+                        if (rede?.congregacaoId) {
+                          setFilterCongregacaoId(rede.congregacaoId);
+                        }
+                      }
+                    }
                   }}
                   size="small"
                   className="bg-gray-800"
@@ -373,12 +458,28 @@ export default function MembersManagementPage() {
                   label="Célula"
                   onChange={(e) => {
                     const value = e.target.value === '' ? null : Number(e.target.value);
-                    // Se selecionar "Sem célula" (0), limpar filtros de rede e discipulado
+                    setFilterCelulaId(value);
+                    
+                    // Se selecionar "Sem célula" (0), limpar filtros superiores
                     if (value === 0) {
                       setFilterRedeId(null);
                       setFilterDiscipuladoId(null);
+                      setFilterCongregacaoId(null);
+                    } else if (value) {
+                      // Auto-preencher discipulado, rede e congregação
+                      const celula = celulas.find(c => c.id === value);
+                      if (celula?.discipuladoId) {
+                        setFilterDiscipuladoId(celula.discipuladoId);
+                        const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+                        if (discipulado?.redeId) {
+                          setFilterRedeId(discipulado.redeId);
+                          const rede = redes.find(r => r.id === discipulado.redeId);
+                          if (rede?.congregacaoId) {
+                            setFilterCongregacaoId(rede.congregacaoId);
+                          }
+                        }
+                      }
                     }
-                    setFilterCelulaId(value);
                   }}
                   size="small"
                   className="bg-gray-800"
@@ -391,6 +492,20 @@ export default function MembersManagementPage() {
                 </Select>
               </FormControl>
             </div>
+
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                setFilterCongregacaoId(null);
+                setFilterRedeId(null);
+                setFilterDiscipuladoId(null);
+                setFilterCelulaId(null);
+              }}
+              className="h-10 whitespace-nowrap"
+            >
+              Limpar Filtros
+            </Button>
           </div>
         </div>
 
@@ -404,48 +519,59 @@ export default function MembersManagementPage() {
             </div>
           ) : (
           <ul className="space-y-2">
-            {members.map((m) => (
-              <li
-                key={m.id}
-                className={`flex items-center gap-3 border p-2 rounded ${!m.celulaId ? 'bg-red-900/20 border-red-700' : 'bg-gray-900'}`}
-              >
-                <span className="flex-1">
-                  <button
-                    onClick={() => openViewModal(m)}
-                    className="text-left hover:text-blue-400 transition-colors font-medium"
-                  >
-                    {m.name}
-                  </button>
-                  {!m.celulaId && <span className="text-xs text-red-400 ml-2 font-semibold">(sem célula)</span>}
-                  {m.celula && (
-                    <span className="text-xs text-gray-400 ml-2">
-                      - {m.celula.name}
-                    </span>
-                  )}
-                  {!m.isActive && <span className="text-xs text-gray-400 ml-2">(desligado)</span>}
-                </span>
-                {canManageMember(m) && (
-                  <div className="flex items-center gap-2">
+            {members.map((m) => {
+              const leadershipTags = getLeadershipTags(m);
+              const hasLeadership = leadershipTags.length > 0;
+              const showNoCelula = !m.celulaId && !hasLeadership;
+
+              return (
+                <li
+                  key={m.id}
+                  className={`flex items-center gap-3 border p-2 rounded ${showNoCelula ? 'bg-red-900/20 border-red-700' : 'bg-gray-900'}`}
+                >
+                  <span className="flex-1">
                     <button
-                      onClick={() => openEditModal(m)}
-                      aria-label="Editar membro"
-                      className="p-1 rounded hover:bg-gray-800"
+                      onClick={() => openViewModal(m)}
+                      className="text-left hover:text-blue-400 transition-colors font-medium"
                     >
-                      <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
+                      {m.name}
                     </button>
-                    {m.celulaId && (
+                    {showNoCelula && <span className="text-xs text-red-400 ml-2 font-semibold">(sem célula)</span>}
+                    {m.celula && (
+                      <span className="text-xs text-gray-400 ml-2">
+                        - {m.celula.name}
+                      </span>
+                    )}
+                    {leadershipTags.map((tag, idx) => (
+                      <span key={idx} className={`text-xs ${tag.color} ml-2 font-semibold`}>
+                        {tag.label}
+                      </span>
+                    ))}
+                    {!m.isActive && <span className="text-xs text-gray-400 ml-2">(desligado)</span>}
+                  </span>
+                  {canManageMember(m) && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => removeMember(m)}
-                        aria-label="Remover membro da célula"
+                        onClick={() => openEditModal(m)}
+                        aria-label="Editar membro"
                         className="p-1 rounded hover:bg-gray-800"
                       >
-                        <FiTrash2 className="h-4 w-4 text-red-600" aria-hidden />
+                        <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
                       </button>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
+                      {m.celulaId && (
+                        <button
+                          onClick={() => removeMember(m)}
+                          aria-label="Remover membro da célula"
+                          className="p-1 rounded hover:bg-gray-800"
+                        >
+                          <FiTrash2 className="h-4 w-4 text-red-600" aria-hidden />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           )}
         </div>

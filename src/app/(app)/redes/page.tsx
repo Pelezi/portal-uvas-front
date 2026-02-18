@@ -13,20 +13,20 @@ import { ErrorMessages } from '@/lib/errorHandler';
 import { FiTrash2, FiPlus } from 'react-icons/fi';
 import ModalConfirm from '@/components/ModalConfirm';
 import { Celula, Discipulado, Member, Rede, Congregacao } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { createTheme, ThemeProvider, FormControl, InputLabel, Select, MenuItem, TextField, Autocomplete, Button } from '@mui/material';
 
 export default function RedesPage() {
+  const { user } = useAuth();
   const [redes, setRedes] = useState<Rede[]>([]);
   const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [users, setUsers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
 
   // filters
-  const [filterName, setFilterName] = useState('');
-  const [filterPastorQuery, setFilterPastorQuery] = useState('');
+  const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterPastorId, setFilterPastorId] = useState<number | null>(null);
-  const pastorDropdownRef = useRef<HTMLDivElement>(null);
-  const [showPastorsDropdown, setShowPastorsDropdown] = useState(false);
-  const pastorsDropdownTimeoutRef = useRef<number | null>(null);
+  const [filterIsKids, setFilterIsKids] = useState<boolean | null>(null);
 
   // expansion & cache maps
   const [expandedRedes, setExpandedRedes] = useState<Record<number, boolean>>({});
@@ -42,6 +42,7 @@ export default function RedesPage() {
   const [createPastorUserId, setCreatePastorUserId] = useState<number | null>(null);
   const [createPastorQuery, setCreatePastorQuery] = useState('');
   const [createPastorName, setCreatePastorName] = useState('');
+  const [createIsKids, setCreateIsKids] = useState(false);
   const [showCreatePastorsDropdown, setShowCreatePastorsDropdown] = useState(false);
   const createPastorDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,7 @@ export default function RedesPage() {
   const [editPastorQuery, setEditPastorQuery] = useState('');
   const [editPastorId, setEditPastorId] = useState<number | null>(null);
   const [editPastorName, setEditPastorName] = useState('');
+  const [editIsKids, setEditIsKids] = useState(false);
   const editPastorDropdownRef = useRef<HTMLDivElement>(null);
   const [showEditPastorsDropdown, setShowEditPastorsDropdown] = useState(false);
   const editPastorsTimeoutRef = useRef<number | null>(null);
@@ -95,12 +97,58 @@ export default function RedesPage() {
       try {
         const c = await congregacoesService.getCongregacoes();
         setCongregacoes(c || []);
+        
+        // Selecionar automaticamente a congregação do usuário
+        if (user) {
+          let userCongregacaoId: number | null = null;
+          
+          // Verificar se é pastor de governo de alguma congregação
+          if (user.congregacoesPastorGoverno && user.congregacoesPastorGoverno.length > 0) {
+            userCongregacaoId = user.congregacoesPastorGoverno[0].id;
+          }
+          // Ou vice presidente de alguma congregação
+          else if (user.congregacoesVicePresidente && user.congregacoesVicePresidente.length > 0) {
+            userCongregacaoId = user.congregacoesVicePresidente[0].id;
+          }
+          // Ou pastor de alguma rede (pegar a congregação da rede)
+          else if (user.redes && user.redes.length > 0) {
+            userCongregacaoId = user.redes[0].congregacaoId;
+          }
+          // Ou pertence a uma célula (líder, vice-líder ou membro)
+          else if ((user.permission?.celulaIds && user.permission.celulaIds.length > 0) || user.celulaId) {
+            try {
+              const allCelulas = await celulasService.getCelulas();
+              const firstCelulaId = user.permission?.celulaIds ? user.permission.celulaIds[0] : user.celulaId;
+              const firstCelula = allCelulas.find(cel => cel.id === firstCelulaId);
+              
+              if (firstCelula?.discipuladoId) {
+                console.log('Buscando discipulado com id: ', firstCelula.discipuladoId);
+                const allDiscipulados = await discipuladosService.getDiscipulados();
+                const discipulado = allDiscipulados.find(d => d.id === firstCelula.discipuladoId);
+                console.log('Discipulado encontrado: ', discipulado);
+                if (discipulado?.redeId) {
+                  console.log('Buscando rede com id: ', discipulado.redeId);
+                  const allRedes = await redesService.getRedes();
+                  const rede = allRedes.find(r => r.id === discipulado.redeId);
+                  console.log('Rede encontrada: ', rede);
+                  if (rede?.congregacaoId) {
+                    console.log('Congregação da rede: ', rede.congregacaoId);
+                    userCongregacaoId = rede.congregacaoId;
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('Erro ao buscar congregação da célula:', err);
+            }
+          }
+          
+          if (userCongregacaoId) {
+            setFilterCongregacaoId(userCongregacaoId);
+          }
+        }
       } catch (err) { console.error(err); }
     })();
-    return () => {
-      if (pastorsDropdownTimeoutRef.current) window.clearTimeout(pastorsDropdownTimeoutRef.current);
-    };
-  }, []);
+  }, [user]);
 
   const onToggleRede = async (r: Rede) => {
     try {
@@ -139,8 +187,8 @@ export default function RedesPage() {
         toast.error('Selecione uma congregação');
         return;
       }
-      await redesService.createRede({ name: createName, congregacaoId: createCongregacaoId, pastorMemberId: createPastorUserId || undefined });
-      setCreateName(''); setCreateCongregacaoId(null); setCreatePastorUserId(null); setCreatePastorQuery(''); setShowCreateModal(false);
+      await redesService.createRede({ name: createName, congregacaoId: createCongregacaoId, pastorMemberId: createPastorUserId || undefined, isKids: createIsKids });
+      setCreateName(''); setCreateCongregacaoId(null); setCreatePastorUserId(null); setCreatePastorQuery(''); setCreateIsKids(false); setShowCreateModal(false);
       await load();
       toast.success('Rede criada com sucesso!');
     } catch (err) { 
@@ -155,6 +203,7 @@ export default function RedesPage() {
     setEditCongregacaoId(r.congregacaoId);
     setEditPastorId(r.pastorMemberId ?? null);
     setEditPastorName(r.pastor ? r.pastor.name : '');
+    setEditIsKids(r.isKids || false);
     setEditPastorQuery('');
     setShowEditPastorsDropdown(false);
     setEditRedeModalOpen(true);
@@ -163,7 +212,7 @@ export default function RedesPage() {
   const saveEditRede = async () => {
     try {
       if (!editingRedeId) throw new Error('Rede inválida');
-      await redesService.updateRede(editingRedeId, { name: editName, congregacaoId: editCongregacaoId || undefined, pastorMemberId: editPastorId || undefined });
+      await redesService.updateRede(editingRedeId, { name: editName, congregacaoId: editCongregacaoId || undefined, pastorMemberId: editPastorId || undefined, isKids: editIsKids });
       setEditRedeModalOpen(false);
       toast.success('Rede atualizada com sucesso!');
       await load();
@@ -230,54 +279,108 @@ export default function RedesPage() {
   // IDs de usuários que são pastores de alguma rede
   const pastorUserIds = new Set<number>((redes || []).map(r => r.pastorMemberId).filter((id): id is number => id != null));
 
+  const muiTheme = createTheme({
+    palette: {
+      mode: 'dark',
+    },
+  });
+
   return (
-    <div>
-      <h2 className="text-2xl font-semibold mb-4">Redes</h2>
+    <ThemeProvider theme={muiTheme}>
+      <div>
+        <h2 className="text-2xl font-semibold mb-4">Redes</h2>
 
-      <div className="mb-6">
-        <label className="block mb-2">Filtros</label>
-        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-          <input placeholder="Nome da rede" value={filterName} onChange={(e) => setFilterName(e.target.value)} className="border p-2 rounded flex-1 bg-gray-800 text-white h-10" />
-
-          <div ref={pastorDropdownRef} className="relative w-full sm:w-80">
-            <input
-              placeholder="Pastor"
-              value={filterPastorQuery}
-              onChange={(e) => { setFilterPastorQuery(e.target.value); }}
-              onFocus={() => {
-                if (pastorsDropdownTimeoutRef.current) { window.clearTimeout(pastorsDropdownTimeoutRef.current); pastorsDropdownTimeoutRef.current = null; }
-                setShowPastorsDropdown(true);
-              }}
-              onBlur={() => {
-                // delay hiding to allow click selection
-                pastorsDropdownTimeoutRef.current = window.setTimeout(() => { setShowPastorsDropdown(false); pastorsDropdownTimeoutRef.current = null; }, 150);
-              }}
-              className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-            />
-
-            {showPastorsDropdown && (
-              <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                {users
-                  .filter(u => pastorUserIds.has(u.id))
-                  .filter(u => {
-                    const q = (filterPastorQuery || '').toLowerCase();
-                    if (!q) return true;
-                    return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
-                  })
-                  .map(u => (
-                    <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterPastorId(u.id); setFilterPastorQuery(''); setShowPastorsDropdown(false); }}>
-                      <div>
-                        <div className="text-sm font-medium text-white">{u.name}</div>
-                        <div className="text-xs text-gray-400">{u.email}</div>
-                      </div>
-                      <div className="text-xs text-green-600">Selecionar</div>
-                    </div>
+        <div className="mb-6">
+          <label className="block mb-2">Filtros</label>
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            <div className="w-full sm:w-64">
+              <FormControl fullWidth size="small">
+                <InputLabel id="filter-congregacao-label">Congregação</InputLabel>
+                <Select
+                  labelId="filter-congregacao-label"
+                  value={filterCongregacaoId || ''}
+                  onChange={(e) => setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null)}
+                  label="Congregação"
+                  className="bg-gray-800"
+                >
+                  <MenuItem value="">Todas as congregações</MenuItem>
+                  {congregacoes.map(c => (
+                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
                   ))}
-              </div>
-            )}
+                </Select>
+              </FormControl>
+            </div>
+
+            <div className="w-full sm:w-48">
+              <FormControl fullWidth size="small">
+                <InputLabel id="filter-kids-label">Tipo</InputLabel>
+                <Select
+                  labelId="filter-kids-label"
+                  value={filterIsKids === null ? '' : filterIsKids ? 'true' : 'false'}
+                  onChange={(e) => {
+                    const value = e.target.value as string;
+                    setFilterIsKids(value === '' ? null : value === 'true');
+                  }}
+                  label="Tipo"
+                  className="bg-gray-800"
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  <MenuItem value="true">Apenas Kids</MenuItem>
+                  <MenuItem value="false">Apenas Padrão</MenuItem>
+                </Select>
+              </FormControl>
+            </div>
+
+            <div className="w-full sm:w-80">
+              <Autocomplete
+                size="small"
+                options={users.filter(u => {
+                  // Filtrar pastores baseado nas redes filtradas
+                  const filteredRedes = redes.filter(r => {
+                    if (filterCongregacaoId && r.congregacaoId !== filterCongregacaoId) return false;
+                    if (filterIsKids !== null && r.isKids !== filterIsKids) return false;
+                    return true;
+                  });
+                  
+                  // Mostrar apenas pastores das redes filtradas
+                  return filteredRedes.some(r => r.pastorMemberId === u.id);
+                })}
+                getOptionLabel={(option) => option.name}
+                value={users.find(u => u.id === filterPastorId) || null}
+                onChange={(event, newValue) => setFilterPastorId(newValue?.id || null)}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Pastor" 
+                    placeholder="Selecione um pastor"
+                    className="bg-gray-800" 
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <div>
+                      <div className="text-sm font-medium">{option.name}</div>
+                      <div className="text-xs text-gray-400">{option.email}</div>
+                    </div>
+                  </li>
+                )}
+              />
+            </div>
+
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                setFilterCongregacaoId(null);
+                setFilterPastorId(null);
+                setFilterIsKids(null);
+              }}
+              className="h-10 whitespace-nowrap"
+            >
+              Limpar Filtros
+            </Button>
           </div>
         </div>
-      </div>
 
       <div>
         <h3 className="font-medium mb-2">Lista de redes</h3>
@@ -288,8 +391,9 @@ export default function RedesPage() {
         ) : (
         <ul className="space-y-2">
           {redes
-            .filter(r => !filterName || r.name.toLowerCase().includes(filterName.toLowerCase()))
+            .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
             .filter(r => !filterPastorId || r.pastorMemberId === filterPastorId)
+            .filter(r => filterIsKids === null || r.isKids === filterIsKids)
             .map(r => (
               <li key={r.id} className={`border p-2 rounded ${!r.congregacaoId || !r.pastorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
                 <CollapsibleItem
@@ -310,11 +414,11 @@ export default function RedesPage() {
                           >
                             <FiTrash2 className="h-4 w-4" aria-hidden />
                           </button>
-                        </span>
+                        </span> 
                       );
                     })()
                   }
-                  title={<>{r.name} <span className="text-sm text-gray-500">({redeDiscipuladosCount[r.id] ?? (redeDiscipuladosMap[r.id]?.length ?? 0)} Discipulados)</span></>}
+                  title={<>{r.name} {r.isKids && <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded ml-2">Kids</span>} <span className="text-sm text-gray-500">({redeDiscipuladosCount[r.id] ?? (redeDiscipuladosMap[r.id]?.length ?? 0)} Discipulados)</span></>}
                   subtitle={<>
                     Congregação: {r.congregacao?.name || <span className="text-red-400">Sem congregação</span>} | 
                     Pastor: {r.pastor ? r.pastor.name : <span className="text-red-400">Sem pastor</span>}
@@ -412,6 +516,16 @@ export default function RedesPage() {
                 )}
               </div>
 
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={createIsKids} 
+                  onChange={(e) => setCreateIsKids(e.target.checked)} 
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Rede Kids</span>
+              </label>
+
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowCreateModal(false)} className="px-3 py-2 border rounded">Cancelar</button>
                 <button onClick={createRede} className="px-3 py-2 bg-green-600 text-white rounded">Criar rede</button>
@@ -464,6 +578,16 @@ export default function RedesPage() {
                 )}
               </div>
 
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={editIsKids} 
+                  onChange={(e) => setEditIsKids(e.target.checked)} 
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Rede Kids</span>
+              </label>
+
               <div className="flex justify-end gap-2">
                 <button onClick={() => setEditRedeModalOpen(false)} className="px-3 py-2 border rounded">Cancelar</button>
                 <button onClick={saveEditRede} className="px-3 py-2 bg-green-600 text-white rounded">Salvar</button>
@@ -483,5 +607,6 @@ export default function RedesPage() {
         onCancel={() => { setConfirmOpen(false); setConfirmTarget(null); }}
       />
     </div>
+    </ThemeProvider>
   );
 }

@@ -9,33 +9,35 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
+import { congregacoesService } from '@/services/congregacoesService';
 import { memberService } from '@/services/memberService';
 import { celulasService } from '@/services/celulasService';
-import { Discipulado, Celula, Rede, Member } from '@/types';
+import { Discipulado, Celula, Rede, Member, Congregacao } from '@/types';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
-import { createTheme, ThemeProvider } from '@mui/material';
+import { createTheme, ThemeProvider, Autocomplete, TextField, Button } from '@mui/material';
 import { FiTrash2, FiPlus } from 'react-icons/fi';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function DiscipuladosPage() {
+  const { user } = useAuth();
   const [list, setList] = useState<Discipulado[]>([]);
   const [selected, setSelected] = useState<Discipulado | null>(null);
   const [celulas, setCelulas] = useState<Celula[]>([]);
+  const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
   const [users, setUsers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   // filters
-  const [filterDiscipuladorQuery, setFilterDiscipuladorQuery] = useState('');
   const [filterDiscipuladorId, setFilterDiscipuladorId] = useState<number | null>(null);
+  const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
-  const [showFilterDiscipuladoresDropdown, setShowFilterDiscipuladoresDropdown] = useState(false);
-  const filterDiscipuladorDropdownRef = useRef<HTMLDivElement>(null);
-  const filterDiscipuladorTimeoutRef = useRef<number | null>(null);
   // creation
   const [createDiscipuladoModalOpen, setCreateDiscipuladoModalOpen] = useState(false);
   const [createDiscipuladorQuery, setCreateDiscipuladorQuery] = useState('');
   const [createDiscipuladorId, setCreateDiscipuladorId] = useState<number | null>(null);
   const [createDiscipuladorName, setCreateDiscipuladorName] = useState('');
+  const [createCongregacaoId, setCreateCongregacaoId] = useState<number | null>(null);
   const [createRedeId, setCreateRedeId] = useState<number | null>(null);
   const createDiscipuladorDropdownRef = useRef<HTMLDivElement>(null);
   const createDiscipuladorTimeoutRef = useRef<number | null>(null);
@@ -50,19 +52,22 @@ export default function DiscipuladosPage() {
   const editDiscipuladorTimeoutRef = useRef<number | null>(null);
   const [showEditDiscipuladoresDropdown, setShowEditDiscipuladoresDropdown] = useState(false);
   const [editDiscipuladoId, setEditDiscipuladoId] = useState<number | null>(null);
+  const [editCongregacaoId, setEditCongregacaoId] = useState<number | null>(null);
   const [editRedeId, setEditRedeId] = useState<number | null>(null);
 
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
+  // Kids validation
+  const [createGenderError, setCreateGenderError] = useState('');
+  const [editGenderError, setEditGenderError] = useState('');
 
   const load = async () => {
     setLoading(true);
     try {
-      const d = await discipuladosService.getDiscipulados();
+      const filters: { congregacaoId?: number; redeId?: number; discipuladorMemberId?: number } = {};
+      if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+      if (filterRedeId) filters.redeId = filterRedeId;
+      if (filterDiscipuladorId) filters.discipuladorMemberId = filterDiscipuladorId;
+      
+      const d = await discipuladosService.getDiscipulados(filters);
       setList(d || []);
       // also load all células to compute counts per discipulado
       try {
@@ -84,20 +89,123 @@ export default function DiscipuladosPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [filterCongregacaoId, filterRedeId, filterDiscipuladorId]);
 
   useEffect(() => {
     const loadAux = async () => {
       try {
-        const r = await redesService.getRedes();
+        const [c, r, u] = await Promise.all([
+          congregacoesService.getCongregacoes(),
+          redesService.getRedes(),
+          memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR' })
+        ]);
+        setCongregacoes(c || []);
         setRedes(r || []);
-        // Carregar apenas usuários que podem ser discipuladores (PRESIDENT_PASTOR, PASTOR ou DISCIPULADOR)
-        const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR' });
         setUsers(u || []);
-      } catch (err) { console.error('failed loading redes/users', err); }
+        
+        // Se o usuário é pastor de alguma rede, selecionar automaticamente a primeira
+        if (user && user.permission?.redeIds && user.permission.redeIds.length > 0) {
+          const firstRedeId = user.permission.redeIds[0];
+          setFilterRedeId(firstRedeId);
+          
+          // Também selecionar a congregação da rede
+          const firstRede = r?.find(rede => rede.id === firstRedeId);
+          if (firstRede?.congregacaoId) {
+            setFilterCongregacaoId(firstRede.congregacaoId);
+          }
+        }
+        // Se o usuário não tem rede direta mas tem discipulado, selecionar automaticamente
+        else if (user && user.permission?.discipuladoIds && user.permission.discipuladoIds.length > 0) {
+          const firstDiscipuladoId = user.permission.discipuladoIds[0];
+          // Buscar o discipulado para pegar sua rede
+          try {
+            const allDiscipulados = await discipuladosService.getDiscipulados();
+            const discipulado = allDiscipulados.find(d => d.id === firstDiscipuladoId);
+            
+            if (discipulado?.redeId) {
+              setFilterRedeId(discipulado.redeId);
+              
+              // Também selecionar a congregação da rede
+              const rede = r?.find(rede => rede.id === discipulado.redeId);
+              if (rede?.congregacaoId) {
+                setFilterCongregacaoId(rede.congregacaoId);
+              }
+            }
+          } catch (err) {
+            console.error('Erro ao buscar rede do discipulado:', err);
+          }
+        }
+        // Se o usuário pertence a uma célula (líder, vice-líder ou membro)
+        else if (user && ((user.permission?.celulaIds && user.permission.celulaIds.length > 0) || user.celulaId)) {
+          try {
+            const allCelulas = await celulasService.getCelulas();
+            const firstCelulaId = user.permission?.celulaIds ? user.permission?.celulaIds[0] : user.celulaId;
+            const firstCelula = allCelulas.find(cel => cel.id === firstCelulaId);
+            
+            if (firstCelula?.discipuladoId) {
+              const allDiscipulados = await discipuladosService.getDiscipulados();
+              const discipulado = allDiscipulados.find(d => d.id === firstCelula.discipuladoId);
+              
+              if (discipulado?.redeId) {
+                setFilterRedeId(discipulado.redeId);
+                
+                // Também selecionar a congregação da rede
+                const rede = r?.find(rede => rede.id === discipulado.redeId);
+                if (rede?.congregacaoId) {
+                  setFilterCongregacaoId(rede.congregacaoId);
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Erro ao buscar rede da célula:', err);
+          }
+        }
+      } catch (err) { console.error('failed loading congregacoes/redes/users', err); }
     };
     loadAux();
-  }, []);
+  }, [user]);
+
+  // Validar gênero quando rede Kids é selecionada no modo de criação
+  useEffect(() => {
+    if (!createRedeId) {
+      setCreateGenderError('');
+      return;
+    }
+    
+    const selectedRede = redes.find(r => r.id === createRedeId);
+    if (selectedRede?.isKids && createDiscipuladorId) {
+      const selectedMember = users.find(u => u.id === createDiscipuladorId);
+      if (selectedMember && selectedMember.gender !== 'FEMALE') {
+        setCreateDiscipuladorId(null);
+        setCreateDiscipuladorName('');
+        setCreateDiscipuladorQuery('');
+        setCreateGenderError('Redes Kids só podem ter líderes do gênero feminino');
+      }
+    } else {
+      setCreateGenderError('');
+    }
+  }, [createRedeId, createDiscipuladorId, redes, users]);
+
+  // Validar gênero quando rede Kids é selecionada no modo de edição
+  useEffect(() => {
+    if (!editRedeId) {
+      setEditGenderError('');
+      return;
+    }
+    
+    const selectedRede = redes.find(r => r.id === editRedeId);
+    if (selectedRede?.isKids && editDiscipuladorId) {
+      const selectedMember = users.find(u => u.id === editDiscipuladorId);
+      if (selectedMember && selectedMember.gender !== 'FEMALE') {
+        setEditDiscipuladorId(null);
+        setEditDiscipuladorName('');
+        setEditDiscipuladorQuery('');
+        setEditGenderError('Redes Kids só podem ter líderes do gênero feminino');
+      }
+    } else {
+      setEditGenderError('');
+    }
+  }, [editRedeId, editDiscipuladorId, redes, users]);
 
   const [expandedDiscipulados, setExpandedDiscipulados] = useState<Record<number, boolean>>({});
   const [discipuladoCelulasMap, setDiscipuladoCelulasMap] = useState<Record<number, Celula[]>>({});
@@ -130,6 +238,13 @@ export default function DiscipuladosPage() {
     setEditDiscipuladorName(getUserName(d.discipuladorMemberId));
     setEditDiscipuladorQuery('');
     setShowEditDiscipuladoresDropdown(false);
+    // Encontrar congregação através da rede
+    if (d.redeId) {
+      const rede = redes.find(r => r.id === d.redeId);
+      if (rede) {
+        setEditCongregacaoId(rede.congregacaoId);
+      }
+    }
     setEditDiscipuladoModalOpen(true);
   };
 
@@ -199,7 +314,7 @@ export default function DiscipuladosPage() {
 
   const muiTheme = createTheme({
     palette: {
-      mode: isDarkMode ? 'dark' : 'light',
+      mode: 'dark',
     },
   });
 
@@ -212,48 +327,93 @@ export default function DiscipuladosPage() {
           <div className="mb-6">
             <label className="block mb-2">Filtros</label>
             <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-              <div className="relative w-full sm:w-80" ref={filterDiscipuladorDropdownRef}>
-                <input
-                  placeholder="Discipulador"
-                  value={filterDiscipuladorQuery || (filterDiscipuladorId ? getUserName(filterDiscipuladorId) : '')}
-                  onChange={(e) => { setFilterDiscipuladorQuery(e.target.value); setShowFilterDiscipuladoresDropdown(true); setFilterDiscipuladorId(null); }}
-                  onFocus={() => { if (filterDiscipuladorTimeoutRef.current) { window.clearTimeout(filterDiscipuladorTimeoutRef.current); filterDiscipuladorTimeoutRef.current = null; } setShowFilterDiscipuladoresDropdown(true); }}
-                  onBlur={() => { filterDiscipuladorTimeoutRef.current = window.setTimeout(() => { setShowFilterDiscipuladoresDropdown(false); filterDiscipuladorTimeoutRef.current = null; }, 150); }}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-                />
-                {showFilterDiscipuladoresDropdown && (
-                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                    {users.filter(u => discipuladorIds.has(u.id)).filter(u => {
-                      const q = (filterDiscipuladorQuery || '').toLowerCase();
-                      if (!q) return true;
-                      return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
-                    }).map(u => (
-                      <div key={u.id} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between" onMouseDown={() => { setFilterDiscipuladorId(u.id); setFilterDiscipuladorQuery(''); setShowFilterDiscipuladoresDropdown(false); }}>
-                        <div>
-                          <div className="text-sm font-medium text-white">{u.name}</div>
-                          <div className="text-xs text-gray-400">{u.email}</div>
-                        </div>
-                        <div className="text-xs text-green-600">Selecionar</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+
+              <FormControl className="w-48">
+                <InputLabel id="congregacao-filter-label" size='small'>Congregação</InputLabel>
+                <Select
+                  labelId="congregacao-filter-label"
+                  value={filterCongregacaoId ?? ''}
+                  onChange={(e) => {
+                    setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null);
+                    setFilterRedeId(null);
+                  }}
+                  label="Congregação"
+                  size="small"
+                  className="bg-gray-800"
+                >
+                  <MenuItem value="">Todas congregações</MenuItem>
+                  {congregacoes.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
               <FormControl className="w-48">
                 <InputLabel id="rede-filter-label" size='small'>Rede</InputLabel>
                 <Select
                   labelId="rede-filter-label"
                   value={filterRedeId ?? ''}
-                  onChange={(e) => setFilterRedeId(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => {
+                    const redeId = e.target.value ? Number(e.target.value) : null;
+                    setFilterRedeId(redeId);
+                    
+                    // Auto-preencher congregação
+                    if (redeId) {
+                      const rede = redes.find(r => r.id === redeId);
+                      if (rede?.congregacaoId) {
+                        setFilterCongregacaoId(rede.congregacaoId);
+                      }
+                    }
+                  }}
                   label="Rede"
                   size="small"
                   className="bg-gray-800"
                 >
                   <MenuItem value="">Todas redes</MenuItem>
-                  {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                  {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map((r) => (
+                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
+              
+              <div className="w-full sm:w-80">
+                <Autocomplete
+                  size="small"
+                  options={users.filter(u => discipuladorIds.has(u.id))}
+                  getOptionLabel={(option) => option.name}
+                  value={users.find(u => u.id === filterDiscipuladorId) || null}
+                  onChange={(event, newValue) => setFilterDiscipuladorId(newValue?.id || null)}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Discipulador" 
+                      placeholder="Selecione um discipulador"
+                      className="bg-gray-800" 
+                    />
+                  )}
+                  renderOption={(props, option) => (
+                    <li {...props} key={option.id}>
+                      <div>
+                        <div className="text-sm font-medium">{option.name}</div>
+                        <div className="text-xs text-gray-400">{option.email}</div>
+                      </div>
+                    </li>
+                  )}
+                />
+              </div>
+
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  setFilterDiscipuladorId(null);
+                  setFilterCongregacaoId(null);
+                  setFilterRedeId(null);
+                }}
+                className="h-10 whitespace-nowrap"
+              >
+                Limpar Filtros
+              </Button>
             </div>
           </div>
 
@@ -265,10 +425,7 @@ export default function DiscipuladosPage() {
               </div>
             ) : (
             <ul className="space-y-2">
-              {list
-                .filter(d => !filterRedeId || d.redeId === filterRedeId)
-                .filter(d => !filterDiscipuladorId || d.discipuladorMemberId === filterDiscipuladorId)
-                .map(d => (
+              {list.map(d => (
                   <li key={d.id} className={`border p-2 rounded ${!d.discipuladorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
                     <CollapsibleItem
                       isOpen={!!expandedDiscipulados[d.id]}
@@ -325,18 +482,50 @@ export default function DiscipuladosPage() {
               </div>
               <div className="space-y-3">
                 <div className="w-full">
+                  <FormControl className="w-full">
+                    <InputLabel id="create-congregacao-label" size='small'>Congregação</InputLabel>
+                    <Select
+                      labelId="create-congregacao-label"
+                      value={createCongregacaoId ?? ''}
+                      onChange={(e) => {
+                        setCreateCongregacaoId(e.target.value ? Number(e.target.value) : null);
+                        setCreateRedeId(null);
+                      }}
+                      label="Congregação"
+                      size="small"
+                      className="bg-gray-800 w-full">
+                      <MenuItem value="">Selecione congregação</MenuItem>
+                      {congregacoes.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </div>
 
+                <div className="w-full">
                   <FormControl className="w-full">
                     <InputLabel id="create-rede-label" size='small'>Rede</InputLabel>
                     <Select
                       labelId="create-rede-label"
                       value={createRedeId ?? ''}
-                      onChange={(e) => setCreateRedeId(e.target.value ? Number(e.target.value) : null)}
+                      onChange={(e) => {
+                        const redeId = e.target.value ? Number(e.target.value) : null;
+                        setCreateRedeId(redeId);
+                        // Auto-preencher congregação quando rede é selecionada
+                        if (redeId) {
+                          const rede = redes.find(r => r.id === redeId);
+                          if (rede?.congregacaoId) {
+                            setCreateCongregacaoId(rede.congregacaoId);
+                          }
+                        }
+                      }}
                       label="Rede"
                       size="small"
                       className="bg-gray-800 w-full">
                       <MenuItem value="">Selecione rede</MenuItem>
-                      {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                      {redes.filter(r => !createCongregacaoId || r.congregacaoId === createCongregacaoId).map((r) => (
+                        <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </div>
@@ -355,9 +544,16 @@ export default function DiscipuladosPage() {
                     }}
                     className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                   />
+                  {createGenderError && <div className="text-red-500 text-xs mt-1">{createGenderError}</div>}
                   {showCreateDiscipuladoresDropdown && (
                     <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                       {users.filter(u => {
+                        // Se a rede selecionada for Kids, filtrar apenas membros do gênero feminino
+                        const selectedRede = redes.find(r => r.id === createRedeId);
+                        if (selectedRede?.isKids && u.gender !== 'FEMALE') {
+                          return false;
+                        }
+                        
                         const q = (createDiscipuladorQuery || '').toLowerCase();
                         if (!q) return true;
                         return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
@@ -395,16 +591,49 @@ export default function DiscipuladosPage() {
               <div className="space-y-3">
                 <div className="w-full">
                   <FormControl className="w-full">
+                    <InputLabel id="edit-congregacao-label" size='small'>Congregação</InputLabel>
+                    <Select
+                      labelId="edit-congregacao-label"
+                      value={editCongregacaoId ?? ''}
+                      onChange={(e) => {
+                        setEditCongregacaoId(e.target.value ? Number(e.target.value) : null);
+                        setEditRedeId(null);
+                      }}
+                      label="Congregação"
+                      size="small"
+                      className="bg-gray-800 w-full">
+                      <MenuItem value="">Selecione congregação</MenuItem>
+                      {congregacoes.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </div>
+
+                <div className="w-full">
+                  <FormControl className="w-full">
                     <InputLabel id="edit-rede-label" size='small'>Rede</InputLabel>
                     <Select
                       labelId="edit-rede-label"
                       value={editRedeId ?? ''}
-                      onChange={(e) => setEditRedeId(e.target.value ? Number(e.target.value) : null)}
+                      onChange={(e) => {
+                        const redeId = e.target.value ? Number(e.target.value) : null;
+                        setEditRedeId(redeId);
+                        // Auto-preencher congregação quando rede é selecionada
+                        if (redeId) {
+                          const rede = redes.find(r => r.id === redeId);
+                          if (rede?.congregacaoId) {
+                            setEditCongregacaoId(rede.congregacaoId);
+                          }
+                        }
+                      }}
                       label="Rede"
                       size="small"
                       className="bg-gray-800 w-full">
                       <MenuItem value="">Selecione rede</MenuItem>
-                      {redes.map((r) => (<MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>))}
+                      {redes.filter(r => !editCongregacaoId || r.congregacaoId === editCongregacaoId).map((r) => (
+                        <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </div>
@@ -423,9 +652,16 @@ export default function DiscipuladosPage() {
                     }}
                     className="border p-2 rounded w-full bg-gray-800 text-white h-10"
                   />
+                  {editGenderError && <div className="text-red-500 text-xs mt-1">{editGenderError}</div>}
                   {showEditDiscipuladoresDropdown && (
                     <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                       {users.filter(u => {
+                        // Se a rede selecionada for Kids, filtrar apenas membros do gênero feminino
+                        const selectedRede = redes.find(r => r.id === editRedeId);
+                        if (selectedRede?.isKids && u.gender !== 'FEMALE') {
+                          return false;
+                        }
+                        
                         const q = (editDiscipuladorQuery || '').toLowerCase();
                         if (!q) return true;
                         return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
