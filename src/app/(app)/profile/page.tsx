@@ -121,7 +121,7 @@ export default function ProfilePage() {
 
   const loadMembers = async () => {
     try {
-      const members = await memberService.list();
+      const members = await memberService.getAllMembers();
       setAllMembers(members);
     } catch (error) {
       console.error('Erro ao carregar membros:', error);

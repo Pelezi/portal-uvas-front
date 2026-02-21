@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Member } from '@/types';
 import { formatPhoneForDisplay } from '@/lib/phoneUtils';
 import { memberService } from '@/services/memberService';
-import { membersService } from '@/services/membersService';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { FiSearch, FiUserPlus, FiX, FiAlertCircle } from 'react-icons/fi';
@@ -56,7 +55,7 @@ export default function AddMemberChoiceModal({
   const loadAllMembers = async () => {
     setLoading(true);
     try {
-      const members = await memberService.list();
+      const members = await memberService.getAllMembers();
       setAllMembers(members);
       setFilteredMembers(members);
     } catch (err) {

@@ -5,7 +5,7 @@ import { celulasService } from '@/services/celulasService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
 import { congregacoesService } from '@/services/congregacoesService';
-import { membersService } from '@/services/membersService';
+import { memberService, MemberInput } from '@/services/memberService';
 import { Celula, Member, Discipulado, Rede, Congregacao, MemberFilters } from '@/types';
 import toast from 'react-hot-toast';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, Button, TextField } from '@mui/material';
@@ -91,7 +91,7 @@ export default function MembersManagementPage() {
         if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
         if (!filterMyDisciples) filters.all = true;
 
-        const m = await membersService.getAllMembers(filters);
+        const m = await memberService.getAllMembers(filters);
         setMembers(m);
       } catch (e) {
         console.error(e);
@@ -126,7 +126,7 @@ export default function MembersManagementPage() {
     try {
       if (modalMember) {
         // Editing
-        savedMember = await membersService.updateMember(modalMember.celulaId || 0, modalMember.id, data, photo, deletePhoto);
+        savedMember = await memberService.updateMember(modalMember.celulaId || 0, modalMember.id, data, photo, deletePhoto);
         toast.success('Membro atualizado');
       } else {
         // Creating - name is required
@@ -134,7 +134,7 @@ export default function MembersManagementPage() {
           toast.error('Nome é obrigatório');
           throw new Error('Nome é obrigatório');
         }
-        savedMember = await membersService.addMember(data.celulaId ?? null, data as Partial<Member> & { name: string }, photo);
+        savedMember = await memberService.create(data as MemberInput, photo);
         toast.success('Membro criado com sucesso');
       }
 
@@ -158,7 +158,7 @@ export default function MembersManagementPage() {
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
-      const refreshed = await membersService.getAllMembers(filters);
+      const refreshed = await memberService.getAllMembers(filters);
       setMembers(refreshed);
       setIsModalOpen(false);
       setModalMember(null);
@@ -171,7 +171,7 @@ export default function MembersManagementPage() {
 
       if (shouldSendInvite) {
         // Enviar em background sem bloquear
-        membersService.sendInvite(savedMember.id)
+        memberService.sendInvite(savedMember.id)
           .then((response) => {
             const message = response.whatsappSent 
               ? 'Convite enviado por email e WhatsApp' 
@@ -287,7 +287,7 @@ export default function MembersManagementPage() {
     const member = confirmingMember;
     if (!member) return;
     try {
-      await membersService.deleteMember(member.celulaId || 0, member.id);
+      await memberService.deleteMember(member.celulaId || 0, member.id);
       toast.success('Membro removido da célula');
 
       // Reload members
@@ -296,7 +296,7 @@ export default function MembersManagementPage() {
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
-      const refreshed = await membersService.getAllMembers(filters);
+      const refreshed = await memberService.getAllMembers(filters);
       setMembers(refreshed);
       setConfirmingMember(null);
     } catch (e) {

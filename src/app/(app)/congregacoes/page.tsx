@@ -75,13 +75,14 @@ export default function CongregacoesPage() {
   useEffect(() => {
     (async () => {
       try {
-        const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR' });
+        const u = await memberService.getAllMembers({ ministryType: 'PRESIDENT_PASTOR,PASTOR', all: true });
         setUsers(u || []);
         
         // Carregar lista de mulheres com cargo ministerial de tipo PASTOR ou acima para rede kids
-        const kidsLeadersList = await memberService.list({ 
+        const kidsLeadersList = await memberService.getAllMembers({ 
           ministryType: 'PRESIDENT_PASTOR,PASTOR',
-          gender: 'FEMALE'
+          gender: 'FEMALE',
+          all: true
         });
         setKidsLeaders(kidsLeadersList || []);
       } catch (err) {

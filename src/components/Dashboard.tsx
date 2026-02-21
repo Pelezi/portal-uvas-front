@@ -14,7 +14,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { membersService } from '@/services/membersService';
+import { memberService } from '@/services/memberService';
 import { redesService } from '@/services/redesService';
 import { congregacoesService } from '@/services/congregacoesService';
 import { discipuladosService } from '@/services/discipuladosService';
@@ -128,7 +128,7 @@ export default function Dashboard() {
           filters.congregacaoId = selectedCongregacaoId;
         }
         
-        const data = await membersService.getStatistics(filters);
+        const data = await memberService.getStatistics(filters);
         setStats(data);
       } catch (error) {
         console.error('Erro ao carregar estatísticas:', error);

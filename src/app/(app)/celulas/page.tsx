@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { celulasService } from '@/services/celulasService';
-import { membersService } from '@/services/membersService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
 import { congregacoesService } from '@/services/congregacoesService';
@@ -127,7 +126,7 @@ export default function CelulasPage() {
       if (authLoading) return;
       try {
         // Carregar apenas usuários que podem ser líderes (PRESIDENT_PASTOR, PASTOR, DISCIPULADOR, LEADER ou LEADER_IN_TRAINING)
-        const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING' });
+        const u = await memberService.getAllMembers({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING' });
         setMembers(u || []);
         
         // load discipulados for select
@@ -238,7 +237,7 @@ export default function CelulasPage() {
     setNewLeaderQuery('');
     setSelectedMemberIds([]);
     try {
-      const m = await membersService.getMembers(g.id);
+      const m = await memberService.getMembers(g.id);
       setAvailableMembers(m);
       
       // Se houver apenas um líder em treinamento, pré-seleciona ele como novo líder

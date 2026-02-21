@@ -105,7 +105,7 @@ export default function RedesPage() {
     (async () => {
       try { 
         // Carregar apenas usuários que podem ser pastores (PRESIDENT_PASTOR ou PASTOR)
-        const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR' }); 
+        const u = await memberService.getAllMembers({ ministryType: 'PRESIDENT_PASTOR,PASTOR', all: true }); 
         setUsers(u || []); 
       } catch (err) { console.error(err); }
       
@@ -153,6 +153,14 @@ export default function RedesPage() {
         toast.error('Selecione uma congregação');
         return;
       }
+      // Validar gênero do pastor para redes Kids
+      if (createIsKids && createPastorUserId) {
+        const selectedPastor = users.find(u => u.id === createPastorUserId);
+        if (selectedPastor && selectedPastor.gender !== 'FEMALE') {
+          toast.error('Redes Kids devem ter responsável do gênero feminino');
+          return;
+        }
+      }
       await redesService.createRede({ name: createName, congregacaoId: createCongregacaoId, pastorMemberId: createPastorUserId || undefined, isKids: createIsKids });
       setCreateName(''); setCreateCongregacaoId(null); setCreatePastorUserId(null); setCreatePastorQuery(''); setCreateIsKids(false); setShowCreateModal(false);
       await load();
@@ -178,6 +186,14 @@ export default function RedesPage() {
   const saveEditRede = async () => {
     try {
       if (!editingRedeId) throw new Error('Rede inválida');
+      // Validar gênero do pastor para redes Kids
+      if (editIsKids && editPastorId) {
+        const selectedPastor = users.find(u => u.id === editPastorId);
+        if (selectedPastor && selectedPastor.gender !== 'FEMALE') {
+          toast.error('Redes Kids devem ter responsável do gênero feminino');
+          return;
+        }
+      }
       await redesService.updateRede(editingRedeId, { name: editName, congregacaoId: editCongregacaoId || undefined, pastorMemberId: editPastorId || undefined, isKids: editIsKids });
       setEditRedeModalOpen(false);
       toast.success('Rede atualizada com sucesso!');
@@ -520,6 +536,8 @@ export default function RedesPage() {
                 {showCreatePastorsDropdown && (
                   <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {users.filter(u => {
+                      // Filtrar apenas mulheres se for rede Kids
+                      if (createIsKids && u.gender !== 'FEMALE') return false;
                       const q = (createPastorQuery || '').toLowerCase();
                       if (!q) return true;
                       return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
@@ -540,11 +558,28 @@ export default function RedesPage() {
                 <input 
                   type="checkbox" 
                   checked={createIsKids} 
-                  onChange={(e) => setCreateIsKids(e.target.checked)} 
+                  onChange={(e) => {
+                    const isKids = e.target.checked;
+                    setCreateIsKids(isKids);
+                    // Se marcar como Kids e o pastor selecionado não for feminino, limpar seleção
+                    if (isKids && createPastorUserId) {
+                      const selectedPastor = users.find(u => u.id === createPastorUserId);
+                      if (selectedPastor && selectedPastor.gender !== 'FEMALE') {
+                        setCreatePastorUserId(null);
+                        setCreatePastorName('');
+                        toast.loading('Redes Kids devem ter responsável do gênero feminino');
+                      }
+                    }
+                  }} 
                   className="w-4 h-4"
                 />
                 <span className="text-sm">Rede Kids</span>
               </label>
+              {createIsKids && (
+                <div className="text-xs text-yellow-400 -mt-2">
+                  ⚠️ Apenas membros do gênero feminino podem ser responsáveis por redes Kids
+                </div>
+              )}
 
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowCreateModal(false)} className="px-3 py-2 border rounded">Cancelar</button>
@@ -582,6 +617,8 @@ export default function RedesPage() {
                 {showEditPastorsDropdown && (
                   <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {users.filter(u => {
+                      // Filtrar apenas mulheres se for rede Kids
+                      if (editIsKids && u.gender !== 'FEMALE') return false;
                       const q = (editPastorQuery || '').toLowerCase();
                       if (!q) return true;
                       return (u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
@@ -602,11 +639,28 @@ export default function RedesPage() {
                 <input 
                   type="checkbox" 
                   checked={editIsKids} 
-                  onChange={(e) => setEditIsKids(e.target.checked)} 
+                  onChange={(e) => {
+                    const isKids = e.target.checked;
+                    setEditIsKids(isKids);
+                    // Se marcar como Kids e o pastor selecionado não for feminino, limpar seleção
+                    if (isKids && editPastorId) {
+                      const selectedPastor = users.find(u => u.id === editPastorId);
+                      if (selectedPastor && selectedPastor.gender !== 'FEMALE') {
+                        setEditPastorId(null);
+                        setEditPastorName('');
+                        toast.loading('Redes Kids devem ter responsável do gênero feminino');
+                      }
+                    }
+                  }} 
                   className="w-4 h-4"
                 />
                 <span className="text-sm">Rede Kids</span>
               </label>
+              {editIsKids && (
+                <div className="text-xs text-yellow-400 -mt-2">
+                  ⚠️ Apenas membros do gênero feminino podem ser responsáveis por redes Kids
+                </div>
+              )}
 
               <div className="flex justify-end gap-2">
                 <button onClick={() => setEditRedeModalOpen(false)} className="px-3 py-2 border rounded">Cancelar</button>

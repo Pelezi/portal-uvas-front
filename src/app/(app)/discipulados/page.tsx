@@ -103,7 +103,7 @@ export default function DiscipuladosPage() {
         const [c, r, u] = await Promise.all([
           congregacoesService.getCongregacoes(),
           redesService.getRedes({}),
-          memberService.list({})
+          memberService.getAllMembers({ all: true })
         ]);
         setCongregacoes(c || []);
         setRedes(r || []);

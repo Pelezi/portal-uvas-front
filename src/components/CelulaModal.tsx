@@ -183,9 +183,9 @@ export default function CelulaModal({
       }
       
       try {
-        const { membersService } = await import('@/services/membersService');
+        const { memberService } = await import('@/services/memberService');
         const { celulasService } = await import('@/services/celulasService');
-        const data = await membersService.getMembers(celula.id);
+        const data = await memberService.getMembers(celula.id);
         setCelulaMemberOptions(data || []);
         
         // Inicializar líderes em treinamento
@@ -202,7 +202,7 @@ export default function CelulaModal({
           if (selectedRede?.isKids) {
             
             // Buscar todos os discípulos do discipulador (célula Kids)
-            const allMembersData = await membersService.getAllMembers({ 
+            const allMembersData = await memberService.getAllMembers({ 
               discipleOfId: selectedDiscipulado.id,
               all: true 
             });
@@ -250,11 +250,11 @@ export default function CelulaModal({
       }
 
       try {
-        const { membersService } = await import('@/services/membersService');
+        const { memberService } = await import('@/services/memberService');
         const { celulasService } = await import('@/services/celulasService');
         
         // Buscar todos os discípulos do discipulador (célula Kids)
-        const allMembersData = await membersService.getAllMembers({ 
+        const allMembersData = await memberService.getAllMembers({ 
           discipleOfId: selectedDiscipulado.id,
           all: true 
         });

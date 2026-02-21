@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { celulasService } from "@/services/celulasService";
-import { membersService } from "@/services/membersService";
+import { memberService, MemberInput } from '@/services/memberService';
 import { reportsService } from "@/services/reportsService";
 import { discipuladosService } from "@/services/discipuladosService";
 import { redesService } from "@/services/redesService";
@@ -21,7 +21,7 @@ import {
   ThemeProvider,
 } from "@mui/material";
 import MemberModal from "@/components/MemberModal";
-import AddMemberChoiceModal from "@/components/AddMemberChoiceModal";
+import DuplicateMemberModal from "@/components/DuplicateMemberModal";
 import ModalConfirm from "@/components/ModalConfirm";
 import ReportReplaceModal from "@/components/ReportReplaceModal";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -56,10 +56,12 @@ export default function ReportPage() {
   const [reportType, setReportType] = useState<"CELULA" | "CULTO">("CELULA");
   const [pendingDate, setPendingDate] = useState<Dayjs | null>(null);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
-  const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showReplaceModal, setShowReplaceModal] = useState(false);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [duplicateMembers, setDuplicateMembers] = useState<Member[]>([]);
+  const [pendingMemberData, setPendingMemberData] = useState<{ data: Partial<Member>, photo?: File } | null>(null);
   const [weekReports, setWeekReports] = useState<WeekReport[]>([]);
   const [showWeeklyView, setShowWeeklyView] = useState(true);
   const [hasCheckedAutoRedirect, setHasCheckedAutoRedirect] = useState(false);
@@ -497,7 +499,7 @@ export default function ReportPage() {
   const reloadMembers = async () => {
     if (selectedGroup === null) return;
     try {
-      const m = await membersService.getMembers(selectedGroup);
+      const m = await memberService.getMembers(selectedGroup);
       setMembers(m);
     } catch (e) {
       console.error(e);
@@ -520,7 +522,7 @@ export default function ReportPage() {
 
     const loadMembers = async () => {
       try {
-        const m = await membersService.getMembers(selectedGroup);
+        const m = await memberService.getMembers(selectedGroup);
         setMembers(m);
         const map: Record<number, boolean> = {};
         m.forEach((mm: Member) => {
@@ -658,29 +660,102 @@ export default function ReportPage() {
     }
   };
 
-  const handleAddExistingMember = async (memberId: number) => {
-    if (!selectedGroup) return;
+  const checkForDuplicates = async (name: string, gender: string): Promise<Member[]> => {
     try {
-      await membersService.updateMember(selectedGroup, memberId, {
+      // Buscar membros com mesmo nome e gênero
+      const allMembers = await memberService.getAllMembers({ all: true });
+      const duplicates = allMembers.filter(
+        (m) => m.name.toLowerCase().trim() === name.toLowerCase().trim() && m.gender === gender
+      );
+      return duplicates;
+    } catch (err) {
+      console.error('Erro ao verificar duplicatas:', err);
+      return [];
+    }
+  };
+
+const handleAddExistingMember = async (member: Member) => {
+    if (!selectedGroup || !member) return;
+
+    try {
+      await memberService.updateMember(selectedGroup, member.id, {
         celulaId: selectedGroup,
+        isActive: true,
       });
+      toast.success(`${member.name} adicionado(a) à célula`);
+      setIsDuplicateModalOpen(false);
+      setDuplicateMembers([]);
+      setPendingMemberData(null);
       await reloadMembers();
     } catch (e) {
       console.error(e);
+      toast.error('Erro ao adicionar membro existente');
       throw e;
     }
   };
 
-  const handleCreateNewMember = () => {
-    setIsChoiceModalOpen(false);
-    setIsAddMemberModalOpen(true);
+  const handleCreateNewMemberAnyway = async () => {
+    if (!selectedGroup || !pendingMemberData) return;
+
+    setIsDuplicateModalOpen(false);
+    setDuplicateMembers([]);
+    
+    try {
+      const memberDataWithCelula = { ...pendingMemberData.data, celulaId: selectedGroup };
+      const created = await memberService.create(
+        memberDataWithCelula as MemberInput,
+        pendingMemberData.photo
+      );
+      toast.success("Membro adicionado com sucesso");
+
+      setPendingMemberData(null);
+      await reloadMembers();
+
+      // Enviar convite em background
+      if (pendingMemberData.data.hasSystemAccess && pendingMemberData.data.email && pendingMemberData.data.email.trim()) {
+        memberService
+          .sendInvite(created.id)
+          .then((response) => {
+            const message = response.whatsappSent
+              ? "Convite enviado por email e WhatsApp"
+              : "Convite enviado por email";
+            toast.success(message);
+          })
+          .catch((inviteErr: any) => {
+            console.error("Erro ao enviar convite:", inviteErr);
+            toast.error(
+              inviteErr.response?.data?.message ||
+                "Erro ao enviar convite, mas o membro foi salvo"
+            );
+          });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao criar membro');
+      throw err;
+    }
   };
 
   const handleSaveMember = async (data: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
     try {
-      const created = await membersService.addMember(
-        selectedGroup,
-        data as Partial<Member> & { name: string },
+      // Check for duplicates before creating
+      if (data.name && data.gender) {
+        const duplicates = await checkForDuplicates(data.name, data.gender);
+        
+        if (duplicates.length > 0) {
+          // Found duplicates - show confirmation modal
+          setDuplicateMembers(duplicates);
+          setPendingMemberData({ data, photo });
+          setIsDuplicateModalOpen(true);
+          setIsAddMemberModalOpen(false);
+          // Return a placeholder
+          return duplicates[0];
+        }
+      }
+
+      const memberDataWithCelula = { ...data, celulaId: selectedGroup };
+      const created = await memberService.create(
+        memberDataWithCelula as MemberInput,
         photo
       );
       toast.success("Membro adicionado com sucesso");
@@ -691,7 +766,7 @@ export default function ReportPage() {
       // Enviar convite em background após fechar o modal
       if (data.hasSystemAccess && data.email && data.email.trim()) {
         // Enviar em background sem bloquear
-        membersService
+        memberService
           .sendInvite(created.id)
           .then((response) => {
             const message = response.whatsappSent
@@ -1350,7 +1425,7 @@ export default function ReportPage() {
         <div className="flex items-center justify-between">
           <h3 className="font-medium">Membros</h3>
           <button
-            onClick={() => setIsChoiceModalOpen(true)}
+            onClick={() => setIsAddMemberModalOpen(true)}
             className="p-1 rounded hover:bg-gray-800"
             title="Adicionar membro"
             aria-label="Adicionar membro"
@@ -1417,12 +1492,17 @@ export default function ReportPage() {
         </button>
       </div>
 
-      <AddMemberChoiceModal
-        isOpen={isChoiceModalOpen}
-        onClose={() => setIsChoiceModalOpen(false)}
-        onCreateNew={handleCreateNewMember}
+      <DuplicateMemberModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => {
+          setIsDuplicateModalOpen(false);
+          setDuplicateMembers([]);
+          setPendingMemberData(null);
+        }}
+        duplicateMembers={duplicateMembers}
         onAddExisting={handleAddExistingMember}
-        currentCelulaId={selectedGroup}
+        onCreateNew={handleCreateNewMemberAnyway}
+        currentCelulaId={selectedGroup && selectedGroup > 0 ? selectedGroup : null}
       />
 
       <MemberModal

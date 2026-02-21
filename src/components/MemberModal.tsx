@@ -132,7 +132,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
           configService.getMinistries(),
           configService.getWinnerPaths(),
           configService.getRoles(),
-          memberService.list(),
+          memberService.getAllMembers(),
           congregacoesService.getCongregacoes(),
           redesService.getRedes(),
           discipuladosService.getDiscipulados(),
@@ -244,6 +244,9 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
           setCelulaId(initialCelulaId);
         }
       }
+    } else {
+      // Limpar estados quando o modal é fechado para evitar que dados antigos apareçam na próxima abertura
+      resetForm();
     }
   }, [member, isOpen, initialCelulaId]);
 

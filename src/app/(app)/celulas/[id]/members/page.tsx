@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, use } from 'react';
-import { membersService } from '@/services/membersService';
+import { memberService, MemberInput } from '@/services/memberService';
 import { celulasService } from '@/services/celulasService';
 import { Celula, Member } from '@/types';
 import toast from 'react-hot-toast';
@@ -9,7 +9,7 @@ import { ErrorMessages } from '@/lib/errorHandler';
 import Link from 'next/link';
 import MemberModal from '@/components/MemberModal';
 import MemberViewModal from '@/components/MemberViewModal';
-import AddMemberChoiceModal from '@/components/AddMemberChoiceModal';
+import DuplicateMemberModal from '@/components/DuplicateMemberModal';
 import { FiEdit2, FiTrash2, FiUserPlus } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -22,9 +22,11 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMember, setModalMember] = useState<Member | null>(null);
-  const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingMember, setViewingMember] = useState<Member | null>(null);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [duplicateMembers, setDuplicateMembers] = useState<Member[]>([]);
+  const [pendingMemberData, setPendingMemberData] = useState<{ data: Partial<Member>, photo?: File } | null>(null);
 
   const celulaId = parseInt(resolvedParams.id, 10);
 
@@ -32,7 +34,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     if (Number.isNaN(celulaId)) return;
     setLoading(true);
     try {
-      const m = await membersService.getMembers(celulaId);
+      const m = await memberService.getMembers(celulaId);
       setMembers(m);
     } catch (err) {
       console.error(err);
@@ -77,7 +79,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
 
   const openAddModal = () => {
     setModalMember(null);
-    setIsChoiceModalOpen(true);
+    setIsModalOpen(true);
   };
 
   const openViewModal = (member: Member) => {
@@ -85,21 +87,88 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     setIsViewModalOpen(true);
   };
 
-  const handleAddExistingMember = async (memberId: number) => {
+  const checkForDuplicates = async (name: string, gender: string): Promise<Member[]> => {
+    try {
+      // Buscar membros com mesmo nome e gênero
+      const allMembers = await memberService.getAllMembers({ all: true });
+      const duplicates = allMembers.filter(
+        (m) => m.name.toLowerCase().trim() === name.toLowerCase().trim() && m.gender === gender
+      );
+      return duplicates;
+    } catch (err) {
+      console.error('Erro ao verificar duplicatas:', err);
+      return [];
+    }
+  };
+
+  const handleAddExistingMember = async (member: Member) => {
+    if (!member) return;
+    
     try {
       // Atualizar o membro para adicionar à célula
-      await membersService.updateMember(celulaId, memberId, { celulaId });
+      await memberService.updateMember(celulaId, member.id, { celulaId, isActive: true });
+      toast.success(`${member.name} adicionado(a) à célula`);
+      setIsDuplicateModalOpen(false);
+      setDuplicateMembers([]);
+      setPendingMemberData(null);
       await load();
     } catch (err) {
       console.error(err);
+      toast.error('Erro ao adicionar membro existente');
       throw err;
     }
   };
 
-  const handleCreateNewMember = () => {
-    setIsChoiceModalOpen(false);
-    setModalMember(null);
-    setIsModalOpen(true);
+  const handleCreateNewMemberAnyway = async () => {
+    if (!pendingMemberData) return;
+
+    setIsDuplicateModalOpen(false);
+    setDuplicateMembers([]);
+    
+    // Continuar com a criação do novo membro
+    try {
+      const memberDataWithCelula = { ...pendingMemberData.data, celulaId };
+      const savedMember = await memberService.create(
+        memberDataWithCelula as MemberInput,
+        pendingMemberData.photo
+      );
+      toast.success('Membro adicionado com sucesso');
+
+      // Check if user edited their own photo
+      const isEditingSelf = user && savedMember.id === user.id;
+      const photoChanged = pendingMemberData.photo;
+      
+      if (isEditingSelf && photoChanged) {
+        window.location.reload();
+        return;
+      }
+
+      setPendingMemberData(null);
+      load();
+
+      // Enviar convite em background
+      const shouldSendInvite = pendingMemberData.data.hasSystemAccess && 
+        pendingMemberData.data.email && 
+        pendingMemberData.data.email.trim();
+
+      if (shouldSendInvite) {
+        memberService.sendInvite(savedMember.id)
+          .then((response) => {
+            const message = response.whatsappSent 
+              ? 'Convite enviado por email e WhatsApp' 
+              : 'Convite enviado por email';
+            toast.success(message);
+          })
+          .catch((inviteErr: any) => {
+            console.error('Erro ao enviar convite:', inviteErr);
+            toast.error(inviteErr.response?.data?.message || 'Erro ao enviar convite, mas o membro foi salvo');
+          });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(ErrorMessages.createMember(err));
+      throw err;
+    }
   };
 
   const handleModalSave = async (memberData: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
@@ -110,11 +179,28 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     try {
       if (modalMember?.id) {
         // Edit existing member
-        savedMember = await membersService.updateMember(celulaId, modalMember.id, memberData, photo, deletePhoto);
+        savedMember = await memberService.updateMember(celulaId, modalMember.id, memberData, photo, deletePhoto);
         toast.success('Membro atualizado com sucesso');
       } else {
-        // Create new member
-        savedMember = await membersService.addMember(celulaId, memberData as Partial<Member> & { name: string }, photo);
+        // Create new member - check for duplicates first
+        if (memberData.name && memberData.gender) {
+          const duplicates = await checkForDuplicates(memberData.name, memberData.gender);
+          
+          if (duplicates.length > 0) {
+            // Found duplicates - show confirmation modal
+            setDuplicateMembers(duplicates);
+            setPendingMemberData({ data: memberData, photo });
+            setIsDuplicateModalOpen(true);
+            setIsModalOpen(false);
+            setModalMember(null);
+            // Return a placeholder - the actual save will happen in handleAddExistingMember or handleCreateNewMemberAnyway
+            return duplicates[0];
+          }
+        }
+
+        // No duplicate found - proceed with creation
+        const memberDataWithCelula = { ...memberData, celulaId };
+        savedMember = await memberService.create(memberDataWithCelula as MemberInput, photo);
         toast.success('Membro adicionado com sucesso');
       }
 
@@ -144,7 +230,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
 
       if (shouldSendInvite) {
         // Enviar em background sem bloquear
-        membersService.sendInvite(savedMember.id)
+        memberService.sendInvite(savedMember.id)
           .then((response) => {
             const message = response.whatsappSent 
               ? 'Convite enviado por email e WhatsApp' 
@@ -168,7 +254,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   const remove = async (memberId: number) => {
     if (!confirm('Remover membro?')) return;
     try {
-      await membersService.deleteMember(celulaId, memberId);
+      await memberService.deleteMember(celulaId, memberId);
       toast.success('Membro removido com sucesso!');
       load();
     } catch (err) {
@@ -232,11 +318,16 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
         <FiUserPlus size={24} />
       </button>
 
-      <AddMemberChoiceModal
-        isOpen={isChoiceModalOpen}
-        onClose={() => setIsChoiceModalOpen(false)}
-        onCreateNew={handleCreateNewMember}
+      <DuplicateMemberModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => {
+          setIsDuplicateModalOpen(false);
+          setDuplicateMembers([]);
+          setPendingMemberData(null);
+        }}
+        duplicateMembers={duplicateMembers}
         onAddExisting={handleAddExistingMember}
+        onCreateNew={handleCreateNewMemberAnyway}
         currentCelulaId={celulaId}
       />
 
