@@ -11,8 +11,10 @@ import MemberModal from '@/components/MemberModal';
 import MemberViewModal from '@/components/MemberViewModal';
 import AddMemberChoiceModal from '@/components/AddMemberChoiceModal';
 import { FiEdit2, FiTrash2, FiUserPlus } from 'react-icons/fi';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CelulaMembersPage({ params }: { params: Promise<{ id: string }> }) {
+  const { user } = useAuth();
   const [celulas, setCelulas] = useState<Celula[]>([]);
   const resolvedParams = use(params);
   const [members, setMembers] = useState<Member[]>([]);
@@ -100,7 +102,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     setIsModalOpen(true);
   };
 
-  const handleModalSave = async (memberData: Partial<Member>): Promise<Member> => {
+  const handleModalSave = async (memberData: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
     let savedMember: Member;
     const wasCreating = !modalMember?.id;
     const wasEnablingAccess = !modalMember?.hasSystemAccess && memberData.hasSystemAccess;
@@ -108,12 +110,26 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     try {
       if (modalMember?.id) {
         // Edit existing member
-        savedMember = await membersService.updateMember(celulaId, modalMember.id, memberData);
+        savedMember = await membersService.updateMember(celulaId, modalMember.id, memberData, photo, deletePhoto);
         toast.success('Membro atualizado com sucesso');
       } else {
         // Create new member
-        savedMember = await membersService.addMember(celulaId, memberData as Partial<Member> & { name: string });
+        savedMember = await membersService.addMember(celulaId, memberData as Partial<Member> & { name: string }, photo);
         toast.success('Membro adicionado com sucesso');
+      }
+
+      // Check if user edited their own photo - if so, reload page to update sidebar
+      const isEditingSelf = user && savedMember.id === user.id;
+      const photoChanged = photo || deletePhoto;
+      
+      if (isEditingSelf && photoChanged) {
+        // Close modal first for better UX
+        setIsModalOpen(false);
+        setModalMember(null);
+        
+        // Reload page to update sidebar picture
+        window.location.reload();
+        return savedMember;
       }
 
       setIsModalOpen(false);

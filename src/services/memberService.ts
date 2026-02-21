@@ -99,8 +99,38 @@ export const memberService = {
     state?: string;
     // Social media
     socialMedia?: Array<{ type: string; username: string }>;
-  }): Promise<Member> {
-    const response = await apiClient.put('/members/profile/me', data);
+  }, photo?: File, deletePhoto?: boolean): Promise<Member> {
+    // Se houver foto, enviar como FormData
+    if (photo) {
+      const formData = new FormData();
+      formData.append('photo', photo);
+      
+      // Adicionar campos do membro ao FormData
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            formData.append(key, JSON.stringify(value));
+          } else if (typeof value === 'object') {
+            formData.append(key, JSON.stringify(value));
+          } else {
+            formData.append(key, String(value));
+          }
+        }
+      });
+      
+      const url = deletePhoto ? '/members/profile/me?deletePhoto=true' : '/members/profile/me';
+      
+      const response = await apiClient.put(url, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    }
+    
+    // Se não houver foto, enviar como JSON normal
+    const url = deletePhoto ? '/members/profile/me?deletePhoto=true' : '/members/profile/me';
+    const response = await apiClient.put(url, data);
     return response.data;
   },
 

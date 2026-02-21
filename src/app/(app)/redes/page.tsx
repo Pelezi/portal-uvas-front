@@ -11,7 +11,9 @@ import { celulasService } from '@/services/celulasService';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { FiTrash2, FiPlus } from 'react-icons/fi';
+import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import ModalConfirm from '@/components/ModalConfirm';
+import FilterModal, { FilterConfig } from '@/components/FilterModal';
 import { Celula, Discipulado, Member, Rede, Congregacao } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { createTheme, ThemeProvider, FormControl, InputLabel, Select, MenuItem, TextField, Autocomplete, Button } from '@mui/material';
@@ -24,6 +26,8 @@ export default function RedesPage() {
   const [loading, setLoading] = useState(false);
 
   // filters
+  const [filterName, setFilterName] = useState('');
+  const [filterMyNetworks, setFilterMyNetworks] = useState(true);
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterPastorId, setFilterPastorId] = useState<number | null>(null);
   const [filterIsKids, setFilterIsKids] = useState<boolean | null>(null);
@@ -62,11 +66,19 @@ export default function RedesPage() {
   const [showEditPastorsDropdown, setShowEditPastorsDropdown] = useState(false);
   const editPastorsTimeoutRef = useRef<number | null>(null);
   const [editingRedeId, setEditingRedeId] = useState<number | null>(null);
+  
+  // Filter modal state
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await redesService.getRedes();
+      const filters: { congregacaoId?: number; pastorMemberId?: number; all?: boolean } = {};
+      if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+      if (filterPastorId) filters.pastorMemberId = filterPastorId;
+      if (!filterMyNetworks) filters.all = true;
+      
+      const r = await redesService.getRedes(filters);
       setRedes(r || []);
       try {
         const allD = await discipuladosService.getDiscipulados();
@@ -87,6 +99,9 @@ export default function RedesPage() {
 
   useEffect(() => {
     load();
+  }, [filterCongregacaoId, filterPastorId, filterMyNetworks]);
+
+  useEffect(() => {
     (async () => {
       try { 
         // Carregar apenas usuários que podem ser pastores (PRESIDENT_PASTOR ou PASTOR)
@@ -97,58 +112,9 @@ export default function RedesPage() {
       try {
         const c = await congregacoesService.getCongregacoes();
         setCongregacoes(c || []);
-        
-        // Selecionar automaticamente a congregação do usuário
-        if (user) {
-          let userCongregacaoId: number | null = null;
-          
-          // Verificar se é pastor de governo de alguma congregação
-          if (user.congregacoesPastorGoverno && user.congregacoesPastorGoverno.length > 0) {
-            userCongregacaoId = user.congregacoesPastorGoverno[0].id;
-          }
-          // Ou vice presidente de alguma congregação
-          else if (user.congregacoesVicePresidente && user.congregacoesVicePresidente.length > 0) {
-            userCongregacaoId = user.congregacoesVicePresidente[0].id;
-          }
-          // Ou pastor de alguma rede (pegar a congregação da rede)
-          else if (user.redes && user.redes.length > 0) {
-            userCongregacaoId = user.redes[0].congregacaoId;
-          }
-          // Ou pertence a uma célula (líder, vice-líder ou membro)
-          else if ((user.permission?.celulaIds && user.permission.celulaIds.length > 0) || user.celulaId) {
-            try {
-              const allCelulas = await celulasService.getCelulas();
-              const firstCelulaId = user.permission?.celulaIds ? user.permission.celulaIds[0] : user.celulaId;
-              const firstCelula = allCelulas.find(cel => cel.id === firstCelulaId);
-              
-              if (firstCelula?.discipuladoId) {
-                console.log('Buscando discipulado com id: ', firstCelula.discipuladoId);
-                const allDiscipulados = await discipuladosService.getDiscipulados();
-                const discipulado = allDiscipulados.find(d => d.id === firstCelula.discipuladoId);
-                console.log('Discipulado encontrado: ', discipulado);
-                if (discipulado?.redeId) {
-                  console.log('Buscando rede com id: ', discipulado.redeId);
-                  const allRedes = await redesService.getRedes();
-                  const rede = allRedes.find(r => r.id === discipulado.redeId);
-                  console.log('Rede encontrada: ', rede);
-                  if (rede?.congregacaoId) {
-                    console.log('Congregação da rede: ', rede.congregacaoId);
-                    userCongregacaoId = rede.congregacaoId;
-                  }
-                }
-              }
-            } catch (err) {
-              console.error('Erro ao buscar congregação da célula:', err);
-            }
-          }
-          
-          if (userCongregacaoId) {
-            setFilterCongregacaoId(userCongregacaoId);
-          }
-        }
       } catch (err) { console.error(err); }
     })();
-  }, [user]);
+  }, []);
 
   const onToggleRede = async (r: Rede) => {
     try {
@@ -279,122 +245,176 @@ export default function RedesPage() {
   // IDs de usuários que são pastores de alguma rede
   const pastorUserIds = new Set<number>((redes || []).map(r => r.pastorMemberId).filter((id): id is number => id != null));
 
+  // Verificar se há filtros ativos
+  const hasActiveFilters = !!filterName || filterCongregacaoId !== null || filterPastorId !== null || filterIsKids !== null || filterMyNetworks;
+
+  // Limpar todos os filtros
+  const clearAllFilters = () => {
+    setFilterName('');
+    setFilterMyNetworks(false);
+    setFilterCongregacaoId(null);
+    setFilterPastorId(null);
+    setFilterIsKids(null);
+  };
+
+  // Configuração dos filtros para o modal
+  const filterConfigs: FilterConfig[] = [
+    {
+      type: 'switch',
+      label: '',
+      value: filterMyNetworks,
+      onChange: setFilterMyNetworks,
+      switchLabelOff: 'Todas as redes',
+      switchLabelOn: 'Minhas redes'
+    },
+    {
+      type: 'select',
+      label: 'Congregação',
+      value: filterCongregacaoId,
+      onChange: setFilterCongregacaoId,
+      options: congregacoes.map(c => ({ value: c.id, label: c.name }))
+    },
+    {
+      type: 'select',
+      label: 'Tipo',
+      value: filterIsKids === null ? null : filterIsKids ? 'true' : 'false',
+      onChange: (val) => {
+        if (val === null) {
+          setFilterIsKids(null);
+        } else {
+          setFilterIsKids(val === 'true');
+        }
+      },
+      options: [
+        { value: 'true', label: 'Apenas Kids' },
+        { value: 'false', label: 'Apenas Padrão' }
+      ]
+    },
+    {
+      type: 'select',
+      label: 'Pastor',
+      value: filterPastorId,
+      onChange: setFilterPastorId,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <Autocomplete
+            size="small"
+            fullWidth
+            options={users.filter(u => {
+              const filteredRedes = redes.filter(r => {
+                if (filterCongregacaoId && r.congregacaoId !== filterCongregacaoId) return false;
+                if (filterIsKids !== null && r.isKids !== filterIsKids) return false;
+                return true;
+              });
+              return filteredRedes.some(r => r.pastorMemberId === u.id);
+            })}
+            getOptionLabel={(option) => option.name}
+            value={users.find(u => u.id === filterPastorId) || null}
+            onChange={(event, newValue) => setFilterPastorId(newValue?.id || null)}
+            renderInput={(params) => (
+              <TextField 
+                {...params} 
+                placeholder="Selecione um pastor"
+                className="bg-gray-700" 
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                <div>
+                  <div className="text-sm font-medium">{option.name}</div>
+                  <div className="text-xs text-gray-400">{option.email}</div>
+                </div>
+              </li>
+            )}
+          />
+        </ThemeProvider>
+      )
+    },
+    {
+      type: 'select',
+      label: 'Nome',
+      value: filterName,
+      onChange: setFilterName,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Buscar por nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="bg-gray-700"
+          />
+        </ThemeProvider>
+      )
+    }
+  ];
+
   const muiTheme = createTheme({
     palette: {
       mode: 'dark',
     },
   });
 
+  const filteredRedes = redes
+    .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
+    .filter(r => !filterPastorId || r.pastorMemberId === filterPastorId)
+    .filter(r => filterIsKids === null || r.isKids === filterIsKids)
+    .filter(r => !filterName || r.name.toLowerCase().includes(filterName.toLowerCase()));
+
   return (
     <ThemeProvider theme={muiTheme}>
       <div>
         <h2 className="text-2xl font-semibold mb-4">Redes</h2>
 
-        <div className="mb-6">
-          <label className="block mb-2">Filtros</label>
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <div className="w-full sm:w-64">
-              <FormControl fullWidth size="small">
-                <InputLabel id="filter-congregacao-label">Congregação</InputLabel>
-                <Select
-                  labelId="filter-congregacao-label"
-                  value={filterCongregacaoId || ''}
-                  onChange={(e) => setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null)}
-                  label="Congregação"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todas as congregações</MenuItem>
-                  {congregacoes.map(c => (
-                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth size="small">
-                <InputLabel id="filter-kids-label">Tipo</InputLabel>
-                <Select
-                  labelId="filter-kids-label"
-                  value={filterIsKids === null ? '' : filterIsKids ? 'true' : 'false'}
-                  onChange={(e) => {
-                    const value = e.target.value as string;
-                    setFilterIsKids(value === '' ? null : value === 'true');
-                  }}
-                  label="Tipo"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  <MenuItem value="true">Apenas Kids</MenuItem>
-                  <MenuItem value="false">Apenas Padrão</MenuItem>
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-80">
-              <Autocomplete
-                size="small"
-                options={users.filter(u => {
-                  // Filtrar pastores baseado nas redes filtradas
-                  const filteredRedes = redes.filter(r => {
-                    if (filterCongregacaoId && r.congregacaoId !== filterCongregacaoId) return false;
-                    if (filterIsKids !== null && r.isKids !== filterIsKids) return false;
-                    return true;
-                  });
-                  
-                  // Mostrar apenas pastores das redes filtradas
-                  return filteredRedes.some(r => r.pastorMemberId === u.id);
-                })}
-                getOptionLabel={(option) => option.name}
-                value={users.find(u => u.id === filterPastorId) || null}
-                onChange={(event, newValue) => setFilterPastorId(newValue?.id || null)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Pastor" 
-                    placeholder="Selecione um pastor"
-                    className="bg-gray-800" 
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>
-                    <div>
-                      <div className="text-sm font-medium">{option.name}</div>
-                      <div className="text-xs text-gray-400">{option.email}</div>
-                    </div>
-                  </li>
-                )}
-              />
-            </div>
-
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => {
-                setFilterCongregacaoId(null);
-                setFilterPastorId(null);
-                setFilterIsKids(null);
-              }}
-              className="h-10 whitespace-nowrap"
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <TextField
+            size="small"
+            placeholder="Buscar por nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="w-64 bg-gray-800"
+            InputProps={{
+              className: 'bg-gray-800',
+            }}
+          />
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${
+              hasActiveFilters
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-700 hover:bg-gray-600 text-white'
+            }`}
+            title="Filtros"
+          >
+            <FaFilter className="h-5 w-5" />
+            <span>Filtros</span>
+            {hasActiveFilters && (
+              <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                {[filterName, filterCongregacaoId, filterPastorId, filterIsKids].filter(f => f !== null && f !== '').length + (filterMyNetworks ? 1 : 0)}
+              </span>
+            )}
+          </button>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+              title="Limpar filtros"
             >
-              Limpar Filtros
-            </Button>
-          </div>
+              <FaFilterCircleXmark className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
       <div>
-        <h3 className="font-medium mb-2">Lista de redes</h3>
+        <h3 className="font-medium mb-2">Exibindo {filteredRedes.length} de {redes.length} redes</h3>
         {loading ? (
           <div className="flex justify-center items-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         ) : (
         <ul className="space-y-2">
-          {redes
-            .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
-            .filter(r => !filterPastorId || r.pastorMemberId === filterPastorId)
-            .filter(r => filterIsKids === null || r.isKids === filterIsKids)
-            .map(r => (
+          {filteredRedes.map(r => (
               <li key={r.id} className={`border p-2 rounded ${!r.congregacaoId || !r.pastorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
                 <CollapsibleItem
                   isOpen={!!expandedRedes[r.id]}
@@ -596,6 +616,17 @@ export default function RedesPage() {
           </div>
         </div>
       )}
+
+      {/* FilterModal */}
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        onApply={() => {}}
+        onClear={clearAllFilters}
+        filters={filterConfigs}
+        hasActiveFilters={hasActiveFilters}
+      />
+
       {/* Confirm deletion modal */}
       <ModalConfirm
         open={confirmOpen}

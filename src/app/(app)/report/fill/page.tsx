@@ -71,7 +71,7 @@ export default function ReportPage() {
     Map<number, number>
   >(new Map());
   const [reloadTrigger, setReloadTrigger] = useState(0);
-  
+
   // Filtros
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
@@ -676,11 +676,12 @@ export default function ReportPage() {
     setIsAddMemberModalOpen(true);
   };
 
-  const handleSaveMember = async (data: Partial<Member>): Promise<Member> => {
+  const handleSaveMember = async (data: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
     try {
       const created = await membersService.addMember(
         selectedGroup,
         data as Partial<Member> & { name: string },
+        photo
       );
       toast.success("Membro adicionado com sucesso");
 
@@ -702,7 +703,7 @@ export default function ReportPage() {
             console.error("Erro ao enviar convite:", inviteErr);
             toast.error(
               inviteErr.response?.data?.message ||
-                "Erro ao enviar convite, mas o membro foi salvo",
+              "Erro ao enviar convite, mas o membro foi salvo",
             );
           });
       }
@@ -766,11 +767,11 @@ export default function ReportPage() {
           ...(isValid &&
             celula?.weekday !== null &&
             celula?.weekday !== undefined && {
-              backgroundColor: "rgba(96, 165, 250, 0.2)",
-              "&:hover": {
-                backgroundColor: "rgba(96, 165, 250, 0.3)",
-              },
-            }),
+            backgroundColor: "rgba(96, 165, 250, 0.2)",
+            "&:hover": {
+              backgroundColor: "rgba(96, 165, 250, 0.3)",
+            },
+          }),
         }}
       />
     );
@@ -779,13 +780,13 @@ export default function ReportPage() {
   // Função auxiliar para filtrar células baseado nos filtros selecionados
   const getFilteredCelulas = () => {
     const celulasToFilter = selectedGroup === -1 ? groups : allCelulas;
-    
+
     return celulasToFilter.filter(celula => {
       // Filtrar por discipulado
       if (filterDiscipuladoId && celula.discipuladoId !== filterDiscipuladoId) {
         return false;
       }
-      
+
       // Filtrar por rede
       if (filterRedeId) {
         const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
@@ -793,7 +794,7 @@ export default function ReportPage() {
           return false;
         }
       }
-      
+
       // Filtrar por congregação
       if (filterCongregacaoId) {
         const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
@@ -803,7 +804,7 @@ export default function ReportPage() {
           return false;
         }
       }
-      
+
       return true;
     });
   };
@@ -811,29 +812,29 @@ export default function ReportPage() {
   // Função auxiliar para agrupar células por Congregação, Rede e Discipulado
   const getCelulasGroupedByHierarchy = () => {
     const filteredCelulas = getFilteredCelulas();
-    
+
     // Agrupar por Congregação > Rede > Discipulado
-    const congregacoesMap = new Map<number, { 
-      congregacao: Congregacao; 
-      redesMap: Map<number, { 
-        rede: Rede; 
-        discipuladosMap: Map<number, { 
-          discipulado: Discipulado; 
-          celulas: Celula[] 
-        }> 
-      }> 
+    const congregacoesMap = new Map<number, {
+      congregacao: Congregacao;
+      redesMap: Map<number, {
+        rede: Rede;
+        discipuladosMap: Map<number, {
+          discipulado: Discipulado;
+          celulas: Celula[]
+        }>
+      }>
     }>();
-    
+
     filteredCelulas.forEach(celula => {
       const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
       if (!discipulado) return;
-      
+
       const rede = redes.find(r => r.id === discipulado.redeId);
       if (!rede) return;
-      
+
       const congregacao = congregacoes.find(c => c.id === rede.congregacaoId);
       if (!congregacao) return;
-      
+
       // Criar ou obter a entrada da Congregação
       if (!congregacoesMap.has(congregacao.id)) {
         congregacoesMap.set(congregacao.id, {
@@ -841,9 +842,9 @@ export default function ReportPage() {
           redesMap: new Map()
         });
       }
-      
+
       const congregacaoEntry = congregacoesMap.get(congregacao.id)!;
-      
+
       // Criar ou obter a entrada da Rede
       if (!congregacaoEntry.redesMap.has(rede.id)) {
         congregacaoEntry.redesMap.set(rede.id, {
@@ -851,9 +852,9 @@ export default function ReportPage() {
           discipuladosMap: new Map()
         });
       }
-      
+
       const redeEntry = congregacaoEntry.redesMap.get(rede.id)!;
-      
+
       // Criar ou obter a entrada do Discipulado
       if (!redeEntry.discipuladosMap.has(discipulado.id)) {
         redeEntry.discipuladosMap.set(discipulado.id, {
@@ -861,10 +862,10 @@ export default function ReportPage() {
           celulas: []
         });
       }
-      
+
       redeEntry.discipuladosMap.get(discipulado.id)!.celulas.push(celula);
     });
-    
+
     return congregacoesMap;
   };
 
@@ -957,7 +958,7 @@ export default function ReportPage() {
                       const redeId = e.target.value ? Number(e.target.value) : null;
                       setFilterRedeId(redeId);
                       setFilterDiscipuladoId(null);
-                      
+
                       // Auto-preencher congregação
                       if (redeId) {
                         const rede = redes.find(r => r.id === redeId);
@@ -983,7 +984,7 @@ export default function ReportPage() {
                     onChange={(e) => {
                       const discipuladoId = e.target.value ? Number(e.target.value) : null;
                       setFilterDiscipuladoId(discipuladoId);
-                      
+
                       // Auto-preencher rede e congregação
                       if (discipuladoId) {
                         const discipulado = discipulados.find(d => d.id === discipuladoId);
@@ -1067,11 +1068,10 @@ export default function ReportPage() {
                                         return (
                                           <div
                                             key={idx}
-                                            className={`p-3 rounded-lg border-2 transition-all ${
-                                              isComplete
-                                                ? "border-green-500 bg-green-900/20"
-                                                : "border-gray-600 bg-gray-800"
-                                            }`}
+                                            className={`p-3 rounded-lg border-2 transition-all ${isComplete
+                                              ? "border-green-500 bg-green-900/20"
+                                              : "border-gray-600 bg-gray-800"
+                                              }`}
                                           >
                                             <div className="flex justify-between items-start mb-2">
                                               <div className="flex-1">
@@ -1095,11 +1095,10 @@ export default function ReportPage() {
                                                     celula.id,
                                                   )
                                                 }
-                                                className={`p-2 rounded border-2 transition-all text-sm ${
-                                                  week.hasCelulaReport
-                                                    ? "border-green-500 bg-green-800/30 text-green-200"
-                                                    : "border-gray-600 hover:border-blue-500"
-                                                }`}
+                                                className={`p-2 rounded border-2 transition-all text-sm ${week.hasCelulaReport
+                                                  ? "border-green-500 bg-green-800/30 text-green-200"
+                                                  : "border-gray-600 hover:border-blue-500"
+                                                  }`}
                                               >
                                                 <div className="font-medium">Célula</div>
                                                 {week.hasCelulaReport && (
@@ -1116,11 +1115,10 @@ export default function ReportPage() {
                                                     celula.id,
                                                   )
                                                 }
-                                                className={`p-2 rounded border-2 transition-all text-sm ${
-                                                  week.hasCultoReport
-                                                    ? "border-green-500 bg-green-800/30 text-green-200"
-                                                    : "border-gray-600 hover:border-blue-500"
-                                                }`}
+                                                className={`p-2 rounded border-2 transition-all text-sm ${week.hasCultoReport
+                                                  ? "border-green-500 bg-green-800/30 text-green-200"
+                                                  : "border-gray-600 hover:border-blue-500"
+                                                  }`}
                                               >
                                                 <div className="font-medium">Culto</div>
                                                 {week.hasCultoReport && (
@@ -1168,11 +1166,10 @@ export default function ReportPage() {
               return (
                 <div
                   key={idx}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    isComplete
-                      ? "border-green-500 bg-green-900/20"
-                      : "border-gray-600 bg-gray-800"
-                  }`}
+                  className={`p-4 rounded-lg border-2 transition-all ${isComplete
+                    ? "border-green-500 bg-green-900/20"
+                    : "border-gray-600 bg-gray-800"
+                    }`}
                 >
                   <div className="flex justify-between items-center mb-3">
                     <div>
@@ -1198,11 +1195,10 @@ export default function ReportPage() {
                           week.endDate,
                         )
                       }
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        week.hasCelulaReport
-                          ? "border-green-500 bg-green-800/30 text-green-200"
-                          : "border-gray-600 hover:border-blue-500"
-                      }`}
+                      className={`p-3 rounded-lg border-2 transition-all ${week.hasCelulaReport
+                        ? "border-green-500 bg-green-800/30 text-green-200"
+                        : "border-gray-600 hover:border-blue-500"
+                        }`}
                     >
                       <div className="font-medium">Célula</div>
                       {week.hasCelulaReport && (
@@ -1218,11 +1214,10 @@ export default function ReportPage() {
                           week.endDate,
                         )
                       }
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        week.hasCultoReport
-                          ? "border-green-500 bg-green-800/30 text-green-200"
-                          : "border-gray-600 hover:border-blue-500"
-                      }`}
+                      className={`p-3 rounded-lg border-2 transition-all ${week.hasCultoReport
+                        ? "border-green-500 bg-green-800/30 text-green-200"
+                        : "border-gray-600 hover:border-blue-500"
+                        }`}
                     >
                       <div className="font-medium">Culto</div>
                       {week.hasCultoReport && (
@@ -1259,7 +1254,17 @@ export default function ReportPage() {
     <div>
       <div className="mb-4 flex items-center gap-4">
         <button
-          onClick={() => setShowWeeklyView(true)}
+          onClick={() => {
+            setShowWeeklyView(true)
+
+            if (groups.length === 1) {
+              setSelectedGroup(groups[0].id);
+              setSelectedCelula(groups[0]);
+            } else {
+              setSelectedGroup(-1);
+              setSelectedCelula(null);
+            }
+          }}
           className="text-blue-600 hover:underline flex items-center gap-2"
         >
           ← Voltar para visão semanal
@@ -1365,11 +1370,10 @@ export default function ReportPage() {
                 <button
                   type="button"
                   onClick={() => togglePresent(m.id)}
-                  className={`w-full text-left flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                    selected
-                      ? "border-green-500 bg-green-900/20"
-                      : "border-gray-700"
-                  } hover:shadow-sm`}
+                  className={`w-full text-left flex items-center justify-between p-3 rounded-lg border transition-colors ${selected
+                    ? "border-green-500 bg-green-900/20"
+                    : "border-gray-700"
+                    } hover:shadow-sm`}
                   aria-pressed={selected}
                 >
                   <span className="truncate">{m.name}</span>

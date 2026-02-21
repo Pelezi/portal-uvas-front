@@ -3,10 +3,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Collapse from '@/components/Collapse';
 import CollapsibleItem from '@/components/CollapsibleItem';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
 import { congregacoesService } from '@/services/congregacoesService';
@@ -15,8 +11,10 @@ import { celulasService } from '@/services/celulasService';
 import { Discipulado, Celula, Rede, Member, Congregacao } from '@/types';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
-import { createTheme, ThemeProvider, Autocomplete, TextField, Button } from '@mui/material';
+import { createTheme, ThemeProvider, Autocomplete, TextField, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { FiTrash2, FiPlus } from 'react-icons/fi';
+import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
+import FilterModal, { FilterConfig } from '@/components/FilterModal';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function DiscipuladosPage() {
@@ -29,6 +27,8 @@ export default function DiscipuladosPage() {
   const [users, setUsers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   // filters
+  const [filterName, setFilterName] = useState('');
+  const [filterMyDiscipleships, setFilterMyDiscipleships] = useState(true);
   const [filterDiscipuladorId, setFilterDiscipuladorId] = useState<number | null>(null);
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
@@ -39,6 +39,7 @@ export default function DiscipuladosPage() {
   const [createDiscipuladorName, setCreateDiscipuladorName] = useState('');
   const [createCongregacaoId, setCreateCongregacaoId] = useState<number | null>(null);
   const [createRedeId, setCreateRedeId] = useState<number | null>(null);
+  const [createDiscipleIds, setCreateDiscipleIds] = useState<number[]>([]);
   const createDiscipuladorDropdownRef = useRef<HTMLDivElement>(null);
   const createDiscipuladorTimeoutRef = useRef<number | null>(null);
   const [showCreateDiscipuladoresDropdown, setShowCreateDiscipuladoresDropdown] = useState(false);
@@ -54,18 +55,23 @@ export default function DiscipuladosPage() {
   const [editDiscipuladoId, setEditDiscipuladoId] = useState<number | null>(null);
   const [editCongregacaoId, setEditCongregacaoId] = useState<number | null>(null);
   const [editRedeId, setEditRedeId] = useState<number | null>(null);
+  const [editDiscipleIds, setEditDiscipleIds] = useState<number[]>([]);
 
   // Kids validation
   const [createGenderError, setCreateGenderError] = useState('');
   const [editGenderError, setEditGenderError] = useState('');
+  
+  // Filter modal state
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const filters: { congregacaoId?: number; redeId?: number; discipuladorMemberId?: number } = {};
+      const filters: { congregacaoId?: number; redeId?: number; discipuladorMemberId?: number; all?: boolean } = {};
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterDiscipuladorId) filters.discipuladorMemberId = filterDiscipuladorId;
+      if (!filterMyDiscipleships) filters.all = true;
       
       const d = await discipuladosService.getDiscipulados(filters);
       setList(d || []);
@@ -89,81 +95,23 @@ export default function DiscipuladosPage() {
     }
   };
 
-  useEffect(() => { load(); }, [filterCongregacaoId, filterRedeId, filterDiscipuladorId]);
+  useEffect(() => { load(); }, [filterCongregacaoId, filterRedeId, filterDiscipuladorId, filterMyDiscipleships]);
 
   useEffect(() => {
     const loadAux = async () => {
       try {
         const [c, r, u] = await Promise.all([
           congregacoesService.getCongregacoes(),
-          redesService.getRedes(),
-          memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR' })
+          redesService.getRedes({}),
+          memberService.list({})
         ]);
         setCongregacoes(c || []);
         setRedes(r || []);
         setUsers(u || []);
-        
-        // Se o usuário é pastor de alguma rede, selecionar automaticamente a primeira
-        if (user && user.permission?.redeIds && user.permission.redeIds.length > 0) {
-          const firstRedeId = user.permission.redeIds[0];
-          setFilterRedeId(firstRedeId);
-          
-          // Também selecionar a congregação da rede
-          const firstRede = r?.find(rede => rede.id === firstRedeId);
-          if (firstRede?.congregacaoId) {
-            setFilterCongregacaoId(firstRede.congregacaoId);
-          }
-        }
-        // Se o usuário não tem rede direta mas tem discipulado, selecionar automaticamente
-        else if (user && user.permission?.discipuladoIds && user.permission.discipuladoIds.length > 0) {
-          const firstDiscipuladoId = user.permission.discipuladoIds[0];
-          // Buscar o discipulado para pegar sua rede
-          try {
-            const allDiscipulados = await discipuladosService.getDiscipulados();
-            const discipulado = allDiscipulados.find(d => d.id === firstDiscipuladoId);
-            
-            if (discipulado?.redeId) {
-              setFilterRedeId(discipulado.redeId);
-              
-              // Também selecionar a congregação da rede
-              const rede = r?.find(rede => rede.id === discipulado.redeId);
-              if (rede?.congregacaoId) {
-                setFilterCongregacaoId(rede.congregacaoId);
-              }
-            }
-          } catch (err) {
-            console.error('Erro ao buscar rede do discipulado:', err);
-          }
-        }
-        // Se o usuário pertence a uma célula (líder, vice-líder ou membro)
-        else if (user && ((user.permission?.celulaIds && user.permission.celulaIds.length > 0) || user.celulaId)) {
-          try {
-            const allCelulas = await celulasService.getCelulas();
-            const firstCelulaId = user.permission?.celulaIds ? user.permission?.celulaIds[0] : user.celulaId;
-            const firstCelula = allCelulas.find(cel => cel.id === firstCelulaId);
-            
-            if (firstCelula?.discipuladoId) {
-              const allDiscipulados = await discipuladosService.getDiscipulados();
-              const discipulado = allDiscipulados.find(d => d.id === firstCelula.discipuladoId);
-              
-              if (discipulado?.redeId) {
-                setFilterRedeId(discipulado.redeId);
-                
-                // Também selecionar a congregação da rede
-                const rede = r?.find(rede => rede.id === discipulado.redeId);
-                if (rede?.congregacaoId) {
-                  setFilterCongregacaoId(rede.congregacaoId);
-                }
-              }
-            }
-          } catch (err) {
-            console.error('Erro ao buscar rede da célula:', err);
-          }
-        }
       } catch (err) { console.error('failed loading congregacoes/redes/users', err); }
     };
     loadAux();
-  }, [user]);
+  }, []);
 
   // Validar gênero quando rede Kids é selecionada no modo de criação
   useEffect(() => {
@@ -216,8 +164,13 @@ export default function DiscipuladosPage() {
       if (!createRedeId) throw new Error('Selecione uma rede');
       const discipulador = users.find(u => u.id === createDiscipuladorId);
       const nameForApi = discipulador ? discipulador.name : 'Sem discipulador';
-      const created = await discipuladosService.createDiscipulado({ name: nameForApi, redeId: createRedeId, discipuladorMemberId: createDiscipuladorId || undefined });
-      setCreateDiscipuladorId(null); setCreateDiscipuladorName(''); setCreateRedeId(null); setCreateDiscipuladoModalOpen(false);
+      const created = await discipuladosService.createDiscipulado({ 
+        name: nameForApi, 
+        redeId: createRedeId, 
+        discipuladorMemberId: createDiscipuladorId || undefined,
+        discipleIds: createDiscipleIds.length > 0 ? createDiscipleIds : undefined
+      });
+      setCreateDiscipuladorId(null); setCreateDiscipuladorName(''); setCreateRedeId(null); setCreateDiscipleIds([]); setCreateDiscipuladoModalOpen(false);
       toast.success('Discipulado criado');
       await load();
       // load celulas for created discipulado and update counts
@@ -238,6 +191,7 @@ export default function DiscipuladosPage() {
     setEditDiscipuladorName(getUserName(d.discipuladorMemberId));
     setEditDiscipuladorQuery('');
     setShowEditDiscipuladoresDropdown(false);
+    setEditDiscipleIds(d.disciples?.map(disc => disc.member.id) || []);
     // Encontrar congregação através da rede
     if (d.redeId) {
       const rede = redes.find(r => r.id === d.redeId);
@@ -254,7 +208,12 @@ export default function DiscipuladosPage() {
       if (!editRedeId) throw new Error('Selecione uma rede');
       const discipulador = users.find(u => u.id === editDiscipuladorId);
       const nameForApi = discipulador ? discipulador.name : 'Sem discipulador';
-      await discipuladosService.updateDiscipulado(editDiscipuladoId, { name: nameForApi, redeId: editRedeId, discipuladorMemberId: editDiscipuladorId || undefined });
+      await discipuladosService.updateDiscipulado(editDiscipuladoId, { 
+        name: nameForApi, 
+        redeId: editRedeId, 
+        discipuladorMemberId: editDiscipuladorId || undefined,
+        discipleIds: editDiscipleIds.length > 0 ? editDiscipleIds : undefined
+      });
       setEditDiscipuladoModalOpen(false);
       toast.success('Discipulado atualizado');
       await load();
@@ -312,11 +271,115 @@ export default function DiscipuladosPage() {
   // users that are discipuladores in the current list
   const discipuladorIds = new Set<number>(list.map(d => d.discipuladorMemberId).filter(Boolean) as number[]);
 
+  // Verificar se há filtros ativos
+  const hasActiveFilters = !!filterName || filterDiscipuladorId !== null || filterCongregacaoId !== null || filterRedeId !== null || filterMyDiscipleships;
+
+  // Limpar todos os filtros
+  const clearAllFilters = () => {
+    setFilterName('');
+    setFilterMyDiscipleships(false);
+    setFilterDiscipuladorId(null);
+    setFilterCongregacaoId(null);
+    setFilterRedeId(null);
+  };
+
+  // Configuração dos filtros para o modal
+  const filterConfigs: FilterConfig[] = [
+    {
+      type: 'switch',
+      label: '',
+      value: filterMyDiscipleships,
+      onChange: setFilterMyDiscipleships,
+      switchLabelOff: 'Todos os discipulados',
+      switchLabelOn: 'Meus discipulados'
+    },
+    {
+      type: 'select',
+      label: 'Congregação',
+      value: filterCongregacaoId,
+      onChange: (val) => {
+        setFilterCongregacaoId(val);
+        setFilterRedeId(null);
+      },
+      options: congregacoes.map(c => ({ value: c.id, label: c.name }))
+    },
+    {
+      type: 'select',
+      label: 'Rede',
+      value: filterRedeId,
+      onChange: (val) => {
+        setFilterRedeId(val);
+        if (val) {
+          const rede = redes.find(r => r.id === val);
+          if (rede?.congregacaoId) {
+            setFilterCongregacaoId(rede.congregacaoId);
+          }
+        }
+      },
+      options: redes
+        .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
+        .map(r => ({ value: r.id, label: r.name }))
+    },
+    {
+      type: 'select',
+      label: 'Discipulador',
+      value: filterDiscipuladorId,
+      onChange: setFilterDiscipuladorId,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <Autocomplete
+            size="small"
+            fullWidth
+            options={users.filter(u => discipuladorIds.has(u.id))}
+            getOptionLabel={(option) => option.name}
+            value={users.find(u => u.id === filterDiscipuladorId) || null}
+            onChange={(event, newValue) => setFilterDiscipuladorId(newValue?.id || null)}
+            renderInput={(params) => (
+              <TextField 
+                {...params} 
+                placeholder="Selecione um discipulador"
+                className="bg-gray-700" 
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                <div>
+                  <div className="text-sm font-medium">{option.name}</div>
+                  <div className="text-xs text-gray-400">{option.email}</div>
+                </div>
+              </li>
+            )}
+          />
+        </ThemeProvider>
+      )
+    },
+    {
+      type: 'select',
+      label: 'Nome',
+      value: filterName,
+      onChange: setFilterName,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Buscar por nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="bg-gray-700"
+          />
+        </ThemeProvider>
+      )
+    }
+  ];
+
   const muiTheme = createTheme({
     palette: {
       mode: 'dark',
     },
   });
+
+  const filteredList = list.filter(d => !filterName || d.discipulador?.name.toLowerCase().includes(filterName.toLowerCase()));
 
   return (
     <>
@@ -324,108 +387,54 @@ export default function DiscipuladosPage() {
         <div>
           <h2 className="text-2xl font-semibold mb-4">Discipulados</h2>
 
-          <div className="mb-6">
-            <label className="block mb-2">Filtros</label>
-            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-
-              <FormControl className="w-48">
-                <InputLabel id="congregacao-filter-label" size='small'>Congregação</InputLabel>
-                <Select
-                  labelId="congregacao-filter-label"
-                  value={filterCongregacaoId ?? ''}
-                  onChange={(e) => {
-                    setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null);
-                    setFilterRedeId(null);
-                  }}
-                  label="Congregação"
-                  size="small"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todas congregações</MenuItem>
-                  {congregacoes.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl className="w-48">
-                <InputLabel id="rede-filter-label" size='small'>Rede</InputLabel>
-                <Select
-                  labelId="rede-filter-label"
-                  value={filterRedeId ?? ''}
-                  onChange={(e) => {
-                    const redeId = e.target.value ? Number(e.target.value) : null;
-                    setFilterRedeId(redeId);
-                    
-                    // Auto-preencher congregação
-                    if (redeId) {
-                      const rede = redes.find(r => r.id === redeId);
-                      if (rede?.congregacaoId) {
-                        setFilterCongregacaoId(rede.congregacaoId);
-                      }
-                    }
-                  }}
-                  label="Rede"
-                  size="small"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todas redes</MenuItem>
-                  {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map((r) => (
-                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <div className="w-full sm:w-80">
-                <Autocomplete
-                  size="small"
-                  options={users.filter(u => discipuladorIds.has(u.id))}
-                  getOptionLabel={(option) => option.name}
-                  value={users.find(u => u.id === filterDiscipuladorId) || null}
-                  onChange={(event, newValue) => setFilterDiscipuladorId(newValue?.id || null)}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label="Discipulador" 
-                      placeholder="Selecione um discipulador"
-                      className="bg-gray-800" 
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <li {...props} key={option.id}>
-                      <div>
-                        <div className="text-sm font-medium">{option.name}</div>
-                        <div className="text-xs text-gray-400">{option.email}</div>
-                      </div>
-                    </li>
-                  )}
-                />
-              </div>
-
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => {
-                  setFilterDiscipuladorId(null);
-                  setFilterCongregacaoId(null);
-                  setFilterRedeId(null);
-                }}
-                className="h-10 whitespace-nowrap"
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <TextField
+              size="small"
+              placeholder="Buscar por nome"
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              className="w-64 bg-gray-800"
+              InputProps={{
+                className: 'bg-gray-800',
+              }}
+            />
+            <button
+              onClick={() => setIsFilterModalOpen(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${
+                hasActiveFilters
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+              }`}
+              title="Filtros"
+            >
+              <FaFilter className="h-5 w-5" />
+              <span>Filtros</span>
+              {hasActiveFilters && (
+                <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                  {[filterName, filterCongregacaoId, filterRedeId, filterDiscipuladorId].filter(f => f !== null && f !== '').length + (filterMyDiscipleships ? 1 : 0)}
+                </span>
+              )}
+            </button>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                title="Limpar filtros"
               >
-                Limpar Filtros
-              </Button>
-            </div>
+                <FaFilterCircleXmark className="h-5 w-5" />
+              </button>
+            )}
           </div>
 
           <div>
-            <h3 className="font-medium mb-2">Lista de discipulados</h3>
+            <h3 className="font-medium mb-2">Exibindo {filteredList.length} de {list.length} discipulados</h3>
             {loading ? (
               <div className="flex justify-center items-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
             ) : (
             <ul className="space-y-2">
-              {list.map(d => (
+              {filteredList.map(d => (
                   <li key={d.id} className={`border p-2 rounded ${!d.discipuladorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
                     <CollapsibleItem
                       isOpen={!!expandedDiscipulados[d.id]}
@@ -571,6 +580,59 @@ export default function DiscipuladosPage() {
                   )}
                 </div>
 
+                {/* Discípulas - apenas para redes Kids */}
+                {redes.find(r => r.id === createRedeId)?.isKids && (
+                  <div className="w-full">
+                    <FormControl className="w-full">
+                      <InputLabel id="create-disciples-label" size='small'>Discípulas</InputLabel>
+                      <Select
+                        labelId="create-disciples-label"
+                        multiple
+                        value={createDiscipleIds}
+                        onChange={(e) => {
+                          const value = e.target.value as number[];
+                          setCreateDiscipleIds(value);
+                        }}
+                        label="Discípulas"
+                        size="small"
+                        className="bg-gray-800 w-full"
+                        renderValue={(selected) => {
+                          const selectedMembers = users.filter(m => selected.includes(m.id));
+                          return selectedMembers.map(m => m.name).join(', ');
+                        }}
+                      >
+                        {users
+                          .filter(u => {
+                            // Apenas membros femininos
+                            if (u.gender !== 'FEMALE') return false;
+                            // Verificar se já está associada a outro discipulado Kids
+                            const alreadyInKidsDiscipulado = list.some(d => {
+                              const rede = redes.find(r => r.id === d.redeId);
+                              return rede?.isKids && d.disciples?.some(disc => disc.member.id === u.id);
+                            });
+                            return !alreadyInKidsDiscipulado;
+                          })
+                          .map((user) => (
+                            <MenuItem key={user.id} value={user.id}>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={createDiscipleIds.includes(user.id)}
+                                  readOnly
+                                  className="h-4 w-4"
+                                />
+                                <span>{user.name}</span>
+                              </div>
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Apenas membros femininos que não estejam em outro discipulado Kids
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setCreateDiscipuladoModalOpen(false)} className="px-3 py-2 border rounded">Cancelar</button>
                   <button onClick={create} className="px-3 py-2 bg-green-600 text-white rounded">Criar discipulado</button>
@@ -678,6 +740,60 @@ export default function DiscipuladosPage() {
                   )}
                 </div>
 
+                {/* Discípulas - apenas para redes Kids */}
+                {redes.find(r => r.id === editRedeId)?.isKids && (
+                  <div className="w-full">
+                    <FormControl className="w-full">
+                      <InputLabel id="edit-disciples-label" size='small'>Discípulas</InputLabel>
+                      <Select
+                        labelId="edit-disciples-label"
+                        multiple
+                        value={editDiscipleIds}
+                        onChange={(e) => {
+                          const value = e.target.value as number[];
+                          setEditDiscipleIds(value);
+                        }}
+                        label="Discípulas"
+                        size="small"
+                        className="bg-gray-800 w-full"
+                        renderValue={(selected) => {
+                          const selectedMembers = users.filter(m => selected.includes(m.id));
+                          return selectedMembers.map(m => m.name).join(', ');
+                        }}
+                      >
+                        {users
+                          .filter(u => {
+                            // Apenas membros femininos
+                            if (u.gender !== 'FEMALE') return false;
+                            // Verificar se já está associada a outro discipulado Kids (exceto o atual)
+                            const alreadyInKidsDiscipulado = list.some(d => {
+                              if (d.id === editDiscipuladoId) return false; // Ignorar o discipulado atual
+                              const rede = redes.find(r => r.id === d.redeId);
+                              return rede?.isKids && d.disciples?.some(disc => disc.member.id === u.id);
+                            });
+                            return !alreadyInKidsDiscipulado;
+                          })
+                          .map((user) => (
+                            <MenuItem key={user.id} value={user.id}>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={editDiscipleIds.includes(user.id)}
+                                  readOnly
+                                  className="h-4 w-4"
+                                />
+                                <span>{user.name}</span>
+                              </div>
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Apenas membros femininos que não estejam em outro discipulado Kids
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setEditDiscipuladoModalOpen(false)} className="px-3 py-2 border rounded">Cancelar</button>
                   <button onClick={saveEdit} className="px-3 py-2 bg-green-600 text-white rounded">Salvar</button>
@@ -686,6 +802,16 @@ export default function DiscipuladosPage() {
             </div>
           </div>
         )}
+
+        {/* FilterModal */}
+        <FilterModal
+          isOpen={isFilterModalOpen}
+          onClose={() => setIsFilterModalOpen(false)}
+          onApply={() => {}}
+          onClear={clearAllFilters}
+          filters={filterConfigs}
+          hasActiveFilters={hasActiveFilters}
+        />
       </ThemeProvider>
     </>
   );

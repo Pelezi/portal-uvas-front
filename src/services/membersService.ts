@@ -2,7 +2,7 @@ import api from '@/lib/apiClient';
 import { Member } from '@/types';
 
 export const membersService = {
-  getAllMembers: async (filters?: { celulaId?: number | null; discipuladoId?: number; redeId?: number; congregacaoId?: number }): Promise<Member[]> => {
+  getAllMembers: async (filters?: { celulaId?: number | null; discipuladoId?: number; redeId?: number; congregacaoId?: number; discipleOfId?: number; all?: boolean }): Promise<Member[]> => {
     const params = new URLSearchParams();
     // celulaId = 0 significa "sem célula"
     if (filters?.celulaId !== undefined && filters?.celulaId !== null) {
@@ -11,6 +11,8 @@ export const membersService = {
     if (filters?.discipuladoId) params.append('discipuladoId', filters.discipuladoId.toString());
     if (filters?.redeId) params.append('redeId', filters.redeId.toString());
     if (filters?.congregacaoId) params.append('congregacaoId', filters.congregacaoId.toString());
+    if (filters?.discipleOfId) params.append('discipleOfId', filters.discipleOfId.toString());
+    if (filters?.all !== undefined) params.append('all', filters.all.toString());
     const queryString = params.toString();
     const res = await api.get<Member[]>(`/members${queryString ? `?${queryString}` : ''}`);
     return res.data;
@@ -21,7 +23,36 @@ export const membersService = {
     return res.data;
   },
 
-  addMember: async (celulaId: number | null, data: Partial<Member> & { name: string }): Promise<Member> => {
+  addMember: async (celulaId: number | null, data: Partial<Member> & { name: string }, photo?: File): Promise<Member> => {
+    // Se houver foto, enviar como FormData
+    if (photo) {
+      const formData = new FormData();
+      formData.append('photo', photo);
+      
+      // Adicionar campos do membro ao FormData
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            // Para arrays (como socialMedia, roleIds)
+            formData.append(key, JSON.stringify(value));
+          } else if (typeof value === 'object') {
+            formData.append(key, JSON.stringify(value));
+          } else {
+            formData.append(key, String(value));
+          }
+        }
+      });
+      
+      const endpoint = celulaId === null ? '/members' : `/celulas/${celulaId}/members`;
+      const res = await api.post<Member>(endpoint, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return res.data;
+    }
+    
+    // Se não houver foto, enviar como JSON normal
     if (celulaId === null) {
       const res = await api.post<Member>(`/members`, data);
       return res.data;
@@ -29,9 +60,41 @@ export const membersService = {
     const res = await api.post<Member>(`/celulas/${celulaId}/members`, data);
     return res.data;
   },
-  updateMember: async (celulaId: number, memberId: number, data: Partial<Member>): Promise<Member> => {
-    // backend exposes member update at /members/:memberId
-    const res = await api.put<Member>(`/members/${memberId}`, data);
+  updateMember: async (celulaId: number, memberId: number, data: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
+    // Se houver foto, enviar como FormData
+    if (photo) {
+      const formData = new FormData();
+      formData.append('photo', photo);
+      
+      // Adicionar campos do membro ao FormData
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            // Para arrays (como socialMedia, roleIds)
+            formData.append(key, JSON.stringify(value));
+          } else if (typeof value === 'object') {
+            formData.append(key, JSON.stringify(value));
+          } else {
+            formData.append(key, String(value));
+          }
+        }
+      });
+      
+      // Adicionar query param deletePhoto se necessário
+      const url = deletePhoto ? `/members/${memberId}?deletePhoto=true` : `/members/${memberId}`;
+      
+      const res = await api.put<Member>(url, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return res.data;
+    }
+    
+    // Se não houver foto, enviar como JSON normal
+    // Adicionar query param deletePhoto se necessário
+    const url = deletePhoto ? `/members/${memberId}?deletePhoto=true` : `/members/${memberId}`;
+    const res = await api.put<Member>(url, data);
     return res.data;
   },
 

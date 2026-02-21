@@ -12,20 +12,20 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, TextField, Autocomplete, Button } from '@mui/material';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
-import { FiPlus, FiUsers, FiEdit2, FiCopy, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiUsers, FiEdit2, FiCopy, FiTrash2, FiFilter } from 'react-icons/fi';
+import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import { LuHistory } from 'react-icons/lu';
 import Link from 'next/link';
 import CelulaModal from '@/components/CelulaModal';
 import CelulaViewModal from '@/components/CelulaViewModal';
+import FilterModal, { FilterConfig } from '@/components/FilterModal';
 
 export default function CelulasPage() {
   const [groups, setGroups] = useState<Celula[]>([]);
-  const [cellMembersCount, setCellMembersCount] = useState<Record<number, number>>({});
-  const [cellHasInactive, setCellHasInactive] = useState<Record<number, boolean>>({});
+  // REMOVIDO: cellMembersCount e cellHasInactive - não são mais necessários
+  // A validação será feita pelo backend ao tentar deletar
   const [confirmingCelula, setConfirmingCelula] = useState<Celula | null>(null);
   const [loading, setLoading] = useState(false);
-  const hasInitialized = useRef(false);
-  const filtersInitialized = useRef(false);
 
   // Modal states
   const [showCelulaModal, setShowCelulaModal] = useState(false);
@@ -34,9 +34,13 @@ export default function CelulasPage() {
   // View modal state
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingCelula, setViewingCelula] = useState<Celula | null>(null);
+  
+  // Filter modal state
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // listing filters
   const [filterName, setFilterName] = useState('');
+  const [filterMyCells, setFilterMyCells] = useState(true);
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
   const [filterDiscipuladoId, setFilterDiscipuladoId] = useState<number | null>(null);
@@ -91,10 +95,7 @@ export default function CelulasPage() {
   }, [showNewLeaderDropdown, showOldLeaderDropdown]);
 
   const load = async () => {
-    // Aguardar inicialização dos filtros e autenticação
-    if (!filtersInitialized.current || authLoading) {
-      return;
-    }
+    if (authLoading) return;
     
     setLoading(true);
     try {
@@ -105,31 +106,13 @@ export default function CelulasPage() {
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+      if (!filterMyCells) filters.all = true;
       
       const g = await celulasService.getCelulas(filters);
       
       // Mostrar todas as células, sem filtrar por permissão
       setGroups(g);
       
-      // load member counts per célula
-      try {
-        const counts: Record<number, number> = {};
-        const inactiveMap: Record<number, boolean> = {};
-        await Promise.all((g || []).map(async (c) => {
-          try {
-            const m = await membersService.getMembers(c.id);
-            counts[c.id] = (m || []).length;
-            inactiveMap[c.id] = (m || []).some((mm) => mm.isActive === false);
-          } catch (err) {
-            counts[c.id] = 0;
-            inactiveMap[c.id] = false;
-          }
-        }));
-        setCellMembersCount(counts);
-        setCellHasInactive(inactiveMap);
-      } catch (err) {
-        console.error('failed loading member counts', err);
-      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -137,13 +120,7 @@ export default function CelulasPage() {
     }
   };
 
-  useEffect(() => {
-    // Apenas carregar após os filtros serem inicializados
-    if (filtersInitialized.current && !authLoading) {
-      const run = async () => { await load(); };
-      run();
-    }
-  }, [filtersInitialized.current, authLoading]);
+
 
   useEffect(() => {
     const loadFilters = async () => {
@@ -158,82 +135,25 @@ export default function CelulasPage() {
         setDiscipulados(d || []);
         
         // load redes for select
-        const r = await redesService.getRedes();
+        const r = await redesService.getRedes({});
         setRedes(r || []);
 
         // load congregacoes for select
         const cong = await congregacoesService.getCongregacoes();
         setCongregacoes(cong || []);
-
-        // Inicializar filtros baseados no usuário logado (apenas uma vez)
-        if (!hasInitialized.current && user) {
-          hasInitialized.current = true;
-          
-          // Verificar se o usuário tem associações e selecionar a primeira
-          if (user.celula?.id) {
-            // Tem célula associada - buscar dados da célula
-            const celulasTemp = await celulasService.getCelulas();
-            const celula = celulasTemp.find(cel => cel.id === user.celula?.id);
-            setFilterLeaderId(celula?.leader?.id || null);
-            
-            if (celula?.discipuladoId) {
-              setFilterDiscipuladoId(celula.discipuladoId);
-              
-              const discipulado = d.find(disc => disc.id === celula.discipuladoId);
-              if (discipulado?.redeId) {
-                setFilterRedeId(discipulado.redeId);
-                
-                const rede = r.find(rd => rd.id === discipulado.redeId);
-                if (rede?.congregacaoId) {
-                  setFilterCongregacaoId(rede.congregacaoId);
-                }
-              }
-            }
-          } else {
-            // Verificar se é discipulador
-            const userDiscipulado = d.find(disc => disc.discipuladorMemberId === user.id);
-            if (userDiscipulado) {
-              setFilterDiscipuladoId(userDiscipulado.id);
-              if (userDiscipulado.redeId) {
-                setFilterRedeId(userDiscipulado.redeId);
-                
-                const rede = r.find(rd => rd.id === userDiscipulado.redeId);
-                if (rede?.congregacaoId) {
-                  setFilterCongregacaoId(rede.congregacaoId);
-                }
-              }
-            } else {
-              // Verificar se é pastor de rede
-              const userRede = r.find(rede => rede.pastorMemberId === user.id);
-              if (userRede) {
-                setFilterRedeId(userRede.id);
-                if (userRede.congregacaoId) {
-                  setFilterCongregacaoId(userRede.congregacaoId);
-                }
-              }
-            }
-          }
-          
-          // Marcar que os filtros foram inicializados
-          filtersInitialized.current = true;
-        } else if (!hasInitialized.current) {
-          // Se não há usuário ainda, marcar como inicializado para evitar loop
-          filtersInitialized.current = true;
-        }
       } catch (err) {
         console.error('failed load filters', err);
-        filtersInitialized.current = true;
       }
     };
     loadFilters();
-  }, [user, authLoading]);
+  }, [authLoading]);
 
   // Re-load when filters change
   useEffect(() => {
-    if (filtersInitialized.current && !authLoading) {
+    if (!authLoading) {
       load();
     }
-  }, [filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterLeaderId, authLoading]);
+  }, [filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterLeaderId, filterMyCells, authLoading]);
 
   const handleSaveCelula = async (data: { 
     name: string; 
@@ -399,140 +319,189 @@ export default function CelulasPage() {
     return isAssociatedToCelula(celula);
   };
 
+  // Verificar se há filtros ativos
+  const hasActiveFilters = !!filterName || filterCongregacaoId !== null || filterRedeId !== null || filterDiscipuladoId !== null || filterLeaderId !== null || filterMyCells;
+
+  // Limpar todos os filtros
+  const clearAllFilters = () => {
+    setFilterName('');
+    setFilterMyCells(false);
+    setFilterCongregacaoId(null);
+    setFilterRedeId(null);
+    setFilterDiscipuladoId(null);
+    setFilterLeaderId(null);
+  };
+
+  // Configuração dos filtros para o modal
+  const filterConfigs: FilterConfig[] = [
+    {
+      type: 'switch',
+      label: '',
+      value: filterMyCells,
+      onChange: setFilterMyCells,
+      switchLabelOff: 'Todas as células',
+      switchLabelOn: 'Minhas células'
+    },
+    {
+      type: 'select',
+      label: 'Nome da célula',
+      value: filterName,
+      onChange: setFilterName,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Digite o nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="bg-gray-700"
+            InputProps={{
+              className: 'bg-gray-700',
+            }}
+          />
+        </ThemeProvider>
+      )
+    },
+    {
+      type: 'select',
+      label: 'Congregação',
+      value: filterCongregacaoId,
+      onChange: (val) => {
+        setFilterCongregacaoId(val);
+        setFilterRedeId(null);
+        setFilterDiscipuladoId(null);
+      },
+      options: congregacoes.map(c => ({ value: c.id, label: c.name }))
+    },
+    {
+      type: 'select',
+      label: 'Rede',
+      value: filterRedeId,
+      onChange: (val) => {
+        setFilterRedeId(val);
+        setFilterDiscipuladoId(null);
+      },
+      options: redes
+        .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
+        .map(r => ({ value: r.id, label: r.name }))
+    },
+    {
+      type: 'select',
+      label: 'Discipulado',
+      value: filterDiscipuladoId,
+      onChange: setFilterDiscipuladoId,
+      options: discipulados
+        .filter(d => !filterRedeId || d.redeId === filterRedeId)
+        .map(d => ({ value: d.id, label: d.discipulador?.name || 'Sem discipulador' }))
+    },
+    {
+      type: 'select',
+      label: 'Líder',
+      value: filterLeaderId,
+      onChange: setFilterLeaderId,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <Autocomplete
+            size="small"
+            fullWidth
+            options={members.filter(member => {
+              const filteredCells = groups.filter(celula => {
+                if (filterCongregacaoId) {
+                  const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+                  if (!discipulado) return false;
+                  const rede = redes.find(r => r.id === discipulado.redeId);
+                  if (!rede || rede.congregacaoId !== filterCongregacaoId) return false;
+                }
+                if (filterRedeId) {
+                  const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+                  if (!discipulado || discipulado.redeId !== filterRedeId) return false;
+                }
+                if (filterDiscipuladoId && celula.discipuladoId !== filterDiscipuladoId) return false;
+                return true;
+              });
+              return filteredCells.some(c => c.leaderMemberId === member.id);
+            })}
+            getOptionLabel={(option) => option.name}
+            value={members.find(m => m.id === filterLeaderId) || null}
+            onChange={(event, newValue) => setFilterLeaderId(newValue?.id || null)}
+            renderInput={(params) => (
+              <TextField 
+                {...params} 
+                placeholder="Selecione um líder"
+                className="bg-gray-700" 
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                <div>
+                  <div className="text-sm font-medium">{option.name}</div>
+                  <div className="text-xs text-gray-400">{option.email}</div>
+                </div>
+              </li>
+            )}
+          />
+        </ThemeProvider>
+      )
+    }
+  ];
+
+  const filteredGroups = groups.filter(g => !filterName || g.name.toLowerCase().includes(filterName.toLowerCase()));
+
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-4">Gerenciar Células</h2>
 
       <ThemeProvider theme={muiTheme}>
-        <div className="mb-6">
-          <label className="block mb-2">Filtros</label>
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <TextField
-              size="small"
-              label="Nome da célula"
-              placeholder="Digite o nome"
-              value={filterName}
-              onChange={(e) => setFilterName(e.target.value)}
-              className="flex-1 bg-gray-800"
-              InputProps={{
-                className: 'bg-gray-800',
-              }}
-            />
-
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth>
-                <InputLabel
-                  id="filter-congregacao-label"
-                  size='small'
-                >Congregação</InputLabel>
-                <Select
-                  labelId="filter-congregacao-label" value={filterCongregacaoId ?? ''} label="Congregação" onChange={(e) => { setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null); setFilterRedeId(null); setFilterDiscipuladoId(null); }} size="small" className="bg-gray-800">
-                  <MenuItem value="">Todas congregações</MenuItem>
-                  {congregacoes.map(c => (
-                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth>
-                <InputLabel
-                  id="filter-rede-label"
-                  size='small'
-                >Rede</InputLabel>
-                <Select
-                  labelId="filter-rede-label" value={filterRedeId ?? ''} label="Rede" onChange={(e) => { setFilterRedeId(e.target.value ? Number(e.target.value) : null); setFilterDiscipuladoId(null); }} size="small" className="bg-gray-800">
-                  <MenuItem value="">Todas redes</MenuItem>
-                  {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map(r => (
-                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth>
-                <InputLabel id="filter-discipulado-label" size='small'>Discipulado</InputLabel>
-                <Select labelId="filter-discipulado-label" value={filterDiscipuladoId ?? ''} label="Discipulado" onChange={(e) => setFilterDiscipuladoId(e.target.value ? Number(e.target.value) : null)} size="small" className="bg-gray-800">
-                  <MenuItem value="">Todos</MenuItem>
-                  {discipulados.filter(discipulado => !filterRedeId || discipulado.redeId === filterRedeId).map(discipulado => (<MenuItem key={discipulado.id} value={discipulado.id}>{discipulado.discipulador?.name}</MenuItem>))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-64">
-              <Autocomplete
-                size="small"
-                options={members.filter(member => {
-                  // Filtrar líderes baseado nas células filtradas
-                  const filteredCells = groups.filter(celula => {
-                    if (filterCongregacaoId) {
-                      const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
-                      if (!discipulado) return false;
-                      const rede = redes.find(r => r.id === discipulado.redeId);
-                      if (!rede || rede.congregacaoId !== filterCongregacaoId) return false;
-                    }
-                    if (filterRedeId) {
-                      const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
-                      if (!discipulado || discipulado.redeId !== filterRedeId) return false;
-                    }
-                    if (filterDiscipuladoId && celula.discipuladoId !== filterDiscipuladoId) return false;
-                    return true;
-                  });
-                  
-                  // Mostrar apenas líderes das células filtradas
-                  return filteredCells.some(c => c.leaderMemberId === member.id);
-                })}
-                getOptionLabel={(option) => option.name}
-                value={members.find(m => m.id === filterLeaderId) || null}
-                onChange={(event, newValue) => setFilterLeaderId(newValue?.id || null)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="Líder" 
-                    placeholder="Selecione um líder"
-                    className="bg-gray-800" 
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props} key={option.id}>
-                    <div>
-                      <div className="text-sm font-medium">{option.name}</div>
-                      <div className="text-xs text-gray-400">{option.email}</div>
-                    </div>
-                  </li>
-                )}
-              />
-            </div>
-
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => {
-                setFilterName('');
-                setFilterCongregacaoId(null);
-                setFilterRedeId(null);
-                setFilterDiscipuladoId(null);
-                setFilterLeaderId(null);
-              }}
-              className="h-10 whitespace-nowrap"
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <TextField
+            size="small"
+            placeholder="Buscar por nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="w-64 bg-gray-800"
+            InputProps={{
+              className: 'bg-gray-800',
+            }}
+          />
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${
+              hasActiveFilters
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-700 hover:bg-gray-600 text-white'
+            }`}
+            title="Filtros"
+          >
+            <FaFilter className="h-5 w-5" />
+            <span>Filtros</span>
+            {hasActiveFilters && (
+              <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                {[filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterLeaderId].filter(f => f !== null && f !== '').length + (filterMyCells ? 1 : 0)}
+              </span>
+            )}
+          </button>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+              title="Limpar filtros"
             >
-              Limpar Filtros
-            </Button>
-          </div>
+              <FaFilterCircleXmark className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </ThemeProvider>
 
       <div>
-        <h3 className="font-medium mb-2">Células existentes</h3>
+        <h3 className="font-medium mb-2">Exibindo {filteredGroups.length} de {groups.length} células</h3>
         {loading ? (
           <div className="flex justify-center items-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         ) : (
         <ul className="space-y-3">
-          {groups.map((g) => (
+          {filteredGroups.map((g) => (
               <li key={g.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border p-3 rounded ${!g.leaderMemberId ? 'bg-red-900/20 border-red-700' : 'bg-gray-900'}`}>
                 <div className="mb-3 sm:mb-0">
                   <button
@@ -557,30 +526,16 @@ export default function CelulasPage() {
                       <FiCopy className="h-6 w-6 text-indigo-600" aria-hidden />
                     </button>
                   )}
-                  {canDelete(g) && (() => {
-                    const memberCount = cellMembersCount[g.id] ?? 0;
-                    const disabled = memberCount > 0;
-                    return (
-                      <button
-                        onClick={() => {
-                          const memberCountLocal = cellMembersCount[g.id] ?? 0;
-                          const hasInactive = cellHasInactive[g.id] ?? false;
-                          const disabledLocal = memberCountLocal > 0 || hasInactive;
-                          if (disabledLocal) {
-                            if (hasInactive) return toast.error('Não é possível apagar célula: possui membros inativos');
-                            return toast.error('Não é possível apagar célula com membros associados');
-                          }
-                          setConfirmingCelula(g);
-                        }}
-                        title={(cellHasInactive[g.id] ?? false) ? 'Não é possível apagar: possui membros inativos' : (disabled ? 'Não é possível apagar: possui membros associados' : 'Excluir célula')}
-                        disabled={(cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)}
-                        className={`p-1 rounded ${((cellMembersCount[g.id] ?? 0) > 0 || (cellHasInactive[g.id] ?? false)) ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-900'}`}
-                        aria-label={`Excluir ${g.name}`}
-                      >
-                        <FiTrash2 className="h-6 w-6" aria-hidden />
-                      </button>
-                    );
-                  })()}
+                  {canDelete(g) && (
+                    <button
+                      onClick={() => setConfirmingCelula(g)}
+                      title="Excluir célula"
+                      className="p-1 rounded text-red-600 hover:bg-red-900"
+                      aria-label={`Excluir ${g.name}`}
+                    >
+                      <FiTrash2 className="h-6 w-6" aria-hidden />
+                    </button>
+                  )}
                   {canViewTracking(g) && (
                     <Link href="/report/view" className="p-1 rounded hover:bg-gray-800" title="Acompanhamento" aria-label={`Acompanhamento ${g.name}`}>
                       <LuHistory className="h-6 w-6 text-teal-600" aria-hidden />
@@ -752,6 +707,16 @@ export default function CelulasPage() {
         redeName={viewingCelula ? redes.find(r => r.id === discipulados.find(d => d.id === viewingCelula.discipuladoId)?.redeId)?.name : undefined}
       />
 
+      {/* FilterModal */}
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        onApply={() => {}}
+        onClear={clearAllFilters}
+        filters={filterConfigs}
+        hasActiveFilters={hasActiveFilters}
+      />
+
       {confirmingCelula && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-55">
           <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
@@ -766,9 +731,12 @@ export default function CelulasPage() {
                     toast.success('Célula excluída');
                     setConfirmingCelula(null);
                     await load();
-                  } catch (e) {
+                  } catch (e: any) {
                     console.error(e);
-                    toast.error('Falha ao excluir célula');
+                    // Mostrar mensagem de erro do backend se disponível
+                    const errorMessage = e?.response?.data?.message || ErrorMessages.deleteCelula(e);
+                    toast.error(errorMessage);
+                    setConfirmingCelula(null);
                   }
                 }}
                 className="px-3 py-1 bg-red-600 text-white rounded"

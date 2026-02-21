@@ -2,20 +2,29 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import CollapsibleItem from '@/components/CollapsibleItem';
-import { congregacoesService, CreateCongregacaoInput, UpdateCongregacaoInput } from '@/services/congregacoesService';
+import { congregacoesService, CreateCongregacaoInput, UpdateCongregacaoInput, CongregacaoFilterInput } from '@/services/congregacoesService';
 import { memberService } from '@/services/memberService';
 import { redesService } from '@/services/redesService';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { FiTrash2, FiPlus, FiEdit2, FiMapPin } from 'react-icons/fi';
+import { FaFilter, FaFilterCircleXmark } from 'react-icons/fa6';
 import ModalConfirm from '@/components/ModalConfirm';
 import { Congregacao, Member, Rede } from '@/types';
+import FilterModal, { FilterConfig } from '@/components/FilterModal';
+import { TextField, Autocomplete, ThemeProvider, createTheme } from '@mui/material';
 
 export default function CongregacoesPage() {
   const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [users, setUsers] = useState<Member[]>([]);
   const [kidsLeaders, setKidsLeaders] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Filter states
+  const [filterName, setFilterName] = useState('');
+  const [filterMyCongregations, setFilterMyCongregations] = useState(true);
+  const [filterPastorId, setFilterPastorId] = useState<number | null>(null);
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
 
   // expansion & cache maps
   const [expandedCongregacoes, setExpandedCongregacoes] = useState<Record<number, boolean>>({});
@@ -44,7 +53,12 @@ export default function CongregacoesPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const c = await congregacoesService.getCongregacoes();
+      const filters: CongregacaoFilterInput = {};
+      if (filterName) filters.name = filterName;
+      if (filterPastorId) filters.pastorGovernoMemberId = filterPastorId;
+      if (!filterMyCongregations) filters.all = true;
+      
+      const c = await congregacoesService.getCongregacoes(filters);
       setCongregacoes(c || []);
     } catch (err) {
       console.error(err);
@@ -56,6 +70,9 @@ export default function CongregacoesPage() {
 
   useEffect(() => {
     load();
+  }, [filterName, filterPastorId, filterMyCongregations]);
+
+  useEffect(() => {
     (async () => {
       try {
         const u = await memberService.list({ ministryType: 'PRESIDENT_PASTOR,PASTOR' });
@@ -206,18 +223,131 @@ export default function CongregacoesPage() {
     }
   };
 
-  const filteredCongregacoes = congregacoes;
+  const hasActiveFilters = !!(filterName || filterPastorId !== null || filterMyCongregations);
+
+  const clearAllFilters = () => {
+    setFilterName('');
+    setFilterMyCongregations(false);
+    setFilterPastorId(null);
+  };
+
+  // Configuração dos filtros para o modal
+  const filterConfigs: FilterConfig[] = [
+    {
+      type: 'switch',
+      label: '',
+      value: filterMyCongregations,
+      onChange: setFilterMyCongregations,
+      switchLabelOff: 'Todas as congregações',
+      switchLabelOn: 'Minhas congregações'
+    },
+    {
+      type: 'select',
+      label: 'Nome',
+      value: filterName,
+      onChange: setFilterName,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Buscar por nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="bg-gray-700"
+          />
+        </ThemeProvider>
+      )
+    },
+    {
+      type: 'select',
+      label: 'Pastor',
+      value: filterPastorId,
+      onChange: setFilterPastorId,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <Autocomplete
+            size="small"
+            fullWidth
+            options={users}
+            getOptionLabel={(option) => option.name}
+            value={users.find(u => u.id === filterPastorId) || null}
+            onChange={(event, newValue) => setFilterPastorId(newValue?.id || null)}
+            renderInput={(params) => (
+              <TextField 
+                {...params} 
+                placeholder="Selecione um pastor"
+                className="bg-gray-700" 
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                <div>
+                  <div className="text-sm font-medium">{option.name}</div>
+                  <div className="text-xs text-gray-400">{option.email}</div>
+                </div>
+              </li>
+            )}
+          />
+        </ThemeProvider>
+      )
+    }
+  ];
+
+  const muiTheme = createTheme({
+    palette: {
+      mode: 'dark',
+    },
+  });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Congregações</h1>
-      </div>
+    <>
+      <ThemeProvider theme={muiTheme}>
+        <div className="relative pb-20">
+          <h1 className="text-3xl font-bold mb-6">Congregações</h1>
 
-      {loading && <p>Carregando...</p>}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <TextField
+              size="small"
+              placeholder="Buscar por nome"
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              className="w-64 bg-gray-800"
+            />
+            <button
+              onClick={() => setFilterModalOpen(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${
+                hasActiveFilters
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+              }`}
+              title="Filtros"
+            >
+              <FaFilter className="h-4 w-4" />
+              <span>Filtros</span>
+              {hasActiveFilters && (
+                <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                  {[filterName, filterPastorId].filter(f => f !== null && f !== '').length + (filterMyCongregations ? 1 : 0)}
+                </span>
+              )}
+            </button>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                title="Limpar filtros"
+              >
+                <FaFilterCircleXmark className="h-5 w-5" />
+              </button>
+            )}
+          </div>
 
-      <div className="space-y-2">
-        {filteredCongregacoes.map(c => {
+          {loading && <p>Carregando...</p>}
+
+          <div>
+            <h3 className="font-medium mb-2">Exibindo {congregacoes.length} congregações</h3>
+            <div className="space-y-2">
+              {congregacoes.map(c => {
           const isExpanded = !!expandedCongregacoes[c.id];
           const redes = congregacaoRedesMap[c.id] || [];
           
@@ -276,10 +406,11 @@ export default function CongregacoesPage() {
             </div>
           );
         })}
-      </div>
+            </div>
+          </div>
 
-      {/* Floating create button */}
-      <button 
+        {/* Floating create button */}
+        <button 
         aria-label="Criar congregação" 
         onClick={() => setShowCreateModal(true)} 
         className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50"
@@ -645,14 +776,26 @@ export default function CongregacoesPage() {
         </div>
       )}
 
-      {/* Confirm Delete Modal */}
-      <ModalConfirm
-        open={confirmOpen}
-        title="Confirmar Exclusão"
-        message={`Tem certeza que deseja excluir a congregação "${confirmTarget?.name}"?`}
-        onConfirm={deleteCongregacaoConfirmed}
-        onCancel={() => { setConfirmOpen(false); setConfirmTarget(null); }}
-      />
-    </div>
+        {/* Confirm Delete Modal */}
+        <ModalConfirm
+          open={confirmOpen}
+          title="Confirmar Exclusão"
+          message={`Tem certeza que deseja excluir a congregação "${confirmTarget?.name}"?`}
+          onConfirm={deleteCongregacaoConfirmed}
+          onCancel={() => { setConfirmOpen(false); setConfirmTarget(null); }}
+        />
+
+        {/* Filter Modal */}
+        <FilterModal
+          isOpen={filterModalOpen}
+          onClose={() => setFilterModalOpen(false)}
+          filters={filterConfigs}
+          onApply={() => setFilterModalOpen(false)}
+          onClear={clearAllFilters}
+          hasActiveFilters={hasActiveFilters}
+        />
+        </div>
+      </ThemeProvider>
+    </>
   );
 }

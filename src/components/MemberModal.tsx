@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Member, Celula, Ministry, WinnerPath, Role, Congregacao, Rede, Discipulado } from '@/types';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, ThemeProvider, Checkbox, ListItemText, OutlinedInput, Autocomplete, TextField, Switch, FormControlLabel } from '@mui/material';
+import { createTheme, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, ThemeProvider, Checkbox, ListItemText, OutlinedInput, Autocomplete, TextField, Switch, FormControlLabel, Slider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -16,12 +16,15 @@ import { redesService } from '@/services/redesService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPhoneForDisplay, formatPhoneForInput, stripPhoneFormatting, ensureCountryCode } from '@/lib/phoneUtils';
+import Cropper from 'react-easy-crop';
+import { Area } from 'react-easy-crop';
+import getCroppedImg from '@/utils/cropImage';
 
 interface MemberModalProps {
   member: Member | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Partial<Member>) => Promise<Member>;
+  onSave: (data: Partial<Member>, photo?: File, deletePhoto?: boolean) => Promise<Member>;
   celulas: Celula[];
   initialCelulaId?: number | null;
 }
@@ -29,6 +32,9 @@ interface MemberModalProps {
 export default function MemberModal({ member, isOpen, onClose, onSave, celulas = [], initialCelulaId }: MemberModalProps) {
   const isEditing = !!member;
   const { user } = useAuth();
+
+  // Ref para o campo de nome
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Estados para todos os campos
   const [name, setName] = useState('');
@@ -70,6 +76,17 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
   const [isSaving, setIsSaving] = useState(false);
   const [isResendingInvite, setIsResendingInvite] = useState(false);
 
+  // Estados para upload e crop de imagem
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>('');
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [croppedImage, setCroppedImage] = useState<string>('');
+  const [croppedImageFile, setCroppedImageFile] = useState<File | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [originalPhotoUrl, setOriginalPhotoUrl] = useState<string>(''); // Foto original do membro
+
   // Filtros em cascata para célula
   const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [redes, setRedes] = useState<Rede[]>([]);
@@ -83,6 +100,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     name: false,
     ministryPosition: false,
     email: false,
+    gender: false,
   });
 
   useEffect(() => {
@@ -94,12 +112,18 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
     if (isOpen) {
       document.addEventListener('keydown', handleEsc);
+      // Focar o campo de nome quando abrir o modal em modo de criação
+      if (!isEditing) {
+        setTimeout(() => {
+          nameInputRef.current?.focus();
+        }, 100);
+      }
     }
 
     return () => {
       document.removeEventListener('keydown', handleEsc);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isEditing]);
 
   useEffect(() => {
     const loadConfigData = async () => {
@@ -187,6 +211,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
         setCelulaId(member.celulaId ?? null);
         setMaritalStatus(member.maritalStatus ?? 'SINGLE');
         setPhotoUrl(member.photoUrl ?? '');
+        setOriginalPhotoUrl(member.photoUrl ?? ''); // Guardar foto original
         setPhone(member.phone ? formatPhoneForDisplay(ensureCountryCode(member.phone)) : '+55');
         setGender(member.gender ?? '');
         setIsBaptized(member.isBaptized ?? false);
@@ -328,10 +353,21 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     setFilterCongregacaoId(null);
     setFilterRedeId(null);
     setFilterDiscipuladoId(null);
-    setTouched({ name: false, ministryPosition: false, email: false });
+    setTouched({ name: false, ministryPosition: false, email: false, gender: false });
     
     // Reset social media
     setSocialMedia([]);
+    
+    // Reset image states
+    setSelectedImage(null);
+    setImagePreview('');
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+    setCroppedImage('');
+    setCroppedImageFile(null);
+    setShowCropModal(false);
+    setOriginalPhotoUrl('');
   };
 
   const formatCep = (value: string) => {
@@ -390,16 +426,98 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     setPhone(formatted);
   };
 
+  // Funções de manipulação de imagem
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validar tamanho do arquivo (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('A imagem deve ter no máximo 10MB');
+        return;
+      }
+      
+      // Validar tipo de arquivo
+      if (!file.type.startsWith('image/')) {
+        toast.error('Por favor, selecione uma imagem válida');
+        return;
+      }
+      
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file));
+      setShowCropModal(true);
+    }
+  };
+
+  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleCropConfirm = async () => {
+    if (!croppedAreaPixels || !selectedImage) return;
+
+    try {
+      const croppedImageBlob = await getCroppedImg(
+        imagePreview,
+        croppedAreaPixels
+      );
+
+      // Converter Blob para File
+      const croppedFile = new File(
+        [croppedImageBlob],
+        selectedImage.name,
+        { type: 'image/jpeg' }
+      );
+
+      setCroppedImage(URL.createObjectURL(croppedImageBlob));
+      setCroppedImageFile(croppedFile);
+      setPhotoUrl(URL.createObjectURL(croppedImageBlob));
+      setShowCropModal(false);
+      
+      // Reset crop and zoom for next photo
+      setZoom(1);
+      setCrop({ x: 0, y: 0 });
+      
+      toast.success('Foto selecionada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao cortar imagem:', error);
+      toast.error('Erro ao processar a imagem');
+    }
+  };
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setSelectedImage(null);
+    setImagePreview('');
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoUrl('');
+    setCroppedImage('');
+    setCroppedImageFile(null);
+    setSelectedImage(null);
+    setImagePreview('');
+    toast.success('Foto removida');
+  };
+
   const handleSave = async () => {
     // Marcar todos os campos como touched
     setTouched({
       name: true,
       ministryPosition: true,
-      email: hasSystemAccess
+      email: hasSystemAccess,
+      gender: true
     });
 
     if (!name.trim()) {
       toast.error('Nome é obrigatório');
+      return;
+    }
+
+    if (!gender) {
+      toast.error('Gênero é obrigatório');
       return;
     }
 
@@ -453,10 +571,13 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
     data.celulaId = celulaId;
 
+    // Verificar se deve deletar a foto: tinha foto original E agora não tem mais E não está enviando uma nova
+    const shouldDeletePhoto = Boolean(isEditing && originalPhotoUrl && !photoUrl.trim() && !croppedImageFile);
+
     setIsSaving(true);
     try {
-      // Salvar o membro - onSave agora retorna o membro salvo
-      await onSave(data);
+      // Salvar o membro - onSave agora retorna o membro salvo e aceita foto
+      await onSave(data, croppedImageFile || undefined, shouldDeletePhoto);
       // Modal fecha imediatamente após salvar com sucesso
       // O envio do convite continuará em background no parent
     } catch (error) {
@@ -497,119 +618,171 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {/* DADOS PESSOAIS */}
-            <div className="border-b pb-3">
+            {/* FOTO E DADOS PESSOAIS */}
+            <div className="border-b pb-4">
               <h4 className="font-medium mb-3 text-sm text-gray-400">DADOS PESSOAIS</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Nome *"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    onBlur={() => setTouched({ ...touched, name: true })}
-                    error={touched.name && !name.trim()}
-                    placeholder="Nome completo"
-                    className="bg-gray-800"
-                  />
-                </div>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* Coluna da Foto - 1/4 em desktop */}
+                <div className="lg:col-span-1 flex flex-col items-center gap-4">
+                  {/* Preview da foto */}
+                  <div className="relative">
+                    {(photoUrl || croppedImage) ? (
+                      <div className="relative">
+                        <img
+                          src={croppedImage || photoUrl}
+                          alt="Foto do membro"
+                          className="w-40 h-40 rounded-full object-cover border-4 border-gray-700"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleRemovePhoto}
+                          className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center"
+                          title="Remover foto"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-40 h-40 rounded-full bg-gray-800 border-4 border-gray-700 flex items-center justify-center">
+                        <span className="text-4xl text-gray-600">👤</span>
+                      </div>
+                    )}
+                  </div>
 
-                <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="gender-label">Gênero</InputLabel>
-                    <Select
-                      labelId="gender-label"
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
-                      label="Gênero"
-                      className="bg-gray-800"
+                  {/* Botão de upload */}
+                  <div className="w-full">
+                    <input
+                      type="file"
+                      id="photo-upload"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="photo-upload"
+                      className="cursor-pointer px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium inline-block w-full text-center"
                     >
-                      <MenuItem value="">Selecione</MenuItem>
-                      <MenuItem value="MALE">Masculino</MenuItem>
-                      <MenuItem value="FEMALE">Feminino</MenuItem>
-                      <MenuItem value="OTHER">Outro</MenuItem>
-                    </Select>
-                  </FormControl>
+                      {photoUrl ? 'Alterar Foto' : 'Selecionar Foto'}
+                    </label>
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      Tamanho máximo: 10MB | Formatos: JPG, PNG
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="marital-status-label">Estado Civil</InputLabel>
-                    <Select
-                      labelId="marital-status-label"
-                      value={maritalStatus}
-                      onChange={(e) => setMaritalStatus(e.target.value)}
-                      label="Estado Civil"
+                {/* Coluna dos Campos - 3/4 em desktop */}
+                <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Nome *"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={() => setTouched({ ...touched, name: true })}
+                      error={touched.name && !name.trim()}
+                      placeholder="Nome completo"
                       className="bg-gray-800"
-                    >
-                      <MenuItem value="SINGLE">Solteiro(a)</MenuItem>
-                      <MenuItem value="COHABITATING">Amasiados</MenuItem>
-                      <MenuItem value="MARRIED">Casado(a)</MenuItem>
-                      <MenuItem value="DIVORCED">Divorciado(a)</MenuItem>
-                      <MenuItem value="WIDOWED">Viúvo(a)</MenuItem>
-                    </Select>
-                  </FormControl>
-                </div>
+                      inputRef={nameInputRef}
+                    />
+                  </div>
 
-                {maritalStatus === 'MARRIED' && (
-                  <div className="md:col-span-1">
-                    <FormControl fullWidth size="small">
-                      <InputLabel id="spouse-label">Cônjuge</InputLabel>
+                  <div>
+                    <FormControl fullWidth size="small" error={touched.gender && !gender}>
+                      <InputLabel id="gender-label">Gênero *</InputLabel>
                       <Select
-                        labelId="spouse-label"
-                        value={spouseId ?? ''}
-                        onChange={(e) => setSpouseId(e.target.value ? Number(e.target.value) : null)}
-                        label="Cônjuge"
+                        labelId="gender-label"
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        onBlur={() => setTouched({ ...touched, gender: true })}
+                        label="Gênero *"
                         className="bg-gray-800"
-                        displayEmpty
                       >
-                        <MenuItem value="">Selecione o cônjuge</MenuItem>
-                        {allMembers
-                          .filter(m => m.id !== member?.id)
-                          .map(m => (
-                            <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                          ))}
+                        <MenuItem value="">Selecione</MenuItem>
+                        <MenuItem value="MALE">Masculino</MenuItem>
+                        <MenuItem value="FEMALE">Feminino</MenuItem>
+                        <MenuItem value="OTHER">Outro</MenuItem>
                       </Select>
                     </FormControl>
                   </div>
-                )}
 
-                <div>
-                  <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
-                    <DatePicker
-                      value={birthDate}
-                      onChange={(newValue: Dayjs | null) => setBirthDate(newValue)}
-                      format="DD/MM/YYYY"
-                      label="Data de Nascimento"
-                      localeText={{
-                        toolbarTitle: 'Selecionar data',
-                        cancelButtonLabel: 'Cancelar',
-                        okButtonLabel: 'OK',
-                      }}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          size: 'small',
-                          placeholder: 'dd/mm/aaaa',
-                        },
-                      }}
+                  <div>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="marital-status-label">Estado Civil</InputLabel>
+                      <Select
+                        labelId="marital-status-label"
+                        value={maritalStatus}
+                        onChange={(e) => setMaritalStatus(e.target.value)}
+                        label="Estado Civil"
+                        className="bg-gray-800"
+                      >
+                        <MenuItem value="SINGLE">Solteiro(a)</MenuItem>
+                        <MenuItem value="COHABITATING">Amasiados</MenuItem>
+                        <MenuItem value="MARRIED">Casado(a)</MenuItem>
+                        <MenuItem value="DIVORCED">Divorciado(a)</MenuItem>
+                        <MenuItem value="WIDOWED">Viúvo(a)</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </div>
+
+                  {maritalStatus === 'MARRIED' && (
+                    <div className="md:col-span-1">
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="spouse-label">Cônjuge</InputLabel>
+                        <Select
+                          labelId="spouse-label"
+                          value={spouseId ?? ''}
+                          onChange={(e) => setSpouseId(e.target.value ? Number(e.target.value) : null)}
+                          label="Cônjuge"
+                          className="bg-gray-800"
+                          displayEmpty
+                        >
+                          <MenuItem value="">Selecione o cônjuge</MenuItem>
+                          {allMembers
+                            .filter(m => m.id !== member?.id)
+                            .map(m => (
+                              <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
+                            ))}
+                        </Select>
+                      </FormControl>
+                    </div>
+                  )}
+
+                  <div>
+                    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
+                      <DatePicker
+                        value={birthDate}
+                        onChange={(newValue: Dayjs | null) => setBirthDate(newValue)}
+                        format="DD/MM/YYYY"
+                        label="Data de Nascimento"
+                        localeText={{
+                          toolbarTitle: 'Selecionar data',
+                          cancelButtonLabel: 'Cancelar',
+                          okButtonLabel: 'OK',
+                        }}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            size: 'small',
+                            placeholder: 'dd/mm/aaaa',
+                          },
+                        }}
+                      />
+                    </LocalizationProvider>
+                  </div>
+
+                  <div>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Telefone"
+                      value={phone}
+                      onChange={handlePhoneChange}
+                      placeholder="(11) 99999-9999"
+                      inputProps={{ maxLength: 25 }}
+                      className="bg-gray-800"
                     />
-                  </LocalizationProvider>
-                </div>
-
-
-                <div>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Telefone"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    placeholder="(11) 99999-9999"
-                    inputProps={{ maxLength: 25 }}
-                    className="bg-gray-800"
-                  />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1312,6 +1485,107 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
           </div>
         </div>
       </ThemeProvider>
+
+      {/* Modal de Crop */}
+      {showCropModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-60">
+          <div className="bg-gray-900 rounded w-11/12 max-w-2xl p-6">
+            <h3 className="text-xl font-bold mb-4">Ajustar Foto</h3>
+            
+            <div className="relative w-full h-96 bg-gray-800 rounded mb-4">
+              <Cropper
+                image={imagePreview}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                cropShape="round"
+                showGrid={false}
+              />
+            </div>
+
+            <ZoomSlider zoom={zoom} onZoomChange={setZoom} />
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCropCancel}
+                className="flex-1 px-4 py-2 border border-gray-600 rounded hover:bg-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCropConfirm}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+              >
+                Confirmar Corte
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// Memoized zoom slider component to prevent unnecessary re-renders
+const ZoomSlider = React.memo(({ zoom, onZoomChange }: { zoom: number; onZoomChange: (zoom: number) => void }) => {
+  // Local state for immediate slider feedback without triggering expensive Cropper re-renders
+  const [localZoom, setLocalZoom] = useState(zoom);
+
+  // Sync local zoom when prop changes (e.g., modal opens)
+  useEffect(() => {
+    setLocalZoom(zoom);
+  }, [zoom]);
+
+  // Update local state immediately for responsive UI
+  const handleChange = useCallback((event: Event, newValue: number | number[]) => {
+    setLocalZoom(newValue as number);
+  }, []);
+
+  // Only update parent (and Cropper) when user finishes dragging
+  const handleChangeCommitted = useCallback((event: React.SyntheticEvent | Event, newValue: number | number[]) => {
+    onZoomChange(newValue as number);
+  }, [onZoomChange]);
+
+  const marks = useMemo(() => [
+    { value: 1, label: '1x' },
+    { value: 2, label: '2x' },
+    { value: 3, label: '3x' }
+  ], []);
+
+  const sliderSx = useMemo(() => ({
+    color: '#3b82f6',
+    '& .MuiSlider-thumb': {
+      width: 20,
+      height: 20,
+    },
+    '& .MuiSlider-track': {
+      height: 4,
+    },
+    '& .MuiSlider-rail': {
+      height: 4,
+      backgroundColor: '#374151',
+    },
+  }), []);
+
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-medium mb-2">
+        Zoom: {localZoom.toFixed(1)}x
+      </label>
+      <Slider
+        value={localZoom}
+        onChange={handleChange}
+        onChangeCommitted={handleChangeCommitted}
+        min={1}
+        max={3}
+        step={0.01}
+        valueLabelDisplay="auto"
+        valueLabelFormat={(value) => `${value.toFixed(1)}x`}
+        marks={marks}
+        sx={sliderSx}
+      />
+    </div>
+  );
+});

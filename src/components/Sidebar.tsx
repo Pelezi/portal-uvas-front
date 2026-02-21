@@ -90,7 +90,7 @@ export default function Sidebar() {
   const isLeader = perm.isAdmin || perm.pastor || perm.discipulador || perm.leader;
 
   const navItems: NavItem[] = [
-    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false, require: 'discipulador' },
+    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false },
     { 
       label: 'Relatório', 
       icon: <FileText size={18} />, 
@@ -100,10 +100,10 @@ export default function Sidebar() {
       ]
     },
     { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true },
-    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
-    { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'discipulador' },
-    { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'pastor' },
-    { href: '/congregacoes', label: 'Congregações', icon: <Building size={18} />, matchPrefix: true, require: 'pastorPresidente' },
+    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true },
+    { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true },
+    { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true },
+    { href: '/congregacoes', label: 'Congregações', icon: <Building size={18} />, matchPrefix: true },
     { href: '/settings', label: 'Configurações', icon: <Settings size={18} />, matchPrefix: true, require: 'admin' },
   ];
 
@@ -226,7 +226,15 @@ export default function Sidebar() {
                 : 'text-gray-300 hover:bg-gray-700'
             }`}
           >
-            <User size={18} />
+            {user?.photoUrl ? (
+              <img
+                src={user.photoUrl}
+                alt={user.name || 'Usuário'}
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <User size={18} />
+            )}
             <span>Perfil</span>
             {user?.hasDefaultPassword && (
               <span className="ml-auto flex h-2 w-2 relative">

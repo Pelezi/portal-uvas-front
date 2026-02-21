@@ -2,8 +2,13 @@ import api from '@/lib/apiClient';
 import { Rede } from '@/types';
 
 export const redesService = {
-  getRedes: async (): Promise<Rede[]> => {
-    const res = await api.get<Rede[]>('/redes');
+  getRedes: async (filters?: { congregacaoId?: number; pastorMemberId?: number; all?: boolean }): Promise<Rede[]> => {
+    const params = new URLSearchParams();
+    if (filters?.congregacaoId) params.append('congregacaoId', filters.congregacaoId.toString());
+    if (filters?.pastorMemberId) params.append('pastorMemberId', filters.pastorMemberId.toString());
+    if (filters?.all !== undefined) params.append('all', filters.all.toString());
+    const queryString = params.toString();
+    const res = await api.get<Rede[]>(`/redes${queryString ? `?${queryString}` : ''}`);
     return res.data;
   },
 

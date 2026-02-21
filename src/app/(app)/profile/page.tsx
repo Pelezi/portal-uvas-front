@@ -1,18 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { memberService } from '@/services/memberService';
 import { Member } from '@/types';
 import { toast } from 'react-hot-toast';
 import { Eye, EyeOff, Edit2, Save, X } from 'lucide-react';
 import { formatPhoneForDisplay, formatPhoneForInput, stripPhoneFormatting, ensureCountryCode } from '@/lib/phoneUtils';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, TextField, Button } from '@mui/material';
+import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, TextField, Button, Slider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/pt-br';
+import Cropper from 'react-easy-crop';
+import { Area } from 'react-easy-crop';
+import getCroppedImg from '@/utils/cropImage';
 
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -57,6 +60,17 @@ export default function ProfilePage() {
   // For spouse selection
   const [allMembers, setAllMembers] = useState<Member[]>([]);
   const [loadingCep, setLoadingCep] = useState(false);
+
+  // Photo upload and crop state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>('');
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [croppedImage, setCroppedImage] = useState<string>('');
+  const [croppedImageFile, setCroppedImageFile] = useState<File | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [deletePhoto, setDeletePhoto] = useState(false);
 
   const muiTheme = createTheme({
     palette: {
@@ -177,6 +191,8 @@ export default function ProfilePage() {
       // Filter valid social media entries
       const validSocialMedia = socialMedia.filter(sm => sm.type.trim() && sm.username.trim());
 
+      const photoChanged = croppedImageFile || deletePhoto;
+
       await memberService.updateOwnProfile({
         name,
         maritalStatus,
@@ -193,11 +209,17 @@ export default function ProfilePage() {
         complement: complement || undefined,
         state: state || undefined,
         socialMedia: validSocialMedia.length > 0 ? validSocialMedia : undefined,
-      });
+      }, croppedImageFile || undefined, deletePhoto);
       
       toast.success('Perfil atualizado com sucesso!');
       setIsEditing(false);
-      loadProfile();
+
+      // If photo was changed, reload page to update sidebar
+      if (photoChanged) {
+        window.location.reload();
+      } else {
+        loadProfile();
+      }
     } catch (error: any) {
       console.error('Erro ao atualizar perfil:', error);
       const errorMessage = error?.response?.data?.message || 'Erro ao atualizar perfil';
@@ -226,8 +248,92 @@ export default function ProfilePage() {
       
       // Reset social media from profile
       setSocialMedia(profile.socialMedia?.map(sm => ({ type: sm.type, username: sm.username })) || []);
+      
+      // Reset photo states
+      setCroppedImage('');
+      setCroppedImageFile(null);
+      setSelectedImage(null);
+      setImagePreview('');
+      setDeletePhoto(false);
     }
     setIsEditing(false);
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validar tamanho do arquivo (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('A imagem deve ter no máximo 10MB');
+        return;
+      }
+      
+      // Validar tipo de arquivo
+      if (!file.type.startsWith('image/')) {
+        toast.error('Por favor, selecione uma imagem válida');
+        return;
+      }
+      
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file));
+      setShowCropModal(true);
+      setDeletePhoto(false);
+    }
+  };
+
+  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleCropConfirm = async () => {
+    if (!croppedAreaPixels || !selectedImage) return;
+
+    try {
+      const croppedImageBlob = await getCroppedImg(
+        imagePreview,
+        croppedAreaPixels
+      );
+
+      // Converter Blob para File
+      const croppedFile = new File(
+        [croppedImageBlob],
+        selectedImage.name,
+        { type: 'image/jpeg' }
+      );
+
+      setCroppedImage(URL.createObjectURL(croppedImageBlob));
+      setCroppedImageFile(croppedFile);
+      setPhotoUrl(URL.createObjectURL(croppedImageBlob));
+      setShowCropModal(false);
+      
+      // Reset crop and zoom for next photo
+      setZoom(1);
+      setCrop({ x: 0, y: 0 });
+      
+      toast.success('Foto selecionada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao cortar imagem:', error);
+      toast.error('Erro ao processar a imagem');
+    }
+  };
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setSelectedImage(null);
+    setImagePreview('');
+    // Reset crop and zoom
+    setZoom(1);
+    setCrop({ x: 0, y: 0 });
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoUrl('');
+    setCroppedImage('');
+    setCroppedImageFile(null);
+    setSelectedImage(null);
+    setImagePreview('');
+    setDeletePhoto(true);
+    toast.success('Foto removida');
   };
 
   const formatCep = (value: string) => {
@@ -310,6 +416,56 @@ export default function ProfilePage() {
   return (
     <ThemeProvider theme={muiTheme}>
       <div className="container mx-auto p-6 max-w-6xl">
+        {/* Photo Section */}
+        <div className="flex justify-center mb-6">
+          <div className="relative">
+            {(photoUrl || croppedImage) ? (
+              <div className="relative">
+                <img
+                  src={croppedImage || photoUrl}
+                  alt={profile?.name}
+                  className="w-32 h-32 rounded-full object-cover border-4 border-blue-900"
+                />
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg"
+                    title="Remover foto"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="w-32 h-32 rounded-full bg-gray-800 border-4 border-blue-900 flex items-center justify-center">
+                <span className="text-4xl text-gray-600">👤</span>
+              </div>
+            )}
+            
+            {isEditing && (
+              <div className="mt-3 text-center">
+                <input
+                  type="file"
+                  id="profile-photo-upload"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="profile-photo-upload"
+                  className="cursor-pointer px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium inline-block"
+                >
+                  {photoUrl ? 'Alterar Foto' : 'Adicionar Foto'}
+                </label>
+                <p className="text-xs text-gray-500 mt-2">
+                  Máximo: 10MB | JPG, PNG
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+        
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-100">Meu Perfil</h1>
           {!isEditing && (
@@ -1002,6 +1158,57 @@ export default function ProfilePage() {
             </form>
           </div>
         </div>
+        
+        {/* Modal de Crop */}
+        {showCropModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+            <div className="bg-gray-900 rounded w-11/12 max-w-2xl p-6">
+              <h3 className="text-xl font-bold mb-4 text-gray-100">Ajustar Foto</h3>
+              
+              <div className="relative w-full h-96 bg-gray-800 rounded mb-4">
+                <Cropper
+                  image={imagePreview}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  onCropChange={setCrop}
+                  onCropComplete={onCropComplete}
+                  cropShape="round"
+                  showGrid={false}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Zoom
+                </label>
+                <Slider
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  onChange={(e, value) => setZoom(value as number)}
+                  className="text-blue-600"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCropCancel}
+                  className="flex-1 px-4 py-2 border border-gray-600 rounded hover:bg-gray-800 text-gray-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCropConfirm}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                >
+                  Confirmar Corte
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ThemeProvider>
   );

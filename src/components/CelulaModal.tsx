@@ -59,6 +59,8 @@ export default function CelulaModal({
   const [showLeaderDropdown, setShowLeaderDropdown] = useState(false);
   const [leaderInTrainingIds, setLeaderInTrainingIds] = useState<number[]>([]);
   const [celulaMemberOptions, setCelulaMemberOptions] = useState<Member[]>([]);
+  const [allMembers, setAllMembers] = useState<Member[]>([]); // Todos os membros para células Kids
+  const [allCelulas, setAllCelulas] = useState<Celula[]>([]); // Todas as células para verificar disponibilidade
   const [weekday, setWeekday] = useState<number | null>(null);
   const [time, setTime] = useState<Dayjs | null>(() => dayjs().hour(19).minute(30));
 
@@ -172,30 +174,102 @@ export default function CelulaModal({
     }
   }, [celula, discipulados]);
 
-  // Carregar membros da célula quando editando
+  // Carregar membros da célula quando editando - APENAS quando o modal está aberto
   useEffect(() => {
     const loadCelulaMembers = async () => {
-      if (celula?.id) {
-        try {
-          const { membersService } = await import('@/services/membersService');
-          const data = await membersService.getMembers(celula.id);
-          setCelulaMemberOptions(data || []);
-          
-          // Inicializar líderes em treinamento
-          if (celula.leadersInTraining) {
-            setLeaderInTrainingIds(celula.leadersInTraining.map(lit => lit.member.id));
-          }
-        } catch (error) {
-          console.error('Error loading celula members:', error);
+      // Só carregar se o modal estiver aberto e houver uma célula
+      if (!isOpen || !celula?.id) {
+        return;
+      }
+      
+      try {
+        const { membersService } = await import('@/services/membersService');
+        const { celulasService } = await import('@/services/celulasService');
+        const data = await membersService.getMembers(celula.id);
+        setCelulaMemberOptions(data || []);
+        
+        // Inicializar líderes em treinamento
+        if (celula.leadersInTraining) {
+          setLeaderInTrainingIds(celula.leadersInTraining.map(lit => lit.member.id));
         }
-      } else {
-        setCelulaMemberOptions([]);
-        setLeaderInTrainingIds([]);
+        
+        // Carregar todos os membros e células para células Kids
+        const selectedDiscipulado = discipulados.find(d => d.id === celula.discipuladoId);
+        
+        if (selectedDiscipulado) {
+          const selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+          
+          if (selectedRede?.isKids) {
+            
+            // Buscar todos os discípulos do discipulador (célula Kids)
+            const allMembersData = await membersService.getAllMembers({ 
+              discipleOfId: selectedDiscipulado.id,
+              all: true 
+            });
+            setAllMembers(allMembersData || []);
+            
+            // Buscar todas as células para verificar disponibilidade
+            const allCelulasData = await celulasService.getCelulas();
+            setAllCelulas(allCelulasData || []);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading celula members:', error);
       }
     };
     
     loadCelulaMembers();
-  }, [celula]);
+  }, [isOpen, celula, discipulados, redes]); // Adicionado isOpen como dependência
+
+  // Limpar estados quando o modal for fechado para liberar memória
+  useEffect(() => {
+    if (!isOpen) {
+      setCelulaMemberOptions([]);
+      setAllMembers([]);
+      setAllCelulas([]);
+    }
+  }, [isOpen]);
+
+  // Carregar membros quando discipuladoId muda (para criação de células Kids)
+  useEffect(() => {
+    const loadDiscipuladoMembers = async () => {
+      // Só carregar se não estiver editando e houver discipuladoId
+      if (isEditing || !discipuladoId || !isOpen) {
+        return;
+      }
+
+      const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+      if (!selectedDiscipulado) return;
+
+      const selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+      if (!selectedRede?.isKids) {
+        // Se não for Kids, limpar allMembers
+        setAllMembers([]);
+        setAllCelulas([]);
+        return;
+      }
+
+      try {
+        const { membersService } = await import('@/services/membersService');
+        const { celulasService } = await import('@/services/celulasService');
+        
+        // Buscar todos os discípulos do discipulador (célula Kids)
+        const allMembersData = await membersService.getAllMembers({ 
+          discipleOfId: selectedDiscipulado.id,
+          all: true 
+        });
+        setAllMembers(allMembersData || []);
+        
+        // Buscar todas as células para verificar disponibilidade
+        const allCelulasData = await celulasService.getCelulas();
+        setAllCelulas(allCelulasData || []);
+      } catch (error) {
+        console.error('Error loading discipulado members:', error);
+      }
+    };
+
+    loadDiscipuladoMembers();
+  }, [discipuladoId, isOpen, isEditing, discipulados, redes]);
 
   // Validar gênero quando rede Kids é selecionada
   useEffect(() => {
@@ -217,7 +291,9 @@ export default function CelulaModal({
     
     // Validar se é rede Kids e se o líder selecionado é feminino
     if (selectedRede?.isKids && leaderId) {
-      const selectedMember = members.find(m => m.id === leaderId);
+      // Para redes Kids, verificar no allMembers se disponível, senão em members
+      const membersList = allMembers.length > 0 ? allMembers : members;
+      const selectedMember = membersList.find(m => m.id === leaderId);
       if (selectedMember && selectedMember.gender !== 'FEMALE') {
         setLeaderId(null);
         setLeaderName('');
@@ -227,7 +303,7 @@ export default function CelulaModal({
     } else {
       setGenderError('');
     }
-  }, [redeId, discipuladoId, leaderId, redes, discipulados, members]);
+  }, [redeId, discipuladoId, leaderId, redes, discipulados, members, allMembers]);
 
   const resetForm = () => {
     setName('');
@@ -239,6 +315,8 @@ export default function CelulaModal({
     setLeaderName('');
     setLeaderInTrainingIds([]);
     setCelulaMemberOptions([]);
+    setAllMembers([]);
+    setAllCelulas([]);
     setWeekday(null);
     setTime(dayjs().hour(19).minute(30));
     setCountry('Brasil');
@@ -490,7 +568,7 @@ export default function CelulaModal({
                 {genderError && <div className="text-red-500 text-xs mt-1">{genderError}</div>}
                 {showLeaderDropdown && (
                   <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                    {members.filter(member => {
+                    {(() => {
                       // Encontrar a rede - pode vir direto do redeId ou do discipulado
                       let selectedRede = redes.find(r => r.id === redeId);
                       
@@ -502,15 +580,17 @@ export default function CelulaModal({
                         }
                       }
                       
-                      // Se a rede selecionada for Kids, filtrar apenas membros do gênero feminino
-                      if (selectedRede?.isKids && member.gender !== 'FEMALE') {
-                        return false;
-                      }
+                      // Se for rede Kids, usar apenas os discípulos do discipulado (allMembers)
+                      // Caso contrário, usar todos os membros disponíveis
+                      const availableMembers = selectedRede?.isKids ? allMembers : members;
                       
-                      const q = (leaderQuery || '').toLowerCase();
-                      if (!q) return true;
-                      return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
-                    }).map(member => (
+                      return availableMembers.filter(member => {
+                        // Para rede Kids, os membros já são apenas discípulos femininos
+                        // Para outras redes, não tem filtro de gênero
+                        const q = (leaderQuery || '').toLowerCase();
+                        if (!q) return true;
+                        return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
+                      }).map(member => (
                       <div
                         key={member.id}
                         className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
@@ -527,14 +607,28 @@ export default function CelulaModal({
                         </div>
                         <div className="text-xs text-green-600">Selecionar</div>
                       </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 )}
               </div>
             </div>
 
             {/* Líderes em Treinamento */}
-            {isEditing && celulaMemberOptions.length > 0 && (
+            {(() => {
+              // Mostrar campo de líderes em treinamento se:
+              // 1. Estiver editando OU
+              // 2. Estiver criando E for rede Kids com membros carregados
+              if (isEditing) return true;
+              
+              if (!discipuladoId) return false;
+              
+              const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+              if (!selectedDiscipulado) return false;
+              
+              const selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+              return selectedRede?.isKids && allMembers.length > 0;
+            })() && (
               <div className="md:col-span-2">
                 <label className="block mb-1 text-sm">Líderes em Treinamento</label>
                 <ThemeProvider theme={muiTheme}>
@@ -552,30 +646,130 @@ export default function CelulaModal({
                       size="small"
                       className="bg-gray-800 w-full"
                       renderValue={(selected) => {
-                        const selectedMembers = celulaMemberOptions.filter(m => selected.includes(m.id));
+                        const selectedRede = (() => {
+                          let sr = redes.find(r => r.id === redeId);
+                          if (!sr && discipuladoId) {
+                            const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+                            if (selectedDiscipulado) {
+                              sr = redes.find(r => r.id === selectedDiscipulado.redeId);
+                            }
+                          }
+                          return sr;
+                        })();
+                        
+                        const membersList = selectedRede?.isKids ? allMembers : celulaMemberOptions;
+                        const selectedMembers = membersList.filter(m => selected.includes(m.id));
+                        
                         return selectedMembers.map(m => m.name).join(', ');
                       }}
                     >
-                      {celulaMemberOptions
-                        .filter(m => m.id !== leaderId)
-                        .map((member) => (
-                          <MenuItem key={member.id} value={member.id}>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={leaderInTrainingIds.includes(member.id)}
-                                readOnly
-                                className="h-4 w-4"
-                              />
-                              <span>{member.name}</span>
-                            </div>
-                          </MenuItem>
-                        ))}
+                      {(() => {
+                        // Encontrar a rede
+                        let selectedRede = redes.find(r => r.id === redeId);
+                        
+                        if (!selectedRede && discipuladoId) {
+                          const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+                          if (selectedDiscipulado) {
+                            selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+                          }
+                        }
+                        
+                        // Função para verificar se o ministério é >= LEADER_IN_TRAINING
+                        const hasMinistryLevel = (ministryType: string | null | undefined): boolean => {
+                          const ministryHierarchy = ['VISITOR', 'REGULAR_ATTENDEE', 'MEMBER', 'LEADER_IN_TRAINING', 'LEADER', 'DISCIPULADOR', 'PASTOR', 'PRESIDENT_PASTOR'];
+                          const requiredIndex = ministryHierarchy.indexOf('LEADER_IN_TRAINING');
+                          const memberIndex = ministryType ? ministryHierarchy.indexOf(ministryType) : -1;
+                          return memberIndex >= requiredIndex;
+                        };
+                        
+                        // Se for rede Kids, usar lógica especial
+                        if (selectedRede?.isKids) {
+                          const filteredMembers = allMembers.filter(m => {
+                            // Não incluir o líder
+                            if (m.id === leaderId) return false;
+                            // Apenas membros femininos
+                            if (m.gender !== 'FEMALE') return false;
+                            // Verificar nível ministerial
+                            if (!hasMinistryLevel(m.ministryPosition?.type)) return false;
+                            return true;
+                          });
+                          
+                          const menuItems = filteredMembers
+                            .map((member) => {
+                              // Verificar se já está em outra célula
+                              const isInAnotherCelula = allCelulas.some(c => 
+                                c.id !== celula?.id && 
+                                c.leadersInTraining?.some(lit => lit.member.id === member.id)
+                              );
+                              
+                              return (
+                                <MenuItem 
+                                  key={member.id} 
+                                  value={member.id}
+                                  disabled={isInAnotherCelula}
+                                >
+                                  <div className="flex items-center gap-2 w-full">
+                                    <input
+                                      type="checkbox"
+                                      checked={leaderInTrainingIds.includes(member.id)}
+                                      readOnly
+                                      className="h-4 w-4"
+                                      disabled={isInAnotherCelula}
+                                    />
+                                    <div className="flex-1">
+                                      <span className={isInAnotherCelula ? 'text-gray-500' : ''}>
+                                        {member.name}
+                                      </span>
+                                      {isInAnotherCelula && (
+                                        <span className="text-xs text-gray-500 ml-2">(Já em outra célula)</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </MenuItem>
+                              );
+                            });
+                          
+                          return menuItems;
+                        } else {
+                          // Lógica padrão para células não-Kids
+                          const nonKidsItems = celulaMemberOptions
+                            .filter(m => m.id !== leaderId)
+                            .map((member) => (
+                              <MenuItem key={member.id} value={member.id}>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={leaderInTrainingIds.includes(member.id)}
+                                    readOnly
+                                    className="h-4 w-4"
+                                  />
+                                  <span>{member.name}</span>
+                                </div>
+                              </MenuItem>
+                            ));
+                          
+                          return nonKidsItems;
+                        }
+                      })()}
                     </Select>
                   </FormControl>
                 </ThemeProvider>
                 <p className="text-xs text-gray-400 mt-1">
-                  Apenas membros desta célula podem ser selecionados como líderes em treinamento
+                  {(() => {
+                    let selectedRede = redes.find(r => r.id === redeId);
+                    if (!selectedRede && discipuladoId) {
+                      const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+                      if (selectedDiscipulado) {
+                        selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+                      }
+                    }
+                    
+                    if (selectedRede?.isKids) {
+                      return 'Apenas discípulos do discipulado. Membros já em outra célula estão bloqueados.';
+                    } else {
+                      return 'Apenas membros desta célula podem ser selecionados como líderes em treinamento';
+                    }
+                  })()}
                 </p>
               </div>
             )}

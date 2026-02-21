@@ -119,6 +119,18 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
           {/* Personal Information */}
           <section>
             <h3 className="text-lg font-semibold mb-3 text-blue-400">Informações Pessoais</h3>
+            
+            {/* Photo */}
+            {member.photoUrl && (
+              <div className="mb-4 flex justify-center">
+                <img
+                  src={member.photoUrl}
+                  alt={member.name}
+                  className="w-32 h-32 rounded-full object-cover border-4 border-blue-900"
+                />
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-400">Nome</label>

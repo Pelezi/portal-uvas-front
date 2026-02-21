@@ -114,6 +114,7 @@ export interface Discipulado {
   discipuladorMemberId: number;
   rede: Rede;
   discipulador: Member;
+  disciples?: { id: number; member: Member }[];
 }
 
 export interface Rede {
@@ -294,6 +295,7 @@ export interface MemberFilters {
   discipuladoId?: number;
   redeId?: number;
   congregacaoId?: number;
+  all?: boolean;
 }
 
 // Type for MUI Select events

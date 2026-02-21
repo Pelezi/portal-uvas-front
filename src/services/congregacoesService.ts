@@ -33,9 +33,28 @@ export interface UpdateCongregacaoInput {
   state?: string;
 }
 
+export interface CongregacaoFilterInput {
+  name?: string;
+  pastorGovernoMemberId?: number;
+  vicePresidenteMemberId?: number;
+  congregacaoIds?: number[];
+  all?: boolean;
+}
+
 export const congregacoesService = {
-  getCongregacoes: async (): Promise<Congregacao[]> => {
-    const res = await api.get<Congregacao[]>('/congregacoes');
+  getCongregacoes: async (filters?: CongregacaoFilterInput): Promise<Congregacao[]> => {
+    const params = new URLSearchParams();
+    if (filters?.name) params.append('name', filters.name);
+    if (filters?.pastorGovernoMemberId) params.append('pastorGovernoMemberId', filters.pastorGovernoMemberId.toString());
+    if (filters?.vicePresidenteMemberId) params.append('vicePresidenteMemberId', filters.vicePresidenteMemberId.toString());
+    if (filters?.congregacaoIds && filters.congregacaoIds.length > 0) {
+      filters.congregacaoIds.forEach(id => params.append('congregacaoIds', id.toString()));
+    }
+    if (filters?.all !== undefined) params.append('all', filters.all.toString());
+    
+    const queryString = params.toString();
+    const url = queryString ? `/congregacoes?${queryString}` : '/congregacoes';
+    const res = await api.get<Congregacao[]>(url);
     return res.data;
   },
 

@@ -8,10 +8,12 @@ import { congregacoesService } from '@/services/congregacoesService';
 import { membersService } from '@/services/membersService';
 import { Celula, Member, Discipulado, Rede, Congregacao, MemberFilters } from '@/types';
 import toast from 'react-hot-toast';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, Button } from '@mui/material';
+import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, Button, TextField } from '@mui/material';
 import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
+import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import MemberModal from '@/components/MemberModal';
 import MemberViewModal from '@/components/MemberViewModal';
+import FilterModal, { FilterConfig } from '@/components/FilterModal';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function MembersManagementPage() {
@@ -22,10 +24,10 @@ export default function MembersManagementPage() {
   const [redes, setRedes] = useState<Rede[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
-  const hasInitialized = useRef(false);
-  const filtersInitialized = useRef(false);
 
   // Filters
+  const [filterName, setFilterName] = useState('');
+  const [filterMyDisciples, setFilterMyDisciples] = useState(true);
   const [filterCelulaId, setFilterCelulaId] = useState<number | null>(null);
   const [filterDiscipuladoId, setFilterDiscipuladoId] = useState<number | null>(null);
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
@@ -41,6 +43,9 @@ export default function MembersManagementPage() {
   // View modal state
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingMember, setViewingMember] = useState<Member | null>(null);
+  
+  // Filter modal state
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const muiTheme = createTheme({
     palette: {
@@ -58,82 +63,23 @@ export default function MembersManagementPage() {
         const [c, d, r, cong] = await Promise.all([
           celulasService.getCelulas(),
           discipuladosService.getDiscipulados(),
-          redesService.getRedes(),
+          redesService.getRedes({}),
           congregacoesService.getCongregacoes()
         ]);
         setCelulas(c);
         setDiscipulados(d);
         setRedes(r);
         setCongregacoes(cong);
-
-        // Inicializar filtros baseados no usuário logado (apenas uma vez)
-        if (!hasInitialized.current && user) {
-          hasInitialized.current = true;
-          
-          // Verificar se o usuário tem associações e selecionar a primeira
-          if (user.celula?.id) {
-            // Tem célula associada
-            setFilterCelulaId(user.celula.id);
-            
-            // Buscar discipulado e rede da célula
-            const celula = c.find(cel => cel.id === user.celula?.id);
-            if (celula?.discipuladoId) {
-              setFilterDiscipuladoId(celula.discipuladoId);
-              
-              const discipulado = d.find(disc => disc.id === celula.discipuladoId);
-              if (discipulado?.redeId) {
-                setFilterRedeId(discipulado.redeId);
-                
-                const rede = r.find(rd => rd.id === discipulado.redeId);
-                if (rede?.congregacaoId) {
-                  setFilterCongregacaoId(rede.congregacaoId);
-                }
-              }
-            }
-          } else {
-            // Verificar se é discipulador
-            const userDiscipulado = d.find(disc => disc.discipuladorMemberId === user.id);
-            if (userDiscipulado) {
-              setFilterDiscipuladoId(userDiscipulado.id);
-              if (userDiscipulado.redeId) {
-                setFilterRedeId(userDiscipulado.redeId);
-                
-                const rede = r.find(rd => rd.id === userDiscipulado.redeId);
-                if (rede?.congregacaoId) {
-                  setFilterCongregacaoId(rede.congregacaoId);
-                }
-              }
-            } else {
-              // Verificar se é pastor de rede
-              const userRede = r.find(rede => rede.pastorMemberId === user.id);
-              if (userRede) {
-                setFilterRedeId(userRede.id);
-                if (userRede.congregacaoId) {
-                  setFilterCongregacaoId(userRede.congregacaoId);
-                }
-              }
-            }
-          }
-          
-          // Marcar que os filtros foram inicializados
-          filtersInitialized.current = true;
-        } else if (!hasInitialized.current) {
-          // Se não há usuário ainda, marcar como inicializado para evitar loop
-          filtersInitialized.current = true;
-        }
       } catch (e) {
         console.error(e);
       }
     };
     loadFilters();
-  }, [user, authLoading]);
+  }, [authLoading]);
 
   useEffect(() => {
     const loadMembers = async () => {
-      // Aguardar inicialização dos filtros e autenticação
-      if (!filtersInitialized.current || authLoading) {
-        return;
-      }
+      if (authLoading) return;
       
       setLoading(true);
       try {
@@ -143,6 +89,7 @@ export default function MembersManagementPage() {
         if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
         if (filterRedeId) filters.redeId = filterRedeId;
         if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+        if (!filterMyDisciples) filters.all = true;
 
         const m = await membersService.getAllMembers(filters);
         setMembers(m);
@@ -154,7 +101,7 @@ export default function MembersManagementPage() {
       }
     };
     loadMembers();
-  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, authLoading]);
+  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterMyDisciples, authLoading]);
 
   const openEditModal = (m: Member) => {
     setModalMember(m);
@@ -171,7 +118,7 @@ export default function MembersManagementPage() {
     setIsModalOpen(true);
   };
 
-  const handleModalSave = async (data: Partial<Member>): Promise<Member> => {
+  const handleModalSave = async (data: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
     let savedMember: Member;
     const wasCreating = !modalMember;
     const wasEnablingAccess = !modalMember?.hasSystemAccess && data.hasSystemAccess;
@@ -179,7 +126,7 @@ export default function MembersManagementPage() {
     try {
       if (modalMember) {
         // Editing
-        savedMember = await membersService.updateMember(modalMember.celulaId || 0, modalMember.id, data);
+        savedMember = await membersService.updateMember(modalMember.celulaId || 0, modalMember.id, data, photo, deletePhoto);
         toast.success('Membro atualizado');
       } else {
         // Creating - name is required
@@ -187,8 +134,22 @@ export default function MembersManagementPage() {
           toast.error('Nome é obrigatório');
           throw new Error('Nome é obrigatório');
         }
-        savedMember = await membersService.addMember(data.celulaId ?? null, data as Partial<Member> & { name: string });
+        savedMember = await membersService.addMember(data.celulaId ?? null, data as Partial<Member> & { name: string }, photo);
         toast.success('Membro criado com sucesso');
+      }
+
+      // Check if user edited their own photo - if so, reload page to update sidebar
+      const isEditingSelf = user && savedMember.id === user.id;
+      const photoChanged = photo || deletePhoto;
+      
+      if (isEditingSelf && photoChanged) {
+        // Close modal first for better UX
+        setIsModalOpen(false);
+        setModalMember(null);
+        
+        // Reload page to update sidebar picture
+        window.location.reload();
+        return savedMember;
       }
 
       // Reload members
@@ -346,180 +307,192 @@ export default function MembersManagementPage() {
 
   const cancelDelete = () => setConfirmingMember(null);
 
+  // Verificar se há filtros ativos
+  const hasActiveFilters = !!filterName || filterCongregacaoId !== null || filterRedeId !== null || filterDiscipuladoId !== null || filterCelulaId !== null || filterMyDisciples;
+
+  // Limpar todos os filtros
+  const clearAllFilters = () => {
+    setFilterName('');
+    setFilterMyDisciples(false);
+    setFilterCongregacaoId(null);
+    setFilterRedeId(null);
+    setFilterDiscipuladoId(null);
+    setFilterCelulaId(null);
+  };
+
+  // Configuração dos filtros para o modal
+  const filterConfigs: FilterConfig[] = [
+    {
+      type: 'switch',
+      label: '',
+      value: filterMyDisciples,
+      onChange: setFilterMyDisciples,
+      switchLabelOff: 'Todos os membros',
+      switchLabelOn: 'Meus discípulos'
+    },
+    {
+      type: 'select',
+      label: 'Nome do membro',
+      value: filterName,
+      onChange: setFilterName,
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Digite o nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="bg-gray-700"
+            InputProps={{
+              className: 'bg-gray-700',
+            }}
+          />
+        </ThemeProvider>
+      )
+    },
+    {
+      type: 'select',
+      label: 'Congregação',
+      value: filterCongregacaoId,
+      onChange: (val) => {
+        setFilterCongregacaoId(val);
+        setFilterRedeId(null);
+        setFilterDiscipuladoId(null);
+        setFilterCelulaId(null);
+      },
+      options: congregacoes.map(c => ({ value: c.id, label: c.name }))
+    },
+    {
+      type: 'select',
+      label: 'Rede',
+      value: filterRedeId,
+      onChange: (val) => {
+        setFilterRedeId(val);
+        setFilterDiscipuladoId(null);
+        setFilterCelulaId(null);
+        if (val) {
+          const rede = redes.find(r => r.id === val);
+          if (rede?.congregacaoId) {
+            setFilterCongregacaoId(rede.congregacaoId);
+          }
+        }
+      },
+      options: redes
+        .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
+        .map(r => ({ value: r.id, label: r.name }))
+    },
+    {
+      type: 'select',
+      label: 'Discipulado',
+      value: filterDiscipuladoId,
+      onChange: (val) => {
+        setFilterDiscipuladoId(val);
+        setFilterCelulaId(null);
+        if (val) {
+          const discipulado = discipulados.find(d => d.id === val);
+          if (discipulado?.redeId) {
+            setFilterRedeId(discipulado.redeId);
+            const rede = redes.find(r => r.id === discipulado.redeId);
+            if (rede?.congregacaoId) {
+              setFilterCongregacaoId(rede.congregacaoId);
+            }
+          }
+        }
+      },
+      options: discipulados
+        .filter(d => !filterRedeId || d.redeId === filterRedeId)
+        .map(d => ({ value: d.id, label: d.discipulador.name }))
+    },
+    {
+      type: 'select',
+      label: 'Célula',
+      value: filterCelulaId,
+      onChange: (val) => {
+        setFilterCelulaId(val);
+        if (val === 0) {
+          setFilterRedeId(null);
+          setFilterDiscipuladoId(null);
+          setFilterCongregacaoId(null);
+        } else if (val) {
+          const celula = celulas.find(c => c.id === val);
+          if (celula?.discipuladoId) {
+            setFilterDiscipuladoId(celula.discipuladoId);
+            const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+            if (discipulado?.redeId) {
+              setFilterRedeId(discipulado.redeId);
+              const rede = redes.find(r => r.id === discipulado.redeId);
+              if (rede?.congregacaoId) {
+                setFilterCongregacaoId(rede.congregacaoId);
+              }
+            }
+          }
+        }
+      },
+      options: [
+        { value: 0, label: 'Sem célula' },
+        ...celulas
+          .filter(c => !filterDiscipuladoId || c.discipuladoId === filterDiscipuladoId)
+          .map(c => ({ value: c.id, label: c.name }))
+      ]
+    }
+  ];
+
+  const filteredMembers = members.filter(m => !filterName || m.name.toLowerCase().includes(filterName.toLowerCase()));
+
   return (
     <div className="relative pb-20">
       <ThemeProvider theme={muiTheme}>
         <h2 className="text-2xl font-semibold mb-4">Gestão de Membros</h2>
 
-        <div className="mb-6">
-          <label className="block mb-2">Filtros</label>
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth>
-                <InputLabel id="filter-congregacao-label" size='small'>Congregação</InputLabel>
-                <Select
-                  labelId="filter-congregacao-label"
-                  value={filterCongregacaoId !== null ? String(filterCongregacaoId) : ''}
-                  label="Congregação"
-                  onChange={(e) => {
-                    setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null);
-                    setFilterRedeId(null);
-                    setFilterDiscipuladoId(null);
-                    setFilterCelulaId(null);
-                  }}
-                  size="small"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todas congregações</MenuItem>
-                  {congregacoes.map(c => (
-                    <MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth>
-                <InputLabel id="filter-rede-label" size='small'>Rede</InputLabel>
-                <Select
-                  labelId="filter-rede-label"
-                  value={filterRedeId !== null ? String(filterRedeId) : ''}
-                  label="Rede"
-                  onChange={(e) => {
-                    const redeId = e.target.value ? Number(e.target.value) : null;
-                    setFilterRedeId(redeId);
-                    setFilterDiscipuladoId(null);
-                    setFilterCelulaId(null);
-                    
-                    // Auto-preencher congregação
-                    if (redeId) {
-                      const rede = redes.find(r => r.id === redeId);
-                      if (rede?.congregacaoId) {
-                        setFilterCongregacaoId(rede.congregacaoId);
-                      }
-                    }
-                  }}
-                  size="small"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todas redes</MenuItem>
-                  {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map(r => (
-                    <MenuItem key={r.id} value={String(r.id)}>{r.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth>
-                <InputLabel id="filter-discipulado-label" size='small'>Discipulado</InputLabel>
-                <Select
-                  labelId="filter-discipulado-label"
-                  value={filterDiscipuladoId !== null ? String(filterDiscipuladoId) : ''}
-                  label="Discipulado"
-                  onChange={(e) => {
-                    const discipuladoId = e.target.value ? Number(e.target.value) : null;
-                    setFilterDiscipuladoId(discipuladoId);
-                    setFilterCelulaId(null);
-                    
-                    // Auto-preencher rede e congregação
-                    if (discipuladoId) {
-                      const discipulado = discipulados.find(d => d.id === discipuladoId);
-                      if (discipulado?.redeId) {
-                        setFilterRedeId(discipulado.redeId);
-                        const rede = redes.find(r => r.id === discipulado.redeId);
-                        if (rede?.congregacaoId) {
-                          setFilterCongregacaoId(rede.congregacaoId);
-                        }
-                      }
-                    }
-                  }}
-                  size="small"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {discipulados
-                    .filter(d => !filterRedeId || d.redeId === filterRedeId)
-                    .map(d => (
-                      <MenuItem key={d.id} value={String(d.id)}>
-                        {d.discipulador.name}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <div className="w-full sm:w-48">
-              <FormControl fullWidth>
-                <InputLabel id="filter-celula-label" size='small'>Célula</InputLabel>
-                <Select
-                  labelId="filter-celula-label"
-                  value={filterCelulaId !== null ? String(filterCelulaId) : ''}
-                  label="Célula"
-                  onChange={(e) => {
-                    const value = e.target.value === '' ? null : Number(e.target.value);
-                    setFilterCelulaId(value);
-                    
-                    // Se selecionar "Sem célula" (0), limpar filtros superiores
-                    if (value === 0) {
-                      setFilterRedeId(null);
-                      setFilterDiscipuladoId(null);
-                      setFilterCongregacaoId(null);
-                    } else if (value) {
-                      // Auto-preencher discipulado, rede e congregação
-                      const celula = celulas.find(c => c.id === value);
-                      if (celula?.discipuladoId) {
-                        setFilterDiscipuladoId(celula.discipuladoId);
-                        const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
-                        if (discipulado?.redeId) {
-                          setFilterRedeId(discipulado.redeId);
-                          const rede = redes.find(r => r.id === discipulado.redeId);
-                          if (rede?.congregacaoId) {
-                            setFilterCongregacaoId(rede.congregacaoId);
-                          }
-                        }
-                      }
-                    }
-                  }}
-                  size="small"
-                  className="bg-gray-800"
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  <MenuItem value="0">Sem célula</MenuItem>
-                  {celulas
-                    .filter(c => !filterDiscipuladoId || c.discipuladoId === filterDiscipuladoId)
-                    .map(c => (<MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>))}
-                </Select>
-              </FormControl>
-            </div>
-
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => {
-                setFilterCongregacaoId(null);
-                setFilterRedeId(null);
-                setFilterDiscipuladoId(null);
-                setFilterCelulaId(null);
-              }}
-              className="h-10 whitespace-nowrap"
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <TextField
+            size="small"
+            placeholder="Buscar por nome"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="w-64 bg-gray-800"
+            InputProps={{
+              className: 'bg-gray-800',
+            }}
+          />
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${
+              hasActiveFilters
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-700 hover:bg-gray-600 text-white'
+            }`}
+            title="Filtros"
+          >
+            <FaFilter className="h-5 w-5" />
+            <span>Filtros</span>
+            {hasActiveFilters && (
+              <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                {[filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterCelulaId].filter(f => f !== null && f !== '').length + (filterMyDisciples ? 1 : 0)}
+              </span>
+            )}
+          </button>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+              title="Limpar filtros"
             >
-              Limpar Filtros
-            </Button>
-          </div>
+              <FaFilterCircleXmark className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         <div>
-          <div className="flex items-center mb-3">
-            <h3 className="font-medium">Membros ({members.length})</h3>
-          </div>
+          <h3 className="font-medium mb-3">Exibindo {filteredMembers.length} de {members.length} membros</h3>
           {loading ? (
             <div className="flex justify-center items-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
           <ul className="space-y-2">
-            {members.map((m) => {
+            {filteredMembers.map((m) => {
               const leadershipTags = getLeadershipTags(m);
               const hasLeadership = leadershipTags.length > 0;
               const showNoCelula = !m.celulaId && !hasLeadership;
@@ -606,7 +579,15 @@ export default function MembersManagementPage() {
             setViewingMember(null);
           }}
         />
-
+        {/* FilterModal */}
+        <FilterModal
+          isOpen={isFilterModalOpen}
+          onClose={() => setIsFilterModalOpen(false)}
+          onApply={() => {}}
+          onClear={clearAllFilters}
+          filters={filterConfigs}
+          hasActiveFilters={hasActiveFilters}
+        />
         {/* Delete confirmation modal */}
         {confirmingMember && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
