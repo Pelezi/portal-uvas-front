@@ -336,7 +336,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     setIsBaptized(false);
     setBaptismDate(null);
     setBirthDate(null);
-    setRegisterDate(null);
+    setRegisterDate(dayjs()); // Preencher automaticamente com a data atual
     setSpouseId(null);
     setMinistryPositionId(null);
     setWinnerPathId(null);

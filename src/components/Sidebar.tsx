@@ -6,8 +6,7 @@ import { Users, FileText, Home, User, Menu, X, Settings, ChevronDown, ChevronUp,
 import { useAuth } from '@/contexts/AuthContext';
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
-import { Permission, Celula } from '@/types';
-import { celulasService } from '@/services/celulasService';
+import { hasPermission, PageRequirement } from '@/lib/permissions';
 
 interface NavLinkProps {
   href: string;
@@ -22,7 +21,7 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   matchPrefix?: boolean;
-  require?: 'leader' | 'discipulador' | 'pastorPresidente' | 'pastor' | 'admin';
+  require?: PageRequirement;
   children?: Omit<NavItem, 'children'>[];
 }
 
@@ -81,29 +80,22 @@ export default function Sidebar() {
     return null;
   }
 
-  // Compute permissions
-  const perm: Permission = user.permission;
-  const isAdmin = perm.isAdmin;
-  const isPresidentPastor = perm.isAdmin || perm.pastorPresidente;
-  const isPastor = perm.isAdmin || perm.pastor;
-  const isDiscipulador = perm.isAdmin || perm.pastor || perm.discipulador;
-  const isLeader = perm.isAdmin || perm.pastor || perm.discipulador || perm.leader;
-
   const navItems: NavItem[] = [
-    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false },
+    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false, require: 'leaderInTraining' },
     { 
       label: 'Relatório', 
       icon: <FileText size={18} />, 
       children: [
-        { href: '/report/fill', label: 'Preencher Relatório', icon: <FileText size={18} />, matchPrefix: false },
-        { href: '/report/view', label: 'Visualizar Relatório', icon: <FileText size={18} />, matchPrefix: false },
-      ]
+        { href: '/report/fill', label: 'Preencher Relatório', icon: <FileText size={18} />, matchPrefix: false, require: 'leaderInTraining' },
+        { href: '/report/view', label: 'Visualizar Relatório', icon: <FileText size={18} />, matchPrefix: false, require: 'leaderInTraining' },
+      ],
+      require: 'leaderInTraining'
     },
-    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true },
-    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true },
-    { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true },
-    { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true },
-    { href: '/congregacoes', label: 'Congregações', icon: <Building size={18} />, matchPrefix: true },
+    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
+    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
+    { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
+    { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
+    { href: '/congregacoes', label: 'Congregações', icon: <Building size={18} />, matchPrefix: true, require: 'leaderInTraining' },
     { href: '/settings', label: 'Configurações', icon: <Settings size={18} />, matchPrefix: true, require: 'admin' },
   ];
 
@@ -154,17 +146,26 @@ export default function Sidebar() {
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => {
-            // permission filtering
-            if (item.require === 'admin' && !isAdmin) return null;
-            if (item.require === 'pastorPresidente' && !isPresidentPastor) return null;
-            if (item.require === 'pastor' && !isPastor) return null;
-            if (item.require === 'discipulador' && !isDiscipulador) return null;
-            if (item.require === 'leader' && !isLeader) return null;
+            // permission filtering using unified system
+            if (item.require && !hasPermission(user.permission, item.require)) {
+              return null;
+            }
 
             // Se tem filhos, renderizar dropdown
             if (item.children && item.children.length > 0) {
               const isOpen = openDropdowns.has(item.label);
-              const hasActiveChild = item.children.some(child => 
+              
+              // Filter children based on permissions
+              const visibleChildren = item.children.filter(child => 
+                !child.require || hasPermission(user.permission, child.require)
+              );
+
+              // If no visible children, don't show the dropdown
+              if (visibleChildren.length === 0) {
+                return null;
+              }
+
+              const hasActiveChild = visibleChildren.some(child => 
                 child.href && (child.matchPrefix ? pathname.startsWith(child.href) : pathname === child.href)
               );
 
@@ -186,7 +187,7 @@ export default function Sidebar() {
                   </button>
                   {isOpen && (
                     <div className="ml-4 mt-1 space-y-1">
-                      {item.children.map((child) => {
+                      {visibleChildren.map((child) => {
                         if (!child.href) return null;
                         const isActive = child.matchPrefix ? pathname.startsWith(child.href) : pathname === child.href;
                         return (
