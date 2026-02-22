@@ -114,7 +114,14 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
       <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">Visualizar Membro</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-semibold">Visualizar Membro</h2>
+            {!member.isActive && (
+              <span className="px-3 py-1 bg-red-600 text-white text-sm font-semibold rounded-full">
+                Desligado
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-800 rounded-full transition-colors"

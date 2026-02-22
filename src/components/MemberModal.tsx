@@ -593,6 +593,36 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
 
   const handleToggleActive = async () => {
     const newActiveState = !isActive;
+    
+    // Se estiver desativando o membro, verificar posições de liderança
+    if (member && !newActiveState) {
+      const leadershipPositions: string[] = [];
+      
+      if (member.ledCelulas && member.ledCelulas.length > 0) {
+        leadershipPositions.push(`Líder de ${member.ledCelulas.length} célula(s)`);
+      }
+      
+      if (member.discipulados && member.discipulados.length > 0) {
+        leadershipPositions.push(`Discipulador de ${member.discipulados.length} discipulado(s)`);
+      }
+      
+      if (member.redes && member.redes.length > 0) {
+        leadershipPositions.push(`Pastor de ${member.redes.length} rede(s)`);
+      }
+      
+      if (member.congregacoesPastorGoverno && member.congregacoesPastorGoverno.length > 0) {
+        leadershipPositions.push(`Pastor de governo de ${member.congregacoesPastorGoverno.length} congregação(ões)`);
+      }
+      
+      if (leadershipPositions.length > 0) {
+        toast.error(
+          `Não é possível desligar este membro pois ele possui os seguintes cargos de liderança:\n\n${leadershipPositions.join('\n')}\n\nRemova-o desses cargos antes de desligá-lo.`,
+          { duration: 6000 }
+        );
+        return;
+      }
+    }
+    
     setIsActive(newActiveState);
 
     if (member) {

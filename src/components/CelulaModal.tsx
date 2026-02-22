@@ -781,7 +781,12 @@ export default function CelulaModal({
                 <Select
                   labelId="weekday-label"
                   value={weekday ?? ''}
-                  onChange={(e) => setWeekday(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Se não houver valor (string vazia) ou for undefined, define null
+                    // Caso contrário, converte para número (incluindo 0 para domingo)
+                    setWeekday(!val && val !== 0 ? null : Number(val));
+                  }}
                   label="Dia da Semana *"
                   size="small"
                   className="bg-gray-800 w-full">

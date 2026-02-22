@@ -162,6 +162,10 @@ export default function DiscipuladosPage() {
   const create = async () => {
     try {
       if (!createRedeId) throw new Error('Selecione uma rede');
+      if (!createDiscipuladorId) {
+        toast.error('Discipulador é obrigatório');
+        return;
+      }
       const discipulador = users.find(u => u.id === createDiscipuladorId);
       const nameForApi = discipulador ? discipulador.name : 'Sem discipulador';
       const created = await discipuladosService.createDiscipulado({ 

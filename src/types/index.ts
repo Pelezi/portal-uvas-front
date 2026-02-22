@@ -274,6 +274,7 @@ export interface CelulaLeadersInTraining {
   celulaId: number;
   memberId: number;
   celula: Celula;
+  member: Member;
 }
 
 export interface ReportCreateInput {
@@ -303,6 +304,7 @@ export interface MemberFilters {
   redeId?: number;
   congregacaoId?: number;
   all?: boolean;
+  isActive?: boolean;
 }
 
 // Type for MUI Select events

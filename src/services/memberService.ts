@@ -43,6 +43,7 @@ export const memberService = {
     ministryType?: string; 
     gender?: string;
     all?: boolean;
+    isActive?: boolean;
   }): Promise<Member[]> {
     const params = new URLSearchParams();
     if (filters?.celulaId !== undefined && filters?.celulaId !== null) {
@@ -55,6 +56,7 @@ export const memberService = {
     if (filters?.ministryType) params.append('ministryType', filters.ministryType);
     if (filters?.gender) params.append('gender', filters.gender);
     if (filters?.all !== undefined) params.append('all', filters.all.toString());
+    if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
     
     const queryString = params.toString();
     const url = queryString ? `/members?${queryString}` : '/members';
@@ -172,6 +174,7 @@ export const memberService = {
 
   async updateOwnProfile(data: {
     name?: string;
+    gender?: string;
     maritalStatus?: string;
     spouseId?: number | null;
     birthDate?: string;

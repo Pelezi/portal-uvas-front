@@ -28,6 +28,7 @@ export default function MembersManagementPage() {
   // Filters
   const [filterName, setFilterName] = useState('');
   const [filterMyDisciples, setFilterMyDisciples] = useState(true);
+  const [filterInactive, setFilterInactive] = useState(false);
   const [filterCelulaId, setFilterCelulaId] = useState<number | null>(null);
   const [filterDiscipuladoId, setFilterDiscipuladoId] = useState<number | null>(null);
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
@@ -90,6 +91,8 @@ export default function MembersManagementPage() {
         if (filterRedeId) filters.redeId = filterRedeId;
         if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
         if (!filterMyDisciples) filters.all = true;
+        // filterInactive: true = apenas inativos, false = apenas ativos
+        filters.isActive = !filterInactive;
 
         const m = await memberService.getAllMembers(filters);
         setMembers(m);
@@ -101,7 +104,7 @@ export default function MembersManagementPage() {
       }
     };
     loadMembers();
-  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterMyDisciples, authLoading]);
+  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterMyDisciples, filterInactive, authLoading]);
 
   const openEditModal = (m: Member) => {
     setModalMember(m);
@@ -158,6 +161,8 @@ export default function MembersManagementPage() {
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+      if (!filterMyDisciples) filters.all = true;
+      filters.isActive = !filterInactive;
       const refreshed = await memberService.getAllMembers(filters);
       setMembers(refreshed);
       setIsModalOpen(false);
@@ -312,6 +317,8 @@ export default function MembersManagementPage() {
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+      if (!filterMyDisciples) filters.all = true;
+      filters.isActive = !filterInactive;
       const refreshed = await memberService.getAllMembers(filters);
       setMembers(refreshed);
       setConfirmingMember(null);
@@ -324,12 +331,13 @@ export default function MembersManagementPage() {
   const cancelDelete = () => setConfirmingMember(null);
 
   // Verificar se há filtros ativos
-  const hasActiveFilters = !!filterName || filterCongregacaoId !== null || filterRedeId !== null || filterDiscipuladoId !== null || filterCelulaId !== null || filterMyDisciples;
+  const hasActiveFilters = !!filterName || filterCongregacaoId !== null || filterRedeId !== null || filterDiscipuladoId !== null || filterCelulaId !== null || filterMyDisciples || filterInactive;
 
   // Limpar todos os filtros
   const clearAllFilters = () => {
     setFilterName('');
     setFilterMyDisciples(false);
+    setFilterInactive(false);
     setFilterCongregacaoId(null);
     setFilterRedeId(null);
     setFilterDiscipuladoId(null);
@@ -344,7 +352,16 @@ export default function MembersManagementPage() {
       value: filterMyDisciples,
       onChange: setFilterMyDisciples,
       switchLabelOff: 'Todos os membros',
-      switchLabelOn: 'Meus discípulos'
+      switchLabelOn: 'Meus discípulos',
+      inline: true
+    },
+    {
+      type: 'switch',
+      label: '',
+      value: filterInactive,
+      onChange: setFilterInactive,
+      switchLabelOff: 'Apenas ativos',
+      switchLabelOn: 'Apenas inativos'
     },
     {
       type: 'select',
@@ -485,7 +502,7 @@ export default function MembersManagementPage() {
             <span>Filtros</span>
             {hasActiveFilters && (
               <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                {[filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterCelulaId].filter(f => f !== null && f !== '').length + (filterMyDisciples ? 1 : 0)}
+                {[filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterCelulaId].filter(f => f !== null && f !== '').length + (filterMyDisciples ? 1 : 0) + (filterInactive ? 1 : 0)}
               </span>
             )}
           </button>

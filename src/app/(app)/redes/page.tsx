@@ -153,6 +153,10 @@ export default function RedesPage() {
         toast.error('Selecione uma congregação');
         return;
       }
+      if (!createPastorUserId) {
+        toast.error('Pastor é obrigatório');
+        return;
+      }
       // Validar gênero do pastor para redes Kids
       if (createIsKids && createPastorUserId) {
         const selectedPastor = users.find(u => u.id === createPastorUserId);
