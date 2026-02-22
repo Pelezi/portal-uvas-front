@@ -1,20 +1,23 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import CollapsibleItem from '@/components/CollapsibleItem';
 import { congregacoesService, CreateCongregacaoInput, UpdateCongregacaoInput, CongregacaoFilterInput } from '@/services/congregacoesService';
 import { memberService } from '@/services/memberService';
 import { redesService } from '@/services/redesService';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
-import { FiTrash2, FiPlus, FiEdit2, FiMapPin } from 'react-icons/fi';
+import { FiTrash2, FiPlus, FiEdit2, FiMapPin, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from 'react-icons/fa6';
 import ModalConfirm from '@/components/ModalConfirm';
 import { Congregacao, Member, Rede } from '@/types';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
+import CongregacaoViewModal from '@/components/CongregacaoViewModal';
 import { TextField, Autocomplete, ThemeProvider, createTheme } from '@mui/material';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CongregacoesPage() {
+  const { user } = useAuth();
   const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [users, setUsers] = useState<Member[]>([]);
   const [kidsLeaders, setKidsLeaders] = useState<Member[]>([]);
@@ -26,7 +29,11 @@ export default function CongregacoesPage() {
   const [filterPastorId, setFilterPastorId] = useState<number | null>(null);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
 
-  // expansion & cache maps
+  // View modal state
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingCongregacao, setViewingCongregacao] = useState<Congregacao | null>(null);
+
+  // expansion & cache maps (já não são mais usados, mas mantidos para não quebrar)
   const [expandedCongregacoes, setExpandedCongregacoes] = useState<Record<number, boolean>>({});
   const [congregacaoRedesMap, setCongregacaoRedesMap] = useState<Record<number, Rede[]>>({});
 
@@ -91,6 +98,93 @@ export default function CongregacoesPage() {
     })();
   }, []);
 
+  // Função auxiliar para obter iniciais
+  const getInitials = (name?: string | null) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  // Permission checks for congregacao
+  const canCreateCongregacao = (): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode criar tudo
+    if (permission.isAdmin) return true;
+
+    // Apenas pastores com cargo ministerial de PRESIDENT_PASTOR podem criar congregações
+    if (permission.ministryType === 'PRESIDENT_PASTOR') return true;
+
+    return false;
+  };
+
+  const canEditCongregacao = (c: Congregacao): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode editar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade pode editar tudo
+    const mainCongregacao = congregacoes.find(cong => cong.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice presidente da congregação
+    if (c.pastorGovernoMemberId === permission.id || c.vicePresidenteMemberId === permission.id) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const canDeleteCongregacao = (c: Congregacao): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode apagar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(cong => cong.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleOpenViewModal = async (c: Congregacao) => {
+    try {
+      // Carregar as redes da congregação
+      const allRedes = await redesService.getRedes();
+      const congregacaoRedes = (allRedes || []).filter((r: Rede) => r.congregacaoId === c.id);
+      
+      // Criar uma cópia da congregação com as redes
+      const congregacaoWithRedes = {
+        ...c,
+        redes: congregacaoRedes
+      };
+      
+      setViewingCongregacao(congregacaoWithRedes);
+      setIsViewModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao carregar detalhes da congregação');
+    }
+  };
+
   const onToggleCongregacao = async (c: Congregacao) => {
     try {
       const currently = !!expandedCongregacoes[c.id];
@@ -132,11 +226,40 @@ export default function CongregacoesPage() {
       } else {
         setCreateData(prev => ({ ...prev, ...addressData }));
       }
+      toast.success('Endereço preenchido automaticamente!');
     } catch (err) {
       console.error(err);
       toast.error('Erro ao buscar endereço');
     } finally {
       setLoadingAddress(false);
+    }
+  };
+
+  const formatCep = (value: string): string => {
+    const limited = value.replace(/\D/g, '').slice(0, 8);
+    if (limited.length <= 5) {
+      return limited;
+    }
+    return `${limited.slice(0, 5)}-${limited.slice(5)}`;
+  };
+
+  const handleCepChangeCreate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCep(e.target.value);
+    setCreateData(prev => ({ ...prev, zipCode: formatted }));
+
+    // Buscar endereço quando CEP estiver completo
+    if (formatted.replace(/\D/g, '').length === 8) {
+      searchAddress(formatted, false);
+    }
+  };
+
+  const handleCepChangeEdit = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCep(e.target.value);
+    setEditData(prev => ({ ...prev, zipCode: formatted }));
+
+    // Buscar endereço quando CEP estiver completo
+    if (formatted.replace(/\D/g, '').length === 8) {
+      searchAddress(formatted, true);
     }
   };
 
@@ -163,6 +286,10 @@ export default function CongregacoesPage() {
   };
 
   const openEditCongregacao = (c: Congregacao) => {
+    if (!canEditCongregacao(c)) {
+      toast.error('Você não tem permissão para editar esta congregação');
+      return;
+    }
     setEditingId(c.id);
     setEditData({
       name: c.name,
@@ -347,77 +474,127 @@ export default function CongregacoesPage() {
 
           <div>
             <h3 className="font-medium mb-2">Exibindo {congregacoes.length} congregações</h3>
-            <div className="space-y-2">
-              {congregacoes.map(c => {
-          const isExpanded = !!expandedCongregacoes[c.id];
-          const redes = congregacaoRedesMap[c.id] || [];
-          
-          return (
-            <div key={c.id} className="border rounded p-2">
-              <CollapsibleItem
-                isOpen={isExpanded}
-                onToggle={() => onToggleCongregacao(c)}
-                onEdit={() => openEditCongregacao(c)}
-                title={
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{c.name}</span>
-                    {c.isPrincipal && (
-                      <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">Principal</span>
-                    )}
-                  </div>
-                }
-                subtitle={`Pastor: ${c.pastorGoverno?.name || 'Sem pastor'}`}
-                right={
-                  <button
-                    onClick={(e) => { e.stopPropagation(); requestDeleteCongregacao(c); }}
-                    className="text-red-600 hover:text-red-800 p-1"
-                  >
-                    <FiTrash2 />
-                  </button>
-                }
-              >
-              <div className="pl-4 space-y-2">
-                {c.city && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <FiMapPin />
-                    <span>{c.city}, {c.state}</span>
-                  </div>
-                )}
-                {c.vicePresidente && (
-                  <div className="text-sm text-gray-600">
-                    Vice Presidente: {c.vicePresidente.name}
-                  </div>
-                )}
-                <div className="mt-4">
-                  <h3 className="font-semibold mb-2">Redes ({redes.length})</h3>
-                  {redes.length === 0 ? (
-                    <p className="text-gray-500 text-sm">Nenhuma rede cadastrada</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {redes.map(r => (
-                        <li key={r.id} className="text-sm">
-                          • {r.name} {r.pastor && `- ${r.pastor.name}`}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+            {loading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
-              </CollapsibleItem>
-            </div>
-          );
-        })}
-            </div>
+            ) : (
+              <ul className="space-y-2">
+                {congregacoes.map(c => {
+                  const redesCount = c.redes?.length || 0;
+                  const canDelete = redesCount === 0;
+                  const pastor = users.find(u => u.id === c.pastorGovernoMemberId);
+                  
+                  return (
+                    <li 
+                      key={c.id} 
+                      className={`border rounded-lg p-4 transition-colors ${
+                        !c.pastorGovernoMemberId
+                          ? 'bg-red-900/20 border-red-700' 
+                          : 'bg-gray-800 border-gray-700 hover:bg-gray-750'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          {pastor ? (
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage src={pastor.photoUrl} alt={pastor.name} />
+                              <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
+                                {getInitials(pastor.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          ) : (
+                            <Avatar className="w-10 h-10">
+                              <AvatarFallback className="bg-red-600 text-white text-sm font-semibold">
+                                ?
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                          
+                          <div className="flex-1">
+                            <h4 className="font-medium text-white flex items-center gap-2">
+                              {c.name}
+                              {c.isPrincipal && <span className="text-xs bg-yellow-600 text-white px-2 py-1 rounded">Principal</span>}
+                            </h4>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Pastor de Governo: {pastor?.name || (
+                                <span className="text-red-400">Sem pastor</span>
+                              )}
+                            </p>
+                            {c.vicePresidente && (
+                              <p className="text-sm text-gray-400">
+                                Vice Presidente: {c.vicePresidente.name}
+                              </p>
+                            )}
+                            {c.city && (
+                              <p className="text-sm text-gray-400 flex items-center gap-1">
+                                <FiMapPin className="h-3 w-3" />
+                                {c.city}, {c.state}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              {redesCount} {redesCount === 1 ? 'rede' : 'redes'}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleOpenViewModal(c)}
+                            className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
+                            title="Visualizar detalhes"
+                          >
+                            <FiEye className="h-4 w-4" />
+                          </button>
+                          <button
+                            disabled={!canEditCongregacao(c)}
+                            onClick={() => openEditCongregacao(c)}
+                            className={`p-2 rounded transition-colors ${
+                              canEditCongregacao(c)
+                                ? 'text-gray-400 hover:bg-gray-700'
+                                : 'text-gray-600 cursor-not-allowed opacity-50'
+                            }`}
+                            title={canEditCongregacao(c) ? 'Editar congregação' : 'Sem permissão para editar'}
+                          >
+                            <FiEdit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            disabled={!canDelete || !canDeleteCongregacao(c)}
+                            onClick={() => requestDeleteCongregacao(c)}
+                            className={`p-2 rounded transition-colors ${
+                              canDelete && canDeleteCongregacao(c)
+                                ? 'text-red-400 hover:bg-red-900/30'
+                                : 'text-gray-600 cursor-not-allowed opacity-50'
+                            }`}
+                            title={
+                              !canDelete 
+                                ? 'Não é possível apagar: possui redes associadas'
+                                : !canDeleteCongregacao(c)
+                                ? 'Sem permissão para apagar'
+                                : 'Excluir congregação'
+                            }
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
         {/* Floating create button */}
-        <button 
-        aria-label="Criar congregação" 
-        onClick={() => setShowCreateModal(true)} 
-        className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50"
-      >
-        <FiPlus size={24} />
-      </button>
+        {canCreateCongregacao() && (
+          <button 
+            aria-label="Criar congregação" 
+            onClick={() => setShowCreateModal(true)} 
+            className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50"
+          >
+            <FiPlus size={24} />
+          </button>
+        )}
 
       {/* Create Modal */}
       {showCreateModal && (
@@ -500,14 +677,21 @@ export default function CongregacoesPage() {
 
               <div>
                 <label className="block text-sm mb-1">CEP</label>
-                <input
-                  type="text"
-                  value={createData.zipCode || ''}
-                  onChange={(e) => setCreateData(prev => ({ ...prev, zipCode: e.target.value }))}
-                  onBlur={(e) => searchAddress(e.target.value, false)}
-                  className="w-full border rounded px-3 py-2 bg-gray-800 text-white h-10"
-                  placeholder="00000-000"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={createData.zipCode || ''}
+                    onChange={handleCepChangeCreate}
+                    maxLength={9}
+                    className="w-full border rounded px-3 py-2 bg-gray-800 text-white h-10"
+                    placeholder="00000-000"
+                  />
+                  {loadingAddress && (
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
@@ -679,14 +863,21 @@ export default function CongregacoesPage() {
 
               <div>
                 <label className="block text-sm mb-1">CEP</label>
-                <input
-                  type="text"
-                  value={editData.zipCode || ''}
-                  onChange={(e) => setEditData(prev => ({ ...prev, zipCode: e.target.value }))}
-                  onBlur={(e) => searchAddress(e.target.value, true)}
-                  className="w-full border rounded px-3 py-2 bg-gray-800 text-white h-10"
-                  placeholder="00000-000"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editData.zipCode || ''}
+                    onChange={handleCepChangeEdit}
+                    maxLength={9}
+                    className="w-full border rounded px-3 py-2 bg-gray-800 text-white h-10"
+                    placeholder="00000-000"
+                  />
+                  {loadingAddress && (
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
@@ -784,6 +975,16 @@ export default function CongregacoesPage() {
           message={`Tem certeza que deseja excluir a congregação "${confirmTarget?.name}"?`}
           onConfirm={deleteCongregacaoConfirmed}
           onCancel={() => { setConfirmOpen(false); setConfirmTarget(null); }}
+        />
+
+        {/* View Modal */}
+        <CongregacaoViewModal
+          congregacao={viewingCongregacao}
+          isOpen={isViewModalOpen}
+          onClose={() => {
+            setIsViewModalOpen(false);
+            setViewingCongregacao(null);
+          }}
         />
 
         {/* Filter Modal */}

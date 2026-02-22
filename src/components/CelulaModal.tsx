@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Celula, Member, Discipulado, Rede, Congregacao } from '@/types';
 import { congregacoesService } from '@/services/congregacoesService';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
@@ -10,6 +10,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/pt-br';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CelulaModalProps {
   celula: Celula | null;
@@ -46,6 +47,7 @@ export default function CelulaModal({
   redes
 }: CelulaModalProps) {
   const isEditing = !!celula;
+  const { user } = useAuth();
 
   // Estados
   const [name, setName] = useState('');
@@ -85,6 +87,105 @@ export default function CelulaModal({
   const [genderError, setGenderError] = useState('');
 
   const leaderDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Lógica de permissões para edição
+  const editPermissions = useMemo(() => {
+    // Modo criação - pode editar tudo
+    if (!isEditing) {
+      return {
+        canEditCongregacao: true,
+        canEditRede: true,
+        canEditDiscipulado: true,
+        canEditLeader: true,
+      };
+    }
+
+    // Se não há user ou célula, não pode editar nada
+    if (!user?.permission || !celula) {
+      return {
+        canEditCongregacao: false,
+        canEditRede: false,
+        canEditDiscipulado: false,
+        canEditLeader: false,
+      };
+    }
+
+    const permission = user.permission;
+
+    // Admin pode editar tudo
+    if (permission.isAdmin) {
+      return {
+        canEditCongregacao: true,
+        canEditRede: true,
+        canEditDiscipulado: true,
+        canEditLeader: true,
+      };
+    }
+
+    // Pastor presidente da congregação principal da cidade pode editar tudo
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return {
+        canEditCongregacao: true,
+        canEditRede: true,
+        canEditDiscipulado: true,
+        canEditLeader: true,
+      };
+    }
+
+    // Pastor da congregação da célula - não pode alterar a congregação
+    if (celula.discipulado?.rede.congregacao?.pastorGovernoMemberId === permission.id ||
+      celula.discipulado?.rede.congregacao?.vicePresidenteMemberId === permission.id
+    ) {
+      return {
+        canEditCongregacao: false,
+        canEditRede: true,
+        canEditDiscipulado: true,
+        canEditLeader: true,
+      };
+    }
+
+    // Pastor da rede da célula - não pode editar a rede (nem congregação)
+    if (celula.discipulado?.rede?.pastorMemberId === permission.id) {
+      return {
+        canEditCongregacao: false,
+        canEditRede: false,
+        canEditDiscipulado: true,
+        canEditLeader: true,
+      };
+    }
+
+    // Discipulador - não pode alterar o discipulado (nem rede, nem congregação)
+    if (celula.discipulado?.discipuladorMemberId === permission.id) {
+      return {
+        canEditCongregacao: false,
+        canEditRede: false,
+        canEditDiscipulado: false,
+        canEditLeader: true,
+      };
+    }
+
+    // Líder - não pode alterar o líder (nem discipulado, nem rede, nem congregação)
+    if (celula.leaderMemberId === permission.id) {
+      return {
+        canEditCongregacao: false,
+        canEditRede: false,
+        canEditDiscipulado: false,
+        canEditLeader: false,
+      };
+    }
+
+    // Caso padrão - não pode editar nada
+    return {
+      canEditCongregacao: false,
+      canEditRede: false,
+      canEditDiscipulado: false,
+      canEditLeader: false,
+    };
+  }, [isEditing, user, celula, congregacoes, discipulados, redes]);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -473,13 +574,19 @@ export default function CelulaModal({
                   }}
                   label="Congregação"
                   size="small"
-                  className="bg-gray-800 w-full">
+                  className="bg-gray-800 w-full"
+                  disabled={!editPermissions.canEditCongregacao}>
                   <MenuItem value="">Selecione congregação</MenuItem>
                   {congregacoes.map((c) => (
                     <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
+              {!editPermissions.canEditCongregacao && isEditing && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Você não tem permissão para alterar a congregação
+                </p>
+              )}
             </div>
 
             {/* Rede */}
@@ -503,13 +610,19 @@ export default function CelulaModal({
                   }}
                   label="Rede"
                   size="small"
-                  className="bg-gray-800 w-full">
+                  className="bg-gray-800 w-full"
+                  disabled={!editPermissions.canEditRede}>
                   <MenuItem value="">Selecione rede</MenuItem>
                   {redes.filter(r => !congregacaoId || r.congregacaoId === congregacaoId).map((r) => (
                     <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
+              {!editPermissions.canEditRede && isEditing && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Você não tem permissão para alterar a rede
+                </p>
+              )}
             </div>
 
             {/* Discipulado */}
@@ -540,13 +653,19 @@ export default function CelulaModal({
                   onBlur={() => setTouched({ ...touched, discipulado: true })}
                   label="Discipulado"
                   size="small"
-                  className="bg-gray-800 w-full">
+                  className="bg-gray-800 w-full"
+                  disabled={!editPermissions.canEditDiscipulado}>
                   <MenuItem value="">Selecione discipulado</MenuItem>
                   {discipulados.filter(d => !redeId || d.redeId === redeId).map((d) => (
                     <MenuItem key={d.id} value={d.id}>{d.discipulador?.name}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
+              {!editPermissions.canEditDiscipulado && isEditing && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Você não tem permissão para alterar o discipulado
+                </p>
+              )}
             </div>
 
             {/* Líder */}
@@ -564,9 +683,15 @@ export default function CelulaModal({
                   }}
                   onFocus={() => setShowLeaderDropdown(true)}
                   className="border p-2 rounded w-full bg-gray-800 text-white h-10"
+                  disabled={!editPermissions.canEditLeader}
                 />
                 {genderError && <div className="text-red-500 text-xs mt-1">{genderError}</div>}
-                {showLeaderDropdown && (
+                {!editPermissions.canEditLeader && isEditing && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Você não tem permissão para alterar o líder
+                  </p>
+                )}
+                {showLeaderDropdown && editPermissions.canEditLeader && (
                   <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                     {(() => {
                       // Encontrar a rede - pode vir direto do redeId ou do discipulado

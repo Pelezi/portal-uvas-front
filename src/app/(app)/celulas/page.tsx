@@ -11,13 +11,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, TextField, Autocomplete, Button } from '@mui/material';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
-import { FiPlus, FiUsers, FiEdit2, FiCopy, FiTrash2, FiFilter } from 'react-icons/fi';
+
+// Ícones
+import { FiPlus, FiUsers, FiEdit2, FiCopy, FiTrash2, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import { LuHistory } from 'react-icons/lu';
+
+
 import Link from 'next/link';
 import CelulaModal from '@/components/CelulaModal';
 import CelulaViewModal from '@/components/CelulaViewModal';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 export default function CelulasPage() {
   const [groups, setGroups] = useState<Celula[]>([]);
@@ -29,11 +34,11 @@ export default function CelulasPage() {
   // Modal states
   const [showCelulaModal, setShowCelulaModal] = useState(false);
   const [editingCelula, setEditingCelula] = useState<Celula | null>(null);
-  
+
   // View modal state
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingCelula, setViewingCelula] = useState<Celula | null>(null);
-  
+
   // Filter modal state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
@@ -95,23 +100,23 @@ export default function CelulasPage() {
 
   const load = async () => {
     if (authLoading) return;
-    
+
     setLoading(true);
     try {
       const filters: any = {};
-      
+
       if (filterName) filters.name = filterName;
       if (filterLeaderId) filters.leaderMemberId = filterLeaderId;
       if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       if (!filterMyCells) filters.all = true;
-      
+
       const g = await celulasService.getCelulas(filters);
-      
+
       // Mostrar todas as células, sem filtrar por permissão
       setGroups(g);
-      
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -128,11 +133,11 @@ export default function CelulasPage() {
         // Carregar apenas usuários que podem ser líderes (PRESIDENT_PASTOR, PASTOR, DISCIPULADOR, LEADER ou LEADER_IN_TRAINING)
         const u = await memberService.getAllMembers({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING' });
         setMembers(u || []);
-        
+
         // load discipulados for select
         const d = await discipuladosService.getDiscipulados();
         setDiscipulados(d || []);
-        
+
         // load redes for select
         const r = await redesService.getRedes({});
         setRedes(r || []);
@@ -154,9 +159,9 @@ export default function CelulasPage() {
     }
   }, [filterName, filterCongregacaoId, filterRedeId, filterDiscipuladoId, filterLeaderId, filterMyCells, authLoading]);
 
-  const handleSaveCelula = async (data: { 
-    name: string; 
-    leaderMemberId?: number; 
+  const handleSaveCelula = async (data: {
+    name: string;
+    leaderMemberId?: number;
     discipuladoId?: number;
     leaderInTrainingIds?: number[];
     weekday?: number;
@@ -239,7 +244,7 @@ export default function CelulasPage() {
     try {
       const m = await memberService.getMembers(g.id);
       setAvailableMembers(m);
-      
+
       // Se houver apenas um líder em treinamento, pré-seleciona ele como novo líder
       const leadersInTraining = m.filter(
         member => member.ministryPosition?.type === 'LEADER_IN_TRAINING'
@@ -283,19 +288,28 @@ export default function CelulasPage() {
   const isPastor = () => user?.permission?.ministryType === 'PRESIDENT_PASTOR' || user?.permission?.ministryType === 'PASTOR';
   const isDiscipulador = () => user?.permission?.ministryType === 'DISCIPULADOR';
   const isCelulaLeader = (celulaId: number) => user?.id === groups.find(c => c.id === celulaId)?.leader?.id;
-  
+
   // Verificar se o usuário está associado a uma célula específica
   const isAssociatedToCelula = (celula: Celula) => {
     if (isAdmin() || isPastor()) return true;
-    
+
     // Discipulador: células do seu discipulado
     if (isDiscipulador()) {
       const userDiscipulado = discipulados.find(d => d.discipuladorMemberId === user?.id);
       return userDiscipulado?.id === celula.discipuladoId;
     }
-    
+
     // Líder: apenas sua própria célula
     return isCelulaLeader(celula.id);
+  };
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
   };
 
   // Permissões para cada ação
@@ -425,10 +439,10 @@ export default function CelulasPage() {
             value={members.find(m => m.id === filterLeaderId) || null}
             onChange={(event, newValue) => setFilterLeaderId(newValue?.id || null)}
             renderInput={(params) => (
-              <TextField 
-                {...params} 
+              <TextField
+                {...params}
                 placeholder="Selecione um líder"
-                className="bg-gray-700" 
+                className="bg-gray-700"
               />
             )}
             renderOption={(props, option) => (
@@ -465,11 +479,10 @@ export default function CelulasPage() {
           />
           <button
             onClick={() => setIsFilterModalOpen(true)}
-            className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${
-              hasActiveFilters
+            className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${hasActiveFilters
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-gray-700 hover:bg-gray-600 text-white'
-            }`}
+              }`}
             title="Filtros"
           >
             <FaFilter className="h-5 w-5" />
@@ -499,58 +512,109 @@ export default function CelulasPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         ) : (
-        <ul className="space-y-3">
-          {filteredGroups.map((g) => (
-              <li key={g.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between border p-3 rounded ${!g.leaderMemberId ? 'bg-red-900/20 border-red-700' : 'bg-gray-900'}`}>
-                <div className="mb-3 sm:mb-0">
-                  <button
-                    onClick={() => handleOpenViewModal(g)}
-                    className="text-left hover:underline focus:outline-none"
-                  >
-                    <div className="font-medium text-white">{g.name} {!g.leaderMemberId && <span className="text-xs text-red-400 ml-2">(sem líder)</span>}</div>
-                  </button>
-                  <div className="text-sm text-gray-400">id: {g.id}</div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Link href={`/celulas/${g.id}/members`} className="p-1 rounded hover:bg-gray-800" title="Membros" aria-label={`Membros ${g.name}`}>
-                    <FiUsers className="h-6 w-6 text-blue-600" aria-hidden />
-                  </Link>
-                  {canEdit(g) && (
-                    <button onClick={() => handleOpenEditModal(g)} className="p-1 rounded hover:bg-gray-800" title="Editar" aria-label={`Editar ${g.name}`}>
-                      <FiEdit2 className="h-6 w-6 text-yellow-500" aria-hidden />
-                    </button>
-                  )}
-                  {canMultiply(g) && (
-                    <button onClick={() => openMultiply(g)} className="p-1 rounded hover:bg-gray-800" title="Multiplicar" aria-label={`Multiplicar ${g.name}`}>
-                      <FiCopy className="h-6 w-6 text-indigo-600" aria-hidden />
-                    </button>
-                  )}
-                  {canDelete(g) && (
-                    <button
-                      onClick={() => setConfirmingCelula(g)}
-                      title="Excluir célula"
-                      className="p-1 rounded text-red-600 hover:bg-red-900"
-                      aria-label={`Excluir ${g.name}`}
-                    >
-                      <FiTrash2 className="h-6 w-6" aria-hidden />
-                    </button>
-                  )}
-                  {canViewTracking(g) && (
-                    <Link href="/report/view" className="p-1 rounded hover:bg-gray-800" title="Acompanhamento" aria-label={`Acompanhamento ${g.name}`}>
-                      <LuHistory className="h-6 w-6 text-teal-600" aria-hidden />
-                    </Link>
-                  )}
-                </div>
-              </li>
-            ))}
-        </ul>
+          <ul className="space-y-3">
+            {filteredGroups.map((g) => {
+              const leader = g.leader;
+              const discipulado = g.discipulado;
+              const rede = discipulado?.rede;
+              const congregacao = rede?.congregacao;
+              
+              return (
+                <li key={g.id} className={`bg-gray-800 border rounded-lg hover:border-gray-600 transition-colors ${!g.leaderMemberId ? 'border-red-700' : 'border-gray-700'}`}>
+                  <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      {leader?.photoUrl ? (
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={leader.photoUrl} alt={leader.name} />
+                          <AvatarFallback className="bg-gray-700 text-white text-sm">
+                            {getInitials(leader.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <Avatar className="w-10 h-10">
+                          <AvatarFallback className={!g.leaderMemberId ? "bg-red-900/30 text-red-400 text-sm" : "bg-gray-700 text-white text-sm"}>
+                            {leader ? getInitials(leader.name) : '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                      
+                      <div className="flex-1">
+                        <h4 className="font-medium text-white">
+                          {g.name}
+                          {!g.leaderMemberId && <span className="text-xs text-red-400 ml-2">(sem líder)</span>}
+                        </h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Líder: {leader?.name || <span className="text-red-400">Não definido</span>}
+                          {rede && ` • Rede: ${rede.name}`}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">ID: {g.id}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleOpenViewModal(g)}
+                        className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
+                        title="Visualizar detalhes"
+                      >
+                        <FiEye className="h-4 w-4" />
+                      </button>
+                      {canEdit(g) && (
+                        <Link href={`/celulas/${g.id}/members`} className="p-2 text-purple-400 hover:bg-purple-900/30 rounded transition-colors" title="Membros">
+                          <FiUsers className="h-4 w-4" />
+                        </Link>
+                      )}
+                      {canEdit(g) && (
+                        <button
+                          onClick={() => handleOpenEditModal(g)}
+                          className="p-2 text-gray-400 hover:bg-gray-700 rounded transition-colors"
+                          title="Editar"
+                        >
+                          <FiEdit2 className="h-4 w-4" />
+                        </button>
+                      )}
+                      {canMultiply(g) && (
+                        <button
+                          onClick={() => openMultiply(g)}
+                          className="p-2 text-indigo-400 hover:bg-indigo-900/30 rounded transition-colors"
+                          title="Multiplicar"
+                        >
+                          <FiCopy className="h-4 w-4" />
+                        </button>
+                      )}
+                      {canDelete(g) && (
+                        <button
+                          onClick={() => setConfirmingCelula(g)}
+                          className="p-2 text-red-400 hover:bg-red-900/30 rounded transition-colors"
+                          title="Excluir célula"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                      {canViewTracking(g) && (
+                        <Link
+                          href="/report/view"
+                          className="p-2 text-teal-400 hover:bg-teal-900/30 rounded transition-colors"
+                          title="Acompanhamento"
+                        >
+                          <LuHistory className="h-4 w-4" />
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 
       {/* Floating create button */}
-      <button aria-label="Criar célula" onClick={handleOpenCreateModal} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
-        <FiPlus className="h-7 w-7" aria-hidden />
-      </button>
+      {(isAdmin() || isPastor() || isDiscipulador()) && (
+        <button aria-label="Criar célula" onClick={handleOpenCreateModal} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
+          <FiPlus className="h-7 w-7" aria-hidden />
+        </button>
+      )}
 
       {/* CelulaModal */}
       <CelulaModal
@@ -673,11 +737,10 @@ export default function CelulasPage() {
                       key={m.id}
                       type="button"
                       onClick={() => toggleMemberSelection(m.id)}
-                      className={`w-full text-left flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                        selected 
-                          ? 'border-green-500 bg-green-900/20' 
+                      className={`w-full text-left flex items-center justify-between p-3 rounded-lg border transition-colors ${selected
+                          ? 'border-green-500 bg-green-900/20'
                           : 'border-gray-700 hover:bg-gray-800'
-                      }`}
+                        }`}
                     >
                       <span className="truncate font-medium text-white">{m.name}</span>
                       {selected && (
@@ -702,15 +765,16 @@ export default function CelulasPage() {
         celula={viewingCelula}
         isOpen={isViewModalOpen}
         onClose={handleCloseViewModal}
-        discipuladorName={viewingCelula ? discipulados.find(d => d.id === viewingCelula.discipuladoId)?.discipulador?.name : undefined}
-        redeName={viewingCelula ? redes.find(r => r.id === discipulados.find(d => d.id === viewingCelula.discipuladoId)?.redeId)?.name : undefined}
+        discipuladorName={viewingCelula ? viewingCelula.discipulado?.discipulador?.name : undefined}
+        redeName={viewingCelula ? viewingCelula.discipulado?.rede?.name : undefined}
+        congregacaoName={viewingCelula ? viewingCelula.discipulado?.rede?.congregacao?.name : undefined}
       />
 
       {/* FilterModal */}
       <FilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        onApply={() => {}}
+        onApply={() => { }}
         onClear={clearAllFilters}
         filters={filterConfigs}
         hasActiveFilters={hasActiveFilters}

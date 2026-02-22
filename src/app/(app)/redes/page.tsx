@@ -1,22 +1,21 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import Collapse from '@/components/Collapse';
-import CollapsibleItem from '@/components/CollapsibleItem';
 import { redesService } from '@/services/redesService';
 import { congregacoesService } from '@/services/congregacoesService';
 import { memberService } from '@/services/memberService';
 import { discipuladosService } from '@/services/discipuladosService';
-import { celulasService } from '@/services/celulasService';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
-import { FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiTrash2, FiPlus, FiEdit2, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import ModalConfirm from '@/components/ModalConfirm';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
-import { Celula, Discipulado, Member, Rede, Congregacao } from '@/types';
+import RedeViewModal from '@/components/RedeViewModal';
+import { Discipulado, Member, Rede, Congregacao } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { createTheme, ThemeProvider, FormControl, InputLabel, Select, MenuItem, TextField, Autocomplete, Button } from '@mui/material';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 export default function RedesPage() {
   const { user } = useAuth();
@@ -31,13 +30,6 @@ export default function RedesPage() {
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterPastorId, setFilterPastorId] = useState<number | null>(null);
   const [filterIsKids, setFilterIsKids] = useState<boolean | null>(null);
-
-  // expansion & cache maps
-  const [expandedRedes, setExpandedRedes] = useState<Record<number, boolean>>({});
-  const [redeDiscipuladosMap, setRedeDiscipuladosMap] = useState<Record<number, Discipulado[]>>({});
-  const [redeDiscipuladosCount, setRedeDiscipuladosCount] = useState<Record<number, number>>({});
-  const [expandedDiscipulados, setExpandedDiscipulados] = useState<Record<number, boolean>>({});
-  const [discipuladoCelulasMap, setDiscipuladoCelulasMap] = useState<Record<number, Celula[]>>({});
 
   // create modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -70,6 +62,10 @@ export default function RedesPage() {
   // Filter modal state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
+  // View modal state
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingRede, setViewingRede] = useState<Rede | null>(null);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -80,15 +76,6 @@ export default function RedesPage() {
       
       const r = await redesService.getRedes(filters);
       setRedes(r || []);
-      try {
-        const allD = await discipuladosService.getDiscipulados();
-        const counts: Record<number, number> = {};
-        (allD || []).forEach((d: Discipulado) => { counts[d.redeId] = (counts[d.redeId] || 0) + 1; });
-        setRedeDiscipuladosCount(counts);
-      } catch (err) {
-        console.error('Failed to load discipulados for counts', err);
-        setRedeDiscipuladosCount({});
-      }
     } catch (err) { 
       console.error(err); 
       toast.error(ErrorMessages.loadRedes(err)); 
@@ -116,35 +103,109 @@ export default function RedesPage() {
     })();
   }, []);
 
-  const onToggleRede = async (r: Rede) => {
-    try {
-      const currently = !!expandedRedes[r.id];
-      if (!currently && !redeDiscipuladosMap[r.id]) {
-        const all = await discipuladosService.getDiscipulados();
-        const redeDiscipulados = (all || []).filter((d: Discipulado) => d.redeId === r.id);
-        setRedeDiscipuladosMap(prev => ({ ...prev, [r.id]: redeDiscipulados }));
-      }
-      setExpandedRedes(prev => ({ ...prev, [r.id]: !currently }));
-    } catch (err) { 
-      console.error(err); 
-      toast.error(ErrorMessages.loadDiscipulados(err)); 
+  // Permission checks for rede
+  const canEditRede = (r: Rede): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode editar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade pode editar tudo
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
     }
+
+    // Pastor presidente/vice presidente da congregação da rede
+    const congregacao = congregacoes.find(c => c.id === r.congregacaoId);
+    if (congregacao && (
+      congregacao.pastorGovernoMemberId === permission.id ||
+      congregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    return false;
   };
 
-  const onToggleDiscipulado = async (d: Discipulado, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    try {
-      const currently = !!expandedDiscipulados[d.id];
-      if (!currently && !discipuladoCelulasMap[d.id]) {
-        const all = await celulasService.getCelulas();
-        const discipuladoCelulas = (all || []).filter((c: Celula) => c.discipuladoId === d.id);
-        setDiscipuladoCelulasMap(prev => ({ ...prev, [d.id]: discipuladoCelulas }));
-      }
-      setExpandedDiscipulados(prev => ({ ...prev, [d.id]: !currently }));
-    } catch (err) { 
-      console.error(err); 
-      toast.error(ErrorMessages.loadCelulas(err)); 
+  const canDeleteRede = (r: Rede): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode apagar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
     }
+
+    // Pastor presidente/vice presidente da congregação da rede
+    const congregacao = congregacoes.find(c => c.id === r.congregacaoId);
+    if (congregacao && (
+      congregacao.pastorGovernoMemberId === permission.id ||
+      congregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const canEditRedeCongregacao = (r: Rede): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode editar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice da congregação NÃO pode alterar congregação
+    return false;
+  };
+
+  const canCreateRede = (): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode criar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice presidente de qualquer congregação
+    const isCongregacaoLeader = congregacoes.some(c => 
+      c.pastorGovernoMemberId === permission.id || 
+      c.vicePresidenteMemberId === permission.id
+    );
+    if (isCongregacaoLeader) {
+      return true;
+    }
+
+    return false;
   };
 
   const createRede = async () => {
@@ -238,32 +299,24 @@ export default function RedesPage() {
     }
   };
 
-  const deleteDiscipulado = async (d: Discipulado) => {
-    try {
-      const allCelulas = await celulasService.getCelulas();
-      const children = (allCelulas || []).filter((c: Celula) => c.discipuladoId === d.id);
-      if (children.length > 0) {
-        return toast.error('Não é possível apagar discipulado com células associadas');
-      }
-    } catch (err) {
-      console.error(err);
-      return toast.error(ErrorMessages.checkAssociations(err));
+  const getInitials = (name?: string | null) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    if (!confirm(`Remover discipulado de ${d.discipulador.name}?`)) return;
-    try {
-      await discipuladosService.deleteDiscipulado(d.id);
-      toast.success('Discipulado removido com sucesso!');
-      // refresh cached list for this rede
-      const all = await discipuladosService.getDiscipulados();
-      setRedeDiscipuladosMap(prev => ({ ...prev, [d.redeId]: (all || []).filter((x: Discipulado) => x.redeId === d.redeId) }));
-    } catch (err) {
-      console.error(err);
-      toast.error(ErrorMessages.deleteDiscipulado(err));
-    }
+    return name.substring(0, 2).toUpperCase();
   };
 
-  // IDs de usuários que são pastores de alguma rede
-  const pastorUserIds = new Set<number>((redes || []).map(r => r.pastorMemberId).filter((id): id is number => id != null));
+  const handleOpenViewModal = async (r: Rede) => {
+    setViewingRede(r);
+    setIsViewModalOpen(true);
+  };
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false);
+    setViewingRede(null);
+  };
 
   // Verificar se há filtros ativos
   const hasActiveFilters = !!filterName || filterCongregacaoId !== null || filterPastorId !== null || filterIsKids !== null || filterMyNetworks;
@@ -434,84 +487,111 @@ export default function RedesPage() {
           </div>
         ) : (
         <ul className="space-y-2">
-          {filteredRedes.map(r => (
-              <li key={r.id} className={`border p-2 rounded ${!r.congregacaoId || !r.pastorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
-                <CollapsibleItem
-                  isOpen={!!expandedRedes[r.id]}
-                  onToggle={() => onToggleRede(r)}
-                  onEdit={() => openEditRede(r)}
-                  right={
-                    (() => {
-                      const childCount = (redeDiscipuladosCount[r.id] ?? (redeDiscipuladosMap[r.id]?.length ?? 0));
-                      const disabled = childCount > 0;
-                      return (
-                        <span onMouseDown={(e) => e.stopPropagation()}>
-                          <button
-                            disabled={disabled}
-                            title={disabled ? 'Não é possível apagar: possui discipulados associados' : 'Excluir rede'}
-                            onClick={() => requestDeleteRede(r)}
-                            className={`p-1 rounded ${disabled ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-900'}`}
-                          >
-                            <FiTrash2 className="h-4 w-4" aria-hidden />
-                          </button>
-                        </span> 
-                      );
-                    })()
-                  }
-                  title={<>{r.name} {r.isKids && <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded ml-2">Kids</span>} <span className="text-sm text-gray-500">({redeDiscipuladosCount[r.id] ?? (redeDiscipuladosMap[r.id]?.length ?? 0)} Discipulados)</span></>}
-                  subtitle={<>
-                    Congregação: {r.congregacao?.name || <span className="text-red-400">Sem congregação</span>} | 
-                    Pastor: {r.pastor ? r.pastor.name : <span className="text-red-400">Sem pastor</span>}
-                  </>}
-                  duration={300}
-                >
-                  {(redeDiscipuladosMap[r.id] || []).length === 0 && <div className="text-xs text-gray-500">Nenhum discipulado</div>}
-                  <ul className="space-y-1">
-                    {(redeDiscipuladosMap[r.id] || []).map((d: Discipulado) => (
-                      <li key={d.id}>
-                        <CollapsibleItem
-                          isOpen={!!expandedDiscipulados[d.id]}
-                          onToggle={() => onToggleDiscipulado(d)}
-                          right={
-                            (() => {
-                              const childCount = (discipuladoCelulasMap[d.id]?.length ?? 0);
-                              const disabled = childCount > 0;
-                              return (
-                                <span onMouseDown={(e) => e.stopPropagation()}>
-                                  <button
-                                    disabled={disabled}
-                                    title={disabled ? 'Não é possível apagar: possui células associadas' : 'Excluir discipulado'}
-                                    onClick={() => deleteDiscipulado(d)}
-                                    className={`text-sm px-2 py-1 border rounded ${disabled ? 'text-gray-400 border-gray-200 opacity-60 cursor-not-allowed' : 'text-red-600'}`}
-                                  >Excluir</button>
-                                </span>
-                              );
-                            })()
-                          }
-                          title={<>{d.discipulador?.name || 'Sem discipulador'}</>}
-                          duration={250}
-                        >
-                          {(discipuladoCelulasMap[d.id] || []).length === 0 && <div className="text-xs text-gray-500">Nenhuma célula</div>}
-                          <ul className="space-y-1">
-                            {(discipuladoCelulasMap[d.id] || []).map((c: Celula) => (
-                              <li key={c.id} className="text-sm border p-1 rounded">{c.name} (id: {c.id})</li>
-                            ))}
-                          </ul>
-                        </CollapsibleItem>
-                      </li>
-                    ))}
-                  </ul>
-                </CollapsibleItem>
+          {filteredRedes.map(r => {
+            const discipuladoCount = r.discipulados?.length || 0;
+            const canDelete = discipuladoCount === 0;
+            const pastor = users.find(u => u.id === r.pastorMemberId);
+            
+            return (
+              <li 
+                key={r.id} 
+                className={`border rounded-lg p-4 transition-colors ${
+                  !r.congregacaoId || !r.pastorMemberId
+                    ? 'bg-red-900/20 border-red-700' 
+                    : 'bg-gray-800 border-gray-700 hover:bg-gray-750'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    {pastor ? (
+                      <Avatar className="w-10 h-10">
+                        <AvatarImage src={pastor.photoUrl} alt={pastor.name} />
+                        <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
+                          {getInitials(pastor.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback className="bg-red-600 text-white text-sm font-semibold">
+                          ?
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    
+                    <div className="flex-1">
+                      <h4 className="font-medium text-white flex items-center gap-2">
+                        {r.name}
+                        {r.isKids && <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded">Kids</span>}
+                      </h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Congregação: {r.congregacao?.name || (
+                          <span className="text-red-400">Sem congregação</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        Pastor: {pastor?.name || (
+                          <span className="text-red-400">Sem pastor</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {discipuladoCount} {discipuladoCount === 1 ? 'discipulado' : 'discipulados'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleOpenViewModal(r)}
+                      className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
+                      title="Visualizar detalhes"
+                    >
+                      <FiEye className="h-4 w-4" />
+                    </button>
+                    <button
+                      disabled={!canEditRede(r)}
+                      onClick={() => openEditRede(r)}
+                      className={`p-2 rounded transition-colors ${
+                        canEditRede(r)
+                          ? 'text-gray-400 hover:bg-gray-700'
+                          : 'text-gray-600 cursor-not-allowed opacity-50'
+                      }`}
+                      title={canEditRede(r) ? 'Editar rede' : 'Sem permissão para editar'}
+                    >
+                      <FiEdit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      disabled={!canDelete || !canDeleteRede(r)}
+                      onClick={() => requestDeleteRede(r)}
+                      className={`p-2 rounded transition-colors ${
+                        canDelete && canDeleteRede(r)
+                          ? 'text-red-400 hover:bg-red-900/30'
+                          : 'text-gray-600 cursor-not-allowed opacity-50'
+                      }`}
+                      title={
+                        !canDelete 
+                          ? 'Não é possível apagar: possui discipulados associados'
+                          : !canDeleteRede(r)
+                          ? 'Sem permissão para apagar'
+                          : 'Excluir rede'
+                      }
+                    >
+                      <FiTrash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
               </li>
-            ))}
+            );
+          })}
         </ul>
         )}
       </div>
 
       {/* Floating create button */}
-      <button aria-label="Criar rede" onClick={() => setShowCreateModal(true)} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
-        <FiPlus className="h-7 w-7" aria-hidden />
-      </button>
+      {canCreateRede() && (
+        <button aria-label="Criar rede" onClick={() => setShowCreateModal(true)} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
+          <FiPlus className="h-7 w-7" aria-hidden />
+        </button>
+      )}
 
       {/* Create modal */}
       {showCreateModal && (
@@ -595,7 +675,10 @@ export default function RedesPage() {
       )}
 
       {/* Edit rede modal */}
-      {editRedeModalOpen && (
+      {editRedeModalOpen && editingRedeId && (() => {
+        const editingRede = redes.find(r => r.id === editingRedeId);
+        const canEditCongregacao = editingRede ? canEditRedeCongregacao(editingRede) : false;
+        return (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
             <div className="flex items-center justify-between mb-3">
@@ -606,15 +689,21 @@ export default function RedesPage() {
               <input placeholder="Nome da rede" value={editName} onChange={(e) => setEditName(e.target.value)} className="border p-2 rounded w-full bg-gray-800 text-white h-10" />
               
               <select 
+                disabled={!canEditCongregacao}
                 value={editCongregacaoId || ''} 
                 onChange={(e) => setEditCongregacaoId(e.target.value ? Number(e.target.value) : null)} 
-                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
+                className={`border p-2 rounded w-full bg-gray-800 text-white h-10 ${!canEditCongregacao ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <option value="">Selecione uma congregação</option>
                 {congregacoes.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              {!canEditCongregacao && (
+                <div className="text-xs text-yellow-400 -mt-2">
+                  ⚠️ Você não tem permissão para alterar a congregação desta rede
+                </div>
+              )}
 
               <div ref={editPastorDropdownRef} className="relative w-full">
                 <input placeholder="Pastor" value={editPastorQuery || editPastorName} onChange={(e) => { setEditPastorQuery(e.target.value); setShowEditPastorsDropdown(true); setEditPastorName(''); setEditPastorId(null); }} onFocus={() => { if (editPastorsTimeoutRef.current) { window.clearTimeout(editPastorsTimeoutRef.current); editPastorsTimeoutRef.current = null; } setShowEditPastorsDropdown(true); }} className="border p-2 rounded w-full bg-gray-800 text-white h-10" />
@@ -673,7 +762,8 @@ export default function RedesPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* FilterModal */}
       <FilterModal
@@ -683,6 +773,13 @@ export default function RedesPage() {
         onClear={clearAllFilters}
         filters={filterConfigs}
         hasActiveFilters={hasActiveFilters}
+      />
+
+      {/* View Modal */}
+      <RedeViewModal
+        rede={viewingRede}
+        isOpen={isViewModalOpen}
+        onClose={handleCloseViewModal}
       />
 
       {/* Confirm deletion modal */}

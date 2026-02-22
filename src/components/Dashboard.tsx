@@ -115,6 +115,12 @@ export default function Dashboard() {
       try {
         setLoading(true);
         
+        // Se for líder restrito e ainda não tiver célula selecionada, aguardar
+        if (isLeader && !isPastor && !isDiscipulador && !selectedCelulaId) {
+          setLoading(false);
+          return;
+        }
+        
         // Construir filtros baseado em seleções
         const filters: { celulaId?: number; discipuladoId?: number; redeId?: number; congregacaoId?: number } = {};
         
@@ -138,7 +144,7 @@ export default function Dashboard() {
     };
 
     fetchStats();
-  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, redes]);
+  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, isLeader, isPastor, isDiscipulador]);
 
   if (loading) {
     return (

@@ -83,12 +83,12 @@ export interface MatrixAuthResponse extends AuthResponse {
 export interface Celula {
   id: number;
   name: string;
-  leaderMemberId?: number;
+  leaderMemberId: number;
   // optional embedded leader member object when returned by API
   leader?: Member | null;
   leaderInTraining?: Member | null;
   leadersInTraining?: CelulaLeadersInTraining[];
-  discipuladoId?: number;
+  discipuladoId: number;
   weekday?: number | null; // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
   time?: string | null; // Formato HH:mm (ex: "19:30")
   
@@ -114,6 +114,7 @@ export interface Discipulado {
   rede: Rede;
   discipulador: Member;
   disciples?: { id: number; member: Member }[];
+  celulas?: Celula[];
 }
 
 export interface Rede {
@@ -124,6 +125,7 @@ export interface Rede {
   pastorMemberId?: number | null;
   pastor?: Member | null;
   isKids?: boolean;
+  discipulados?: Discipulado[];
 }
 
 export interface Congregacao {

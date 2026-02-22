@@ -10,7 +10,9 @@ import Link from 'next/link';
 import MemberModal from '@/components/MemberModal';
 import MemberViewModal from '@/components/MemberViewModal';
 import DuplicateMemberModal from '@/components/DuplicateMemberModal';
-import { FiEdit2, FiTrash2, FiUserPlus } from 'react-icons/fi';
+import ModalConfirm from '@/components/ModalConfirm';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { FiEdit2, FiTrash2, FiUserPlus, FiEye } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function CelulaMembersPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +29,9 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [duplicateMembers, setDuplicateMembers] = useState<Member[]>([]);
   const [pendingMemberData, setPendingMemberData] = useState<{ data: Partial<Member>, photo?: File } | null>(null);
+  
+  // Confirmation modal state
+  const [confirmingRemoveMember, setConfirmingRemoveMember] = useState<Member | null>(null);
 
   const celulaId = parseInt(resolvedParams.id, 10);
 
@@ -85,6 +90,15 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   const openViewModal = (member: Member) => {
     setViewingMember(member);
     setIsViewModalOpen(true);
+  };
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
   };
 
   const checkForDuplicates = async (name: string, gender: string): Promise<Member[]> => {
@@ -251,11 +265,16 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const remove = async (memberId: number) => {
-    if (!confirm('Remover membro?')) return;
+  const remove = async (member: Member) => {
+    setConfirmingRemoveMember(member);
+  };
+
+  const removeMemberConfirmed = async () => {
+    if (!confirmingRemoveMember) return;
     try {
-      await memberService.deleteMember(celulaId, memberId);
+      await memberService.deleteMember(celulaId, confirmingRemoveMember.id);
       toast.success('Membro removido com sucesso!');
+      setConfirmingRemoveMember(null);
       load();
     } catch (err) {
       console.error(err);
@@ -277,31 +296,55 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
       {!loading && (
         <ul className="space-y-3">
           {members.map((m) => (
-            <li key={m.id} className="flex items-center justify-between border p-3 rounded bg-gray-900">
-              <div>
-                <button
-                  onClick={() => openViewModal(m)}
-                  className="font-medium text-white hover:text-blue-400 transition-colors text-left"
-                >
-                  {m.name}
-                </button>
-                <div className="text-sm text-gray-400">id: {m.id}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => openEditModal(m)}
-                  className="p-2 text-yellow-600 hover:bg-yellow-900/20 rounded transition-colors"
-                  title="Editar"
-                >
-                  <FiEdit2 size={18} />
-                </button>
-                <button
-                  onClick={() => remove(m.id)}
-                  className="p-2 text-red-600 hover:bg-red-900/20 rounded transition-colors"
-                  title="Remover"
-                >
-                  <FiTrash2 size={18} />
-                </button>
+            <li key={m.id} className="bg-gray-800 border border-gray-700 rounded-lg hover:border-gray-600 transition-colors">
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  {m.photoUrl ? (
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={m.photoUrl} alt={m.name} />
+                      <AvatarFallback className="bg-gray-700 text-white text-sm">
+                        {getInitials(m.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <Avatar className="w-10 h-10">
+                      <AvatarFallback className="bg-gray-700 text-white text-sm">
+                        {getInitials(m.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  
+                  <div className="flex-1">
+                    <h4 className="font-medium text-white">{m.name}</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      ID: {m.id} {m.email && `• ${m.email}`}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openViewModal(m)}
+                    className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
+                    title="Visualizar detalhes"
+                  >
+                    <FiEye className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => openEditModal(m)}
+                    className="p-2 text-gray-400 hover:bg-gray-700 rounded transition-colors"
+                    title="Editar"
+                  >
+                    <FiEdit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => remove(m)}
+                    className="p-2 text-red-400 hover:bg-red-900/30 rounded transition-colors"
+                    title="Remover"
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </li>
           ))}
@@ -350,6 +393,16 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
         celulas={celulas}
         onSave={handleModalSave}
         initialCelulaId={celulaId}
+      />
+
+      <ModalConfirm
+        open={!!confirmingRemoveMember}
+        title="Confirmar remoção"
+        message={confirmingRemoveMember ? `Remover membro ${confirmingRemoveMember.name}?` : ''}
+        confirmLabel="Remover"
+        cancelLabel="Cancelar"
+        onConfirm={removeMemberConfirmed}
+        onCancel={() => setConfirmingRemoveMember(null)}
       />
     </div>
   );

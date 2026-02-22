@@ -9,11 +9,12 @@ import { memberService, MemberInput } from '@/services/memberService';
 import { Celula, Member, Discipulado, Rede, Congregacao, MemberFilters } from '@/types';
 import toast from 'react-hot-toast';
 import { createTheme, ThemeProvider, TextField } from '@mui/material';
-import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiPlus, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import MemberModal from '@/components/MemberModal';
 import MemberViewModal from '@/components/MemberViewModal';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function MembersManagementPage() {
@@ -119,6 +120,15 @@ export default function MembersManagementPage() {
   const openCreateModal = () => {
     setModalMember(null);
     setIsModalOpen(true);
+  };
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
   };
 
   const handleModalSave = async (data: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
@@ -524,7 +534,7 @@ export default function MembersManagementPage() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {filteredMembers.map((m) => {
               const leadershipTags = getLeadershipTags(m);
               const hasLeadership = leadershipTags.length > 0;
@@ -533,39 +543,61 @@ export default function MembersManagementPage() {
               return (
                 <li
                   key={m.id}
-                  className={`flex items-center gap-3 border p-2 rounded ${showNoCelula ? 'bg-red-900/20 border-red-700' : 'bg-gray-900'}`}
+                  className={`bg-gray-800 border rounded-lg hover:border-gray-600 transition-colors ${showNoCelula ? 'border-red-700' : 'border-gray-700'}`}
                 >
-                  <span className="flex-1">
-                    <button
-                      onClick={() => openViewModal(m)}
-                      className="text-left hover:text-blue-400 transition-colors font-medium"
-                    >
-                      {m.name}
-                    </button>
-                    {showNoCelula && <span className="text-xs text-red-400 ml-2 font-semibold">(sem célula)</span>}
-                    {m.celula && (
-                      <span className="text-xs text-gray-400 ml-2">
-                        - {m.celula.name}
-                      </span>
-                    )}
-                    {leadershipTags.map((tag, idx) => (
-                      <span key={idx} className={`text-xs ${tag.color} ml-2 font-semibold`}>
-                        {tag.label}
-                      </span>
-                    ))}
-                    {!m.isActive && <span className="text-xs text-gray-400 ml-2">(desligado)</span>}
-                  </span>
-                  {canManageMember(m) && (
+                  <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      {m.photoUrl ? (
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={m.photoUrl} alt={m.name} />
+                          <AvatarFallback className="bg-gray-700 text-white text-sm">
+                            {getInitials(m.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <Avatar className={`w-10 h-10 ${showNoCelula ? 'bg-red-900/30' : ''}`}>
+                          <AvatarFallback className={`text-sm ${showNoCelula ? 'text-red-400' : 'bg-gray-700 text-white'}`}>
+                            {getInitials(m.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                      
+                      <div className="flex-1">
+                        <h4 className="font-medium text-white">
+                          {m.name}
+                          {showNoCelula && <span className="text-xs text-red-400 ml-2 font-semibold">(sem célula)</span>}
+                          {!m.isActive && <span className="text-xs text-gray-400 ml-2">(desligado)</span>}
+                        </h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          {m.celula && `${m.celula.name}`}
+                          {leadershipTags.map((tag, idx) => (
+                            <span key={idx} className={`${tag.color} ml-2 font-semibold`}>
+                              • {tag.label}
+                            </span>
+                          ))}
+                        </p>
+                      </div>
+                    </div>
+                    
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => openEditModal(m)}
-                        aria-label="Editar membro"
-                        className="p-1 rounded hover:bg-gray-800"
+                        onClick={() => openViewModal(m)}
+                        className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
+                        title="Visualizar detalhes"
                       >
-                        <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
+                        <FiEye className="h-4 w-4" />
                       </button>
+                      {canManageMember(m) && (
+                        <button
+                          onClick={() => openEditModal(m)}
+                          className="p-2 text-gray-400 hover:bg-gray-700 rounded transition-colors"
+                          title="Editar"
+                        >
+                          <FiEdit2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </li>
               );
             })}

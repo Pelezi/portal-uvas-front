@@ -1,20 +1,20 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import Collapse from '@/components/Collapse';
-import CollapsibleItem from '@/components/CollapsibleItem';
 import { discipuladosService } from '@/services/discipuladosService';
 import { redesService } from '@/services/redesService';
 import { congregacoesService } from '@/services/congregacoesService';
 import { memberService } from '@/services/memberService';
-import { celulasService } from '@/services/celulasService';
 import { Discipulado, Celula, Rede, Member, Congregacao } from '@/types';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { createTheme, ThemeProvider, Autocomplete, TextField, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import { FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiTrash2, FiPlus, FiEdit2, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
+import DiscipuladoViewModal from '@/components/DiscipuladoViewModal';
+import ModalConfirm from '@/components/ModalConfirm';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function DiscipuladosPage() {
@@ -26,6 +26,14 @@ export default function DiscipuladosPage() {
   const [redes, setRedes] = useState<Rede[]>([]);
   const [users, setUsers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // View modal state
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingDiscipulado, setViewingDiscipulado] = useState<Discipulado | null>(null);
+  
+  // Confirmation modal state
+  const [confirmingDiscipulado, setConfirmingDiscipulado] = useState<Discipulado | null>(null);
+  
   // filters
   const [filterName, setFilterName] = useState('');
   const [filterMyDiscipleships, setFilterMyDiscipleships] = useState(true);
@@ -56,6 +64,7 @@ export default function DiscipuladosPage() {
   const [editCongregacaoId, setEditCongregacaoId] = useState<number | null>(null);
   const [editRedeId, setEditRedeId] = useState<number | null>(null);
   const [editDiscipleIds, setEditDiscipleIds] = useState<number[]>([]);
+  const [editingDiscipulado, setEditingDiscipulado] = useState<Discipulado | null>(null);
 
   // Kids validation
   const [createGenderError, setCreateGenderError] = useState('');
@@ -75,18 +84,12 @@ export default function DiscipuladosPage() {
       
       const d = await discipuladosService.getDiscipulados(filters);
       setList(d || []);
-      // also load all células to compute counts per discipulado
-      try {
-        const allCells = await celulasService.getCelulas();
-        const counts: Record<number, number> = {};
-        (allCells || []).forEach((c) => {
-          if (!c.discipuladoId) return;
-          counts[c.discipuladoId] = (counts[c.discipuladoId] || 0) + 1;
-        });
-        setDiscipuladoCellCountMap(counts);
-      } catch (err) {
-        console.error('failed loading celulas for counts', err);
-      }
+      // compute counts from células already included in discipulados
+      const counts: Record<number, number> = {};
+      (d || []).forEach((disc) => {
+        counts[disc.id] = disc.celulas?.length ?? 0;
+      });
+      setDiscipuladoCellCountMap(counts);
     } catch (err) {
       console.error(err);
       toast.error(ErrorMessages.loadDiscipulados(err));
@@ -155,8 +158,6 @@ export default function DiscipuladosPage() {
     }
   }, [editRedeId, editDiscipuladorId, redes, users]);
 
-  const [expandedDiscipulados, setExpandedDiscipulados] = useState<Record<number, boolean>>({});
-  const [discipuladoCelulasMap, setDiscipuladoCelulasMap] = useState<Record<number, Celula[]>>({});
   const [discipuladoCellCountMap, setDiscipuladoCellCountMap] = useState<Record<number, number>>({});
 
   const create = async () => {
@@ -177,11 +178,6 @@ export default function DiscipuladosPage() {
       setCreateDiscipuladorId(null); setCreateDiscipuladorName(''); setCreateRedeId(null); setCreateDiscipleIds([]); setCreateDiscipuladoModalOpen(false);
       toast.success('Discipulado criado');
       await load();
-      // load celulas for created discipulado and update counts
-      const all = await celulasService.getCelulas();
-      const cellsForCreated = (all || []).filter(c => c.discipuladoId === created.id);
-      setDiscipuladoCelulasMap(prev => ({ ...prev, [created.id]: cellsForCreated }));
-      setDiscipuladoCellCountMap(prev => ({ ...prev, [created.id]: cellsForCreated.length }));
     } catch (err) {
       console.error(err);
       toast.error(ErrorMessages.createDiscipulado(err));
@@ -189,6 +185,7 @@ export default function DiscipuladosPage() {
   };
 
   const openEditModal = (d: Discipulado) => {
+    setEditingDiscipulado(d);
     setEditDiscipuladoId(d.id);
     setEditRedeId(d.redeId ?? null);
     setEditDiscipuladorId(d.discipuladorMemberId ?? null);
@@ -227,38 +224,33 @@ export default function DiscipuladosPage() {
     }
   };
 
-  const onToggleDiscipulado = async (d: Discipulado, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    try {
-      const currently = !!expandedDiscipulados[d.id];
-      if (!currently && !discipuladoCelulasMap[d.id]) {
-        const all = await celulasService.getCelulas();
-        const cells = (all || []).filter(c => c.discipuladoId === d.id);
-        setDiscipuladoCelulasMap(prev => ({ ...prev, [d.id]: cells }));
-        setDiscipuladoCellCountMap(prev => ({ ...prev, [d.id]: cells.length }));
-      }
-      setExpandedDiscipulados(prev => ({ ...prev, [d.id]: !currently }));
-    } catch (err) {
-      console.error(err);
-      toast.error(ErrorMessages.loadCelulas(err));
-    }
+  const handleOpenViewModal = (d: Discipulado) => {
+    setViewingDiscipulado(d);
+    setIsViewModalOpen(true);
+  };
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false);
+    setViewingDiscipulado(null);
+  };
+
+  const handleConfirmDelete = (d: Discipulado) => {
+    setConfirmingDiscipulado(d);
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmingDiscipulado(null);
   };
 
   const deleteDiscipulado = async (d: Discipulado) => {
-    try {
-      const allCelulas = await celulasService.getCelulas();
-      const children = (allCelulas || []).filter((c: Celula) => c.discipuladoId === d.id);
-      if (children.length > 0) {
-        return toast.error('Não é possível apagar discipulado com células associadas');
-      }
-    } catch (err) {
-      console.error(err);
-      return toast.error(ErrorMessages.checkAssociations(err));
+    const cellCount = d.celulas?.length ?? 0;
+    if (cellCount > 0) {
+      return toast.error('Não é possível apagar discipulado com células associadas');
     }
-    if (!confirm(`Remover discipulado de ${getUserName(d.discipuladorMemberId)}?`)) return;
     try {
       await discipuladosService.deleteDiscipulado(d.id);
       toast.success('Discipulado removido com sucesso!');
+      setConfirmingDiscipulado(null);
       await load();
     } catch (err) {
       console.error(err);
@@ -270,6 +262,187 @@ export default function DiscipuladosPage() {
     if (!id) return '';
     const u = users.find(x => x.id === id);
     return u ? u.name : '';
+  };
+
+  const getInitials = (name?: string | null) => {
+    if (!name) return '?';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  // Permission checks for discipulado
+  const canEditDiscipulado = (d: Discipulado): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode editar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade pode editar tudo
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice presidente da congregação do discipulado
+    const congregacao = congregacoes.find(c => c.id === d.rede.congregacaoId);
+    if (congregacao && (
+      congregacao.pastorGovernoMemberId === permission.id ||
+      congregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor da rede do discipulado
+    if (d.rede.pastorMemberId === permission.id) {
+      return true;
+    }
+
+    // Discipulador do discipulado (e discipulado é da rede kids) - apenas pode editar disciples
+    if (d.discipuladorMemberId === permission.id && d.rede.isKids) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const canDeleteDiscipulado = (d: Discipulado): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode apagar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice presidente da congregação do discipulado
+    const congregacao = congregacoes.find(c => c.id === d.rede.congregacaoId);
+    if (congregacao && (
+      congregacao.pastorGovernoMemberId === permission.id ||
+      congregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor da rede do discipulado
+    if (d.rede.pastorMemberId === permission.id) {
+      return true;
+    }
+
+    // Discipulador NÃO pode apagar
+    return false;
+  };
+
+  const canEditDiscipuladoCongregacao = (d: Discipulado): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode editar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice da congregação NÃO pode alterar congregação
+    // Pastor da rede NÃO pode alterar congregação
+    // Discipulador NÃO pode alterar congregação
+    return false;
+  };
+
+  const canEditDiscipuladoRede = (d: Discipulado): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode editar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice presidente da congregação do discipulado
+    const congregacao = congregacoes.find(c => c.id === d.rede.congregacaoId);
+    if (congregacao && (
+      congregacao.pastorGovernoMemberId === permission.id ||
+      congregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor da rede NÃO pode alterar a rede
+    // Discipulador NÃO pode alterar a rede
+    return false;
+  };
+
+  const canEditOnlyDisciples = (d: Discipulado): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Se for discipulador do discipulado e for rede kids, pode editar apenas disciples
+    if (d.discipuladorMemberId === permission.id && d.rede.isKids) {
+      // Não pode editar outros campos
+      return !canEditDiscipuladoCongregacao(d) && !canEditDiscipuladoRede(d);
+    }
+
+    return false;
+  };
+
+  const canCreateDiscipulado = (): boolean => {
+    if (!user?.permission) return false;
+    const permission = user.permission;
+
+    // Admin pode criar tudo
+    if (permission.isAdmin) return true;
+
+    // Pastor presidente da congregação principal da cidade
+    const mainCongregacao = congregacoes.find(c => c.isPrincipal);
+    if (mainCongregacao && (
+      mainCongregacao.pastorGovernoMemberId === permission.id ||
+      mainCongregacao.vicePresidenteMemberId === permission.id
+    )) {
+      return true;
+    }
+
+    // Pastor presidente/vice presidente de qualquer congregação
+    const isCongregacaoLeader = congregacoes.some(c => 
+      c.pastorGovernoMemberId === permission.id || 
+      c.vicePresidenteMemberId === permission.id
+    );
+    if (isCongregacaoLeader) {
+      return true;
+    }
+
+    // Pastor de qualquer rede
+    const isRedePastor = redes.some(r => r.pastorMemberId === permission.id);
+    if (isRedePastor) {
+      return true;
+    }
+
+    return false;
   };
 
   // users that are discipuladores in the current list
@@ -438,52 +611,106 @@ export default function DiscipuladosPage() {
               </div>
             ) : (
             <ul className="space-y-2">
-              {filteredList.map(d => (
-                  <li key={d.id} className={`border p-2 rounded ${!d.discipuladorMemberId ? 'bg-red-900/20 border-red-700' : ''}`}>
-                    <CollapsibleItem
-                      isOpen={!!expandedDiscipulados[d.id]}
-                      onToggle={() => onToggleDiscipulado(d)}
-                      onEdit={() => openEditModal(d)}
-                      right={
-                        (() => {
-                          const childCount = (discipuladoCellCountMap[d.id] ?? (discipuladoCelulasMap[d.id]?.length ?? 0));
-                          const disabled = childCount > 0;
-                          return (
-                            <span onMouseDown={(e) => e.stopPropagation()}>
-                              <button
-                                disabled={disabled}
-                                title={disabled ? 'Não é possível apagar: possui células associadas' : 'Excluir discipulado'}
-                                onClick={() => deleteDiscipulado(d)}
-                                className={`p-1 rounded ${disabled ? 'text-gray-400 opacity-60 cursor-not-allowed' : 'text-red-600 hover:bg-red-900'}`}
-                              >
-                                <FiTrash2 className="h-4 w-4" aria-hidden />
-                              </button>
-                            </span>
-                          );
-                        })()
-                      }
-                      title={<>{(users.find(u => u.id === d.discipuladorMemberId)?.name || <span className="text-red-400">Sem discipulador</span>)} <span className="text-sm text-gray-500 ml-2">({discipuladoCellCountMap[d.id] ?? (discipuladoCelulasMap[d.id]?.length ?? 0)} células)</span></>}
-                      subtitle={<>{`rede: ${d.rede.name}`}</>}
-                      duration={250}
-                    >
-                      {(discipuladoCelulasMap[d.id] || []).length === 0 && <div className="text-xs text-gray-500">Nenhuma célula</div>}
-                      <ul className="space-y-1">
-                        {(discipuladoCelulasMap[d.id] || []).map((c: Celula) => (
-                          <li key={c.id} className="text-sm border p-1 rounded">{c.name} (id: {c.id})</li>
-                        ))}
-                      </ul>
-                    </CollapsibleItem>
+              {filteredList.map(d => {
+                const cellCount = discipuladoCellCountMap[d.id] ?? 0;
+                const canDelete = cellCount === 0;
+                const discipulador = users.find(u => u.id === d.discipuladorMemberId);
+                
+                return (
+                  <li 
+                    key={d.id} 
+                    className={`border rounded-lg p-4 transition-colors ${
+                      !d.discipuladorMemberId 
+                        ? 'bg-red-900/20 border-red-700' 
+                        : 'bg-gray-800 border-gray-700 hover:bg-gray-750'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        {discipulador ? (
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={discipulador.photoUrl} alt={discipulador.name} />
+                            <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
+                              {getInitials(discipulador.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <Avatar className="w-10 h-10">
+                            <AvatarFallback className="bg-red-600 text-white text-sm font-semibold">
+                              ?
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+                        
+                        <div className="flex-1">
+                          <h4 className="font-medium text-white">
+                            {discipulador?.name || (
+                              <span className="text-red-400">Sem discipulador</span>
+                            )}
+                          </h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Rede: {d.rede.name}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {cellCount} {cellCount === 1 ? 'célula' : 'células'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleOpenViewModal(d)}
+                          className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
+                          title="Visualizar detalhes"
+                        >
+                          <FiEye className="h-4 w-4" />
+                        </button>
+                        <button
+                          disabled={!canEditDiscipulado(d)}
+                          onClick={() => openEditModal(d)}
+                          className={`p-2 rounded transition-colors ${
+                            canEditDiscipulado(d)
+                              ? 'text-gray-400 hover:bg-gray-700'
+                              : 'text-gray-600 cursor-not-allowed opacity-50'
+                          }`}
+                          title={canEditDiscipulado(d) ? 'Editar discipulado' : 'Sem permissão para editar'}
+                        >
+                          <FiEdit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          disabled={!canDelete || !canDeleteDiscipulado(d)}
+                          onClick={() => handleConfirmDelete(d)}
+                          className={`p-2 rounded transition-colors ${
+                            canDelete && canDeleteDiscipulado(d)
+                              ? 'text-red-400 hover:bg-red-900/30'
+                              : 'text-gray-600 cursor-not-allowed opacity-50'
+                          }`}
+                          title={
+                            !canDelete 
+                              ? 'Não é possível apagar: possui células associadas'
+                              : !canDeleteDiscipulado(d)
+                              ? 'Sem permissão para apagar'
+                              : 'Excluir discipulado'
+                          }
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
                   </li>
-                ))}
+                );
+              })}
             </ul>
             )}
           </div>
         </div>
 
         {/* Floating create button */}
-        <button aria-label="Criar discipulado" onClick={() => setCreateDiscipuladoModalOpen(true)} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
-          <FiPlus className="h-7 w-7" aria-hidden />
-        </button>
+        {canCreateDiscipulado() && (
+          <button aria-label="Criar discipulado" onClick={() => setCreateDiscipuladoModalOpen(true)} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
+            <FiPlus className="h-7 w-7" aria-hidden />
+          </button>
+        )}
 
         {/* Create discipulado modal */}
         {createDiscipuladoModalOpen && (
@@ -647,7 +874,7 @@ export default function DiscipuladosPage() {
         )}
 
         {/* Edit discipulado modal */}
-        {editDiscipuladoModalOpen && (
+        {editDiscipuladoModalOpen && editingDiscipulado && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-gray-900 p-6 rounded w-11/12 sm:w-96">
               <div className="flex items-center justify-between mb-3">
@@ -667,13 +894,18 @@ export default function DiscipuladosPage() {
                       }}
                       label="Congregação"
                       size="small"
-                      className="bg-gray-800 w-full">
+                      className="bg-gray-800 w-full"
+                      disabled={!canEditDiscipuladoCongregacao(editingDiscipulado)}
+                    >
                       <MenuItem value="">Selecione congregação</MenuItem>
                       {congregacoes.map((c) => (
                         <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
+                  {!canEditDiscipuladoCongregacao(editingDiscipulado) && (
+                    <p className="text-xs text-gray-500 mt-1">Você não tem permissão para alterar a congregação</p>
+                  )}
                 </div>
 
                 <div className="w-full">
@@ -695,13 +927,18 @@ export default function DiscipuladosPage() {
                       }}
                       label="Rede"
                       size="small"
-                      className="bg-gray-800 w-full">
+                      className="bg-gray-800 w-full"
+                      disabled={!canEditDiscipuladoRede(editingDiscipulado)}
+                    >
                       <MenuItem value="">Selecione rede</MenuItem>
                       {redes.filter(r => !editCongregacaoId || r.congregacaoId === editCongregacaoId).map((r) => (
                         <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
+                  {!canEditDiscipuladoRede(editingDiscipulado) && (
+                    <p className="text-xs text-gray-500 mt-1">Você não tem permissão para alterar a rede</p>
+                  )}
                 </div>
 
                 <div ref={editDiscipuladorDropdownRef} className="relative w-full">
@@ -717,7 +954,11 @@ export default function DiscipuladosPage() {
                       editDiscipuladorTimeoutRef.current = window.setTimeout(() => { setShowEditDiscipuladoresDropdown(false); editDiscipuladorTimeoutRef.current = null; }, 150);
                     }}
                     className="border p-2 rounded w-full bg-gray-800 text-white h-10"
+                    disabled={canEditOnlyDisciples(editingDiscipulado)}
                   />
+                  {canEditOnlyDisciples(editingDiscipulado) && (
+                    <p className="text-xs text-gray-500 mt-1">Você só pode editar as discípulas</p>
+                  )}
                   {editGenderError && <div className="text-red-500 text-xs mt-1">{editGenderError}</div>}
                   {showEditDiscipuladoresDropdown && (
                     <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
@@ -807,6 +1048,13 @@ export default function DiscipuladosPage() {
           </div>
         )}
 
+        {/* DiscipuladoViewModal */}
+        <DiscipuladoViewModal
+          discipulado={viewingDiscipulado}
+          isOpen={isViewModalOpen}
+          onClose={handleCloseViewModal}
+        />
+
         {/* FilterModal */}
         <FilterModal
           isOpen={isFilterModalOpen}
@@ -815,6 +1063,17 @@ export default function DiscipuladosPage() {
           onClear={clearAllFilters}
           filters={filterConfigs}
           hasActiveFilters={hasActiveFilters}
+        />
+
+        {/* ModalConfirm */}
+        <ModalConfirm
+          open={!!confirmingDiscipulado}
+          title="Confirmar remoção"
+          message={confirmingDiscipulado ? `Remover discipulado de ${getUserName(confirmingDiscipulado.discipuladorMemberId)}?` : ''}
+          confirmLabel="Remover"
+          cancelLabel="Cancelar"
+          onConfirm={() => confirmingDiscipulado && deleteDiscipulado(confirmingDiscipulado)}
+          onCancel={handleCancelDelete}
         />
       </ThemeProvider>
     </>
