@@ -90,13 +90,23 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
     }
     
     // Vice-Líder de Célula
-    if (member.viceLedCelulas && member.viceLedCelulas.length > 0) {
-      member.viceLedCelulas.forEach(cel => {
-        tags.push({ label: `Líder em Treinamento - ${cel.name}`, color: 'text-yellow-400' });
+    if (member.leadingInTrainingCelulas && member.leadingInTrainingCelulas.length > 0) {
+      member.leadingInTrainingCelulas.forEach(cl => {
+        tags.push({ label: `Líder em Treinamento - ${cl.celula.name}`, color: 'text-yellow-400' });
       });
     }
     
     return tags;
+  };
+
+  // Retorna as tags de funções do membro
+  const getRoleTags = (member: Member): { label: string; color: string }[] => {
+    if (!member.roles || member.roles.length === 0) return [];
+    
+    return member.roles.map(userRole => ({
+      label: userRole.role.name,
+      color: 'text-indigo-400'
+    }));
   };
 
   return (
@@ -120,55 +130,98 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
           <section>
             <h3 className="text-lg font-semibold mb-3 text-blue-400">Informações Pessoais</h3>
             
-            {/* Photo */}
-            {member.photoUrl && (
-              <div className="mb-4 flex justify-center">
-                <img
-                  src={member.photoUrl}
-                  alt={member.name}
-                  className="w-32 h-32 rounded-full object-cover border-4 border-blue-900"
-                />
+            {/* Photo and Personal Data Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-4">
+              {/* Coluna da Foto - 1/4 em desktop */}
+              <div className="lg:col-span-1 flex flex-col items-center gap-4">
+                {member.photoUrl ? (
+                  <img
+                    src={member.photoUrl}
+                    alt={member.name}
+                    className="w-40 h-40 rounded-full object-cover border-4 border-blue-900"
+                  />
+                ) : (
+                  <div className="w-40 h-40 rounded-full bg-gray-800 border-4 border-gray-700 flex items-center justify-center">
+                    <span className="text-4xl text-gray-600">👤</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Coluna dos Dados - 3/4 em desktop */}
+              <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-400">Nome</label>
+                  <p className="text-base mt-1">{member.name}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-400">Email</label>
+                  <p className="text-base mt-1">{member.email || '-'}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-400">Telefone</label>
+                  <p className="text-base mt-1">{formatPhone(member.phone)}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-400">Gênero</label>
+                  <p className="text-base mt-1">{getGenderLabel(member.gender)}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-400">Data de Nascimento</label>
+                  <p className="text-base mt-1">{formatDate(member.birthDate)}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-400">Estado Civil</label>
+                  <p className="text-base mt-1">{getMaritalStatusLabel(member.maritalStatus)}</p>
+                </div>
+                
+                {member.maritalStatus === 'MARRIED' && member.spouse && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-400">Cônjuge</label>
+                    <p className="text-base mt-1">{member.spouse.name}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tags Section - Below photo and data */}
+            {(getLeadershipInfo(member).length > 0 || getRoleTags(member).length > 0) && (
+              <div className="mt-4 flex flex-col items-center gap-3">
+                <div className="flex flex-wrap gap-6 justify-center">
+                  {/* Leadership Tags */}
+                  {getLeadershipInfo(member).length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-400 mb-2 block text-center">Posições de Liderança</label>
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {getLeadershipInfo(member).map((tag, idx) => (
+                          <span key={idx} className={`text-sm ${tag.color} bg-gray-800 px-3 py-1 rounded-full font-semibold`}>
+                            {tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Role Tags */}
+                  {getRoleTags(member).length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-400 mb-2 block text-center">Funções</label>
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {getRoleTags(member).map((tag, idx) => (
+                          <span key={idx} className={`text-sm ${tag.color} bg-gray-800 px-3 py-1 rounded-full font-semibold`}>
+                            {tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-400">Nome</label>
-                <p className="text-base mt-1">{member.name}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Email</label>
-                <p className="text-base mt-1">{member.email || '-'}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Telefone</label>
-                <p className="text-base mt-1">{formatPhone(member.phone)}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Gênero</label>
-                <p className="text-base mt-1">{getGenderLabel(member.gender)}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Data de Nascimento</label>
-                <p className="text-base mt-1">{formatDate(member.birthDate)}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Estado Civil</label>
-                <p className="text-base mt-1">{getMaritalStatusLabel(member.maritalStatus)}</p>
-              </div>
-              
-              {member.maritalStatus === 'MARRIED' && member.spouse && (
-                <div>
-                  <label className="text-sm font-medium text-gray-400">Cônjuge</label>
-                  <p className="text-base mt-1">{member.spouse.name}</p>
-                </div>
-              )}
-            </div>
           </section>
 
           {/* Church Information */}
@@ -242,20 +295,6 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
                 </div>
               )}
             </div>
-            
-            {/* Leadership Positions */}
-            {getLeadershipInfo(member).length > 0 && (
-              <div className="mt-4">
-                <label className="text-sm font-medium text-gray-400 mb-2 block">Posições de Liderança</label>
-                <div className="flex flex-wrap gap-2">
-                  {getLeadershipInfo(member).map((tag, idx) => (
-                    <span key={idx} className={`text-sm ${tag.color} bg-gray-800 px-3 py-1 rounded-full font-semibold`}>
-                      {tag.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </section>
 
           {/* Address */}

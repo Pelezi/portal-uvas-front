@@ -27,8 +27,8 @@ export type MinistryType =
 export interface Permission {
   id: number;
   isAdmin: boolean;
-  viceLeader: boolean;
   leader: boolean;
+  leaderInTraining: boolean;
   discipulador: boolean;
   pastor: boolean;
   pastorCongregacao: boolean;
@@ -84,11 +84,10 @@ export interface Celula {
   id: number;
   name: string;
   leaderMemberId?: number;
-  viceLeaderMemberId?: number;
   // optional embedded leader member object when returned by API
   leader?: Member | null;
-  viceLeader?: Member | null;
-  leadersInTraining?: { id: number; member: Member }[];
+  leaderInTraining?: Member | null;
+  leadersInTraining?: CelulaLeadersInTraining[];
   discipuladoId?: number;
   weekday?: number | null; // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
   time?: string | null; // Formato HH:mm (ex: "19:30")
@@ -259,14 +258,22 @@ export interface Member {
   
   // Leadership positions
   ledCelulas?: Celula[];
-  viceLedCelulas?: Celula[];
+  leadingInTrainingCelulas?: CelulaLeadersInTraining[];
   discipulados?: Discipulado[];
   redes?: Rede[];
   congregacoesPastorGoverno?: Congregacao[];
   congregacoesVicePresidente?: Congregacao[];
+  congregacoesKidsLeader?: Congregacao[];
   
   // Permission (populated after login)
   permission?: Permission | null;
+}
+
+export interface CelulaLeadersInTraining {
+  id: number;
+  celulaId: number;
+  memberId: number;
+  celula: Celula;
 }
 
 export interface ReportCreateInput {

@@ -8,7 +8,7 @@ import { congregacoesService } from '@/services/congregacoesService';
 import { memberService, MemberInput } from '@/services/memberService';
 import { Celula, Member, Discipulado, Rede, Congregacao, MemberFilters } from '@/types';
 import toast from 'react-hot-toast';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, Button, TextField } from '@mui/material';
+import { createTheme, ThemeProvider, TextField } from '@mui/material';
 import { FiEdit2, FiTrash2, FiPlus } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
 import MemberModal from '@/components/MemberModal';
@@ -202,11 +202,27 @@ export default function MembersManagementPage() {
     
     // Admin pode gerenciar todos
     const isAdmin = user.roles?.some((r: any) => r.role?.isAdmin);
-    
     if (isAdmin) return true;
+
+    // Se o ministryPosition do membro for igual ou superior ao do usuário, não pode gerenciar
+    if (member.ministryPosition && user.ministryPosition) {
+      if (member.ministryPosition.priority <= user.ministryPosition.priority) {
+        return false;
+      }
+    }
     
     // Membro sem célula pode ser gerenciado
-    if (!member.celulaId) return true;
+    if (!member.celulaId 
+      && !member.ledCelulas?.length 
+      && !member.leadingInTrainingCelulas?.length 
+      && !member.discipulados?.length 
+      && !member.redes?.length 
+      && !member.congregacoesPastorGoverno?.length 
+      && !member.congregacoesVicePresidente?.length 
+      && !member.congregacoesKidsLeader?.length
+    ) {
+      return true
+    };
     
     // Verificar se o membro está na mesma rede/discipulado/célula
     const memberCelula = celulas.find(c => c.id === member.celulaId);
@@ -276,7 +292,7 @@ export default function MembersManagementPage() {
     }
     
     // Vice-Líder de Célula
-    if (member.viceLedCelulas && member.viceLedCelulas.length > 0) {
+    if (member.leadingInTrainingCelulas && member.leadingInTrainingCelulas.length > 0) {
       tags.push({ label: 'Líder em Treinamento', color: 'text-yellow-400' });
     }
     
@@ -531,15 +547,6 @@ export default function MembersManagementPage() {
                       >
                         <FiEdit2 className="h-4 w-4 text-yellow-500" aria-hidden />
                       </button>
-                      {m.celulaId && (
-                        <button
-                          onClick={() => removeMember(m)}
-                          aria-label="Remover membro da célula"
-                          className="p-1 rounded hover:bg-gray-800"
-                        >
-                          <FiTrash2 className="h-4 w-4 text-red-600" aria-hidden />
-                        </button>
-                      )}
                     </div>
                   )}
                 </li>

@@ -571,17 +571,24 @@ export default function ViewReportPage() {
       
       // Cabeçalho da tabela
       const headerRow = worksheet.getRow(infoRow);
-      headerRow.values = ['Membro', 'Tipo', ...celulaData.reports.map(r => {
+      const headerValues = ['Membro', 'Tipo', ...celulaData.reports.map(r => {
         const dateDay = `${dayjs(r.date).format('DD/MM')} (${getDayLabel(new Date(r.date).getDay())})`;
         return r.isStandardDay === false ? `${dateDay}\nFora do dia padrão` : dateDay;
       })];
-      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF3B82F6' }
-      };
-      headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      
+      // Aplicar valores e estilos apenas nas células com dados
+      headerValues.forEach((value, index) => {
+        const cell = headerRow.getCell(index + 1);
+        cell.value = value;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF3B82F6' }
+        };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      });
+      
       const hasNonStandardDay = celulaData.reports.some(r => r.isStandardDay === false);
       headerRow.height = hasNonStandardDay ? 35 : 20;
       

@@ -4,7 +4,7 @@ import { Celula } from "@/types";
 export const celulasService = {
   getCelulas: async (options?: {
     name?: string;
-    viceLeaderMemberId?: number;
+    leaderInTrainingMemberId?: number;
     leaderMemberId?: number;
     discipuladoId?: number;
     redeId?: number;

@@ -38,6 +38,7 @@ export default function ProfilePage() {
 
   // Editable personal data
   const [name, setName] = useState('');
+  const [gender, setGender] = useState<string>('MALE');
   const [maritalStatus, setMaritalStatus] = useState<string>('SINGLE');
   const [spouseId, setSpouseId] = useState<number | null>(null);
   const [birthDate, setBirthDate] = useState<Dayjs | null>(null);
@@ -95,6 +96,7 @@ export default function ProfilePage() {
       
       // Set editable fields
       setName(data.name || '');
+      setGender(data.gender || 'MALE');
       setMaritalStatus(data.maritalStatus || 'SINGLE');
       setSpouseId(data.spouseId || null);
       setBirthDate(data.birthDate ? dayjs(data.birthDate) : null);
@@ -195,6 +197,7 @@ export default function ProfilePage() {
 
       await memberService.updateOwnProfile({
         name,
+        gender,
         maritalStatus,
         spouseId: maritalStatus === 'MARRIED' ? spouseId : null,
         birthDate: birthDate ? birthDate.format('YYYY-MM-DD') : undefined,
@@ -232,6 +235,7 @@ export default function ProfilePage() {
   const handleCancelEdit = () => {
     if (profile) {
       setName(profile.name || '');
+      setGender(profile.gender || 'MALE');
       setMaritalStatus(profile.maritalStatus || 'SINGLE');
       setSpouseId(profile.spouseId || null);
       setBirthDate(profile.birthDate ? dayjs(profile.birthDate) : null);
@@ -540,6 +544,23 @@ export default function ProfilePage() {
 
                   <div>
                     <FormControl fullWidth size="small">
+                      <InputLabel id="gender-label">Gênero</InputLabel>
+                      <Select
+                        labelId="gender-label"
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        label="Gênero"
+                        className="bg-gray-700"
+                      >
+                        <MenuItem value="MALE">Masculino</MenuItem>
+                        <MenuItem value="FEMALE">Feminino</MenuItem>
+                        <MenuItem value="OTHER">Outro</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </div>
+
+                  <div>
+                    <FormControl fullWidth size="small">
                       <InputLabel id="marital-status-label">Estado Civil</InputLabel>
                       <Select
                         labelId="marital-status-label"
@@ -611,18 +632,6 @@ export default function ProfilePage() {
                       onChange={handlePhoneChange}
                       placeholder="(11) 99999-9999"
                       inputProps={{ maxLength: 25 }}
-                      className="bg-gray-700"
-                    />
-                  </div>
-
-                  <div>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="URL da Foto"
-                      value={photoUrl}
-                      onChange={(e) => setPhotoUrl(e.target.value)}
-                      placeholder="https://..."
                       className="bg-gray-700"
                     />
                   </div>

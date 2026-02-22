@@ -81,7 +81,7 @@ export default function Sidebar() {
   }
 
   const navItems: NavItem[] = [
-    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false, require: 'leaderInTraining' },
+    { href: '/', label: 'Início', icon: <Home size={18} />, matchPrefix: false, require: 'leader' },
     { 
       label: 'Relatório', 
       icon: <FileText size={18} />, 
@@ -91,11 +91,11 @@ export default function Sidebar() {
       ],
       require: 'leaderInTraining'
     },
-    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
-    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
-    { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
-    { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'leaderInTraining' },
-    { href: '/congregacoes', label: 'Congregações', icon: <Building size={18} />, matchPrefix: true, require: 'leaderInTraining' },
+    { href: '/members', label: 'Membros', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
+    { href: '/celulas', label: 'Células', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
+    { href: '/discipulados', label: 'Discipulados', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
+    { href: '/redes', label: 'Redes', icon: <Users size={18} />, matchPrefix: true, require: 'leader' },
+    { href: '/congregacoes', label: 'Congregações', icon: <Building size={18} />, matchPrefix: true, require: 'leader' },
     { href: '/settings', label: 'Configurações', icon: <Settings size={18} />, matchPrefix: true, require: 'admin' },
   ];
 

@@ -89,7 +89,7 @@ export function hasPermission(
       return permission.leader || hasMinistryPermission(permission.ministryType, 'leader');
     
     case 'leaderInTraining':
-      return permission.viceLeader || hasMinistryPermission(permission.ministryType, 'leaderInTraining');
+      return permission.leaderInTraining || hasMinistryPermission(permission.ministryType, 'leaderInTraining');
     
     case 'member':
       return hasMinistryPermission(permission.ministryType, 'member');

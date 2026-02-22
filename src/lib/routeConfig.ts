@@ -26,16 +26,16 @@ export const PROTECTED_ROUTES: RouteConfig[] = [
   { path: '/report/view', requirement: 'leaderInTraining', matchType: 'exact' },
   
   // Páginas específicas de células
-  { path: '/celulas/[id]/members', requirement: 'leaderInTraining', matchType: 'prefix' },
+  { path: '/celulas/[id]/members', requirement: 'leader', matchType: 'prefix' },
   { path: '/celulas/[id]/presence', requirement: 'leaderInTraining', matchType: 'prefix' },
   
   // Páginas principais
-  { path: '/', requirement: 'leaderInTraining', matchType: 'exact' },
-  { path: '/members', requirement: 'leaderInTraining', matchType: 'prefix' },
-  { path: '/celulas', requirement: 'leaderInTraining', matchType: 'prefix' },
-  { path: '/discipulados', requirement: 'leaderInTraining', matchType: 'prefix' },
-  { path: '/redes', requirement: 'leaderInTraining', matchType: 'prefix' },
-  { path: '/congregacoes', requirement: 'leaderInTraining', matchType: 'prefix' },
+  { path: '/', requirement: 'leader', matchType: 'exact' },
+  { path: '/members', requirement: 'leader', matchType: 'prefix' },
+  { path: '/celulas', requirement: 'leader', matchType: 'prefix' },
+  { path: '/discipulados', requirement: 'leader', matchType: 'prefix' },
+  { path: '/redes', requirement: 'leader', matchType: 'prefix' },
+  { path: '/congregacoes', requirement: 'leader', matchType: 'prefix' },
   
   // Perfil (todos autenticados podem acessar)
   { path: '/profile', requirement: 'visitor', matchType: 'exact' },

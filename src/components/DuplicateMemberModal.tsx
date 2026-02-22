@@ -110,9 +110,9 @@ export default function DuplicateMemberModal({
       });
     }
     
-    if (member.viceLedCelulas && member.viceLedCelulas.length > 0) {
-      member.viceLedCelulas.forEach(cel => {
-        tags.push({ label: `Líder em Treinamento - ${cel.name}`, color: 'text-yellow-400' });
+    if (member.leadingInTrainingCelulas && member.leadingInTrainingCelulas.length > 0) {
+      member.leadingInTrainingCelulas.forEach(cl => {
+        tags.push({ label: `Líder em Treinamento - ${cl.celula.name}`, color: 'text-yellow-400' });
       });
     }
     

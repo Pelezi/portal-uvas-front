@@ -160,11 +160,11 @@ export default function ReportPage() {
     const ledCelulas = await celulasService.getCelulas({
       leaderMemberId: user.id,
     });
-    const viceLedCelulas = await celulasService.getCelulas({
-      viceLeaderMemberId: user.id,
+    const leadingInTrainingCelulas = await celulasService.getCelulas({
+      leaderInTrainingMemberId: user.id,
     });
 
-    const combined = [...ledCelulas, ...viceLedCelulas];
+    const combined = [...ledCelulas, ...leadingInTrainingCelulas];
     return Array.from(new Map(combined.map((c) => [c.id, c])).values());
   };
 
