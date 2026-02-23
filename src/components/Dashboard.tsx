@@ -275,7 +275,7 @@ export default function Dashboard() {
                   setSelectedDiscipuladoId(discipuladoId);
                   setSelectedCelulaId(undefined);
                   
-                  // Auto-preencher rede e congregação
+                  // Auto-preencher rede e congregação apenas se não estiver desmarcando
                   if (discipuladoId) {
                     const discipulado = discipulados.find(d => d.id === discipuladoId);
                     if (discipulado?.redeId) {
@@ -285,6 +285,10 @@ export default function Dashboard() {
                         setSelectedCongregacaoId(rede.congregacaoId);
                       }
                     }
+                  } else {
+                    // Limpar rede e congregação quando desmarcar discipulado
+                    setSelectedRedeId(undefined);
+                    setSelectedCongregacaoId(undefined);
                   }
                 }}
                 className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
@@ -292,7 +296,12 @@ export default function Dashboard() {
               >
                 <option value="">Todos os discipulados</option>
                 {discipulados
-                  .filter(d => !selectedRedeId || d.redeId === selectedRedeId)
+                  .filter(d => {
+                    // Se nenhum discipulado selecionado, filtrar por rede (se selecionada)
+                    // Se já há discipulado selecionado, mostrar todos para permitir troca
+                    if (selectedDiscipuladoId) return true;
+                    return !selectedRedeId || d.redeId === selectedRedeId;
+                  })
                   .map((discipulado) => (
                     <option key={discipulado.id} value={discipulado.id}>
                       {discipulado.discipulador ? discipulado.discipulador.name : `Discipulado ${discipulado.id} `}
