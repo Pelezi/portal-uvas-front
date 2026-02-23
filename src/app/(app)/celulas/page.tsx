@@ -131,7 +131,11 @@ export default function CelulasPage() {
       if (authLoading) return;
       try {
         // Carregar apenas usuários que podem ser líderes (PRESIDENT_PASTOR, PASTOR, DISCIPULADOR, LEADER ou LEADER_IN_TRAINING)
-        const u = await memberService.getAllMembers({ ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING' });
+        const isAdmin = user?.permission?.isAdmin || false;
+        const u = await memberService.getAllMembers({ 
+          ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING',
+          ...(isAdmin && { all: true })
+        });
         setMembers(u || []);
 
         // load discipulados for select
@@ -285,22 +289,24 @@ export default function CelulasPage() {
 
   // Funções auxiliares de permissão
   const isAdmin = () => !user?.permission || user.permission.isAdmin;
-  const isPastor = () => user?.permission?.ministryType === 'PRESIDENT_PASTOR' || user?.permission?.ministryType === 'PASTOR';
-  const isDiscipulador = () => user?.permission?.ministryType === 'DISCIPULADOR';
+  const isPresidentPastor = () => user?.permission?.ministryType === 'PRESIDENT_PASTOR';
+  
+  // Verifica se é líder da célula específica
   const isCelulaLeader = (celulaId: number) => user?.id === groups.find(c => c.id === celulaId)?.leader?.id;
-
-  // Verificar se o usuário está associado a uma célula específica
-  const isAssociatedToCelula = (celula: Celula) => {
-    if (isAdmin() || isPastor()) return true;
-
-    // Discipulador: células do seu discipulado
-    if (isDiscipulador()) {
-      const userDiscipulado = discipulados.find(d => d.discipuladorMemberId === user?.id);
-      return userDiscipulado?.id === celula.discipuladoId;
-    }
-
-    // Líder: apenas sua própria célula
-    return isCelulaLeader(celula.id);
+  
+  // Verifica se é discipulador da célula
+  const isDiscipuladorOfCelula = (celula: Celula) => {
+    return celula.discipulado?.discipuladorMemberId === user?.id;
+  };
+  
+  // Verifica se é pastor de rede da célula
+  const isPastorDeRedeOfCelula = (celula: Celula) => {
+    return celula.discipulado?.rede?.pastorMemberId === user?.id;
+  };
+  
+  // Verifica se é pastor da congregação da célula
+  const isPastorDaCongregacaoOfCelula = (celula: Celula) => {
+    return celula.discipulado?.rede?.congregacao?.pastorGovernoMemberId === user?.id || celula.discipulado?.rede?.congregacao?.vicePresidenteMemberId === user?.id;
   };
 
   const getInitials = (name?: string | null) => {
@@ -314,22 +320,45 @@ export default function CelulasPage() {
 
   // Permissões para cada ação
   const canEdit = (celula: Celula) => {
-    if (!isAssociatedToCelula(celula)) return false;
-    return isAdmin() || isPastor() || isDiscipulador() || isCelulaLeader(celula.id);
+    // Admin e Pastor Presidente têm permissão geral
+    if (isAdmin() || isPresidentPastor()) return true;
+    
+    // Líder, Discipulador, Pastor de Rede e Pastor da Congregação podem editar
+    return isCelulaLeader(celula.id) || 
+           isDiscipuladorOfCelula(celula) || 
+           isPastorDeRedeOfCelula(celula) || 
+           isPastorDaCongregacaoOfCelula(celula);
   };
 
   const canMultiply = (celula: Celula) => {
-    if (!isAssociatedToCelula(celula)) return false;
-    return isAdmin() || isPastor() || isDiscipulador();
+    // Admin e Pastor Presidente têm permissão geral
+    if (isAdmin() || isPresidentPastor()) return true;
+    
+    // Apenas Discipulador, Pastor de Rede e Pastor da Congregação podem multiplicar (LÍDER NÃO PODE)
+    return isDiscipuladorOfCelula(celula) || 
+           isPastorDeRedeOfCelula(celula) || 
+           isPastorDaCongregacaoOfCelula(celula);
   };
 
   const canDelete = (celula: Celula) => {
-    if (!isAssociatedToCelula(celula)) return false;
-    return isAdmin() || isPastor() || isDiscipulador();
+    // Admin e Pastor Presidente têm permissão geral
+    if (isAdmin() || isPresidentPastor()) return true;
+    
+    // Apenas Discipulador, Pastor de Rede e Pastor da Congregação podem deletar (LÍDER NÃO PODE)
+    return isDiscipuladorOfCelula(celula) || 
+           isPastorDeRedeOfCelula(celula) || 
+           isPastorDaCongregacaoOfCelula(celula);
   };
 
   const canViewTracking = (celula: Celula) => {
-    return isAssociatedToCelula(celula);
+    // Admin e Pastor Presidente têm permissão geral
+    if (isAdmin() || isPresidentPastor()) return true;
+    
+    // Líder, Discipulador, Pastor de Rede e Pastor da Congregação podem acompanhar
+    return isCelulaLeader(celula.id) || 
+           isDiscipuladorOfCelula(celula) || 
+           isPastorDeRedeOfCelula(celula) || 
+           isPastorDaCongregacaoOfCelula(celula);
   };
 
   // Verificar se há filtros ativos
@@ -610,7 +639,7 @@ export default function CelulasPage() {
       </div>
 
       {/* Floating create button */}
-      {(isAdmin() || isPastor() || isDiscipulador()) && (
+      {(isAdmin() || isPresidentPastor() || user?.permission?.ministryType === 'PASTOR' || user?.permission?.ministryType === 'DISCIPULADOR') && (
         <button aria-label="Criar célula" onClick={handleOpenCreateModal} className="fixed right-6 bottom-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg z-50">
           <FiPlus className="h-7 w-7" aria-hidden />
         </button>
