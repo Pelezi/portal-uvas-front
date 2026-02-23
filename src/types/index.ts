@@ -84,13 +84,21 @@ export interface Celula {
   id: number;
   name: string;
   leaderMemberId: number;
+  hostMemberId?: number | null;
   // optional embedded leader member object when returned by API
   leader?: Member | null;
+  host?: Member | null;
   leaderInTraining?: Member | null;
   leadersInTraining?: CelulaLeadersInTraining[];
   discipuladoId: number;
   weekday?: number | null; // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
   time?: string | null; // Formato HH:mm (ex: "19:30")
+  
+  // New fields
+  openingDate?: string | null;
+  hasNextHost?: boolean | null;
+  type?: 'YOUNG' | 'ADULT' | 'TEENAGER' | 'CHILDISH' | null;
+  level?: 'EVANGELISM' | 'EDIFICATION' | 'COMMUNION' | 'MULTIPLICATION' | 'UNKNOWN' | null;
   
   // Address fields
   country?: string | null;

@@ -32,10 +32,15 @@ export const celulasService = {
   createCelula: async (data: {
     name: string;
     leaderMemberId?: number;
+    hostMemberId?: number;
     discipuladoId?: number;
     leaderInTrainingIds?: number[];
     weekday?: number;
     time?: string;
+    openingDate?: string;
+    hasNextHost?: boolean;
+    type?: string;
+    level?: string;
     country?: string;
     zipCode?: string;
     street?: string;
@@ -54,10 +59,15 @@ export const celulasService = {
     data: {
       name?: string;
       leaderMemberId?: number;
+      hostMemberId?: number;
       discipuladoId?: number;
       leaderInTrainingIds?: number[];
       weekday?: number;
       time?: string;
+      openingDate?: string;
+      hasNextHost?: boolean;
+      type?: string;
+      level?: string;
       country?: string;
       zipCode?: string;
       street?: string;

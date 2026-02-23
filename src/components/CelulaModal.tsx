@@ -6,6 +6,7 @@ import { congregacoesService } from '@/services/congregacoesService';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/pt-br';
@@ -19,10 +20,15 @@ interface CelulaModalProps {
   onSave: (data: {
     name: string;
     leaderMemberId?: number;
+    hostMemberId?: number;
     discipuladoId?: number;
     leaderInTrainingIds?: number[];
     weekday?: number;
     time?: string;
+    openingDate?: string;
+    hasNextHost?: boolean;
+    type?: string;
+    level?: string;
     country?: string;
     zipCode?: string;
     street?: string;
@@ -77,6 +83,16 @@ export default function CelulaModal({
   const [state, setState] = useState('');
   const [loadingCep, setLoadingCep] = useState(false);
 
+  // New fields
+  const [hostQuery, setHostQuery] = useState('');
+  const [hostId, setHostId] = useState<number | null>(null);
+  const [hostName, setHostName] = useState('');
+  const [showHostDropdown, setShowHostDropdown] = useState(false);
+  const [openingDate, setOpeningDate] = useState<Dayjs | null>(null);
+  const [hasNextHost, setHasNextHost] = useState(false);
+  const [celulaType, setCelulaType] = useState<string>('');
+  const [celulaLevel, setCelulaLevel] = useState<string>('');
+
   // Validação
   const [touched, setTouched] = useState({
     name: false,
@@ -87,6 +103,7 @@ export default function CelulaModal({
   const [genderError, setGenderError] = useState('');
 
   const leaderDropdownRef = useRef<HTMLDivElement>(null);
+  const hostDropdownRef = useRef<HTMLDivElement>(null);
 
   // Lógica de permissões para edição
   const editPermissions = useMemo(() => {
@@ -209,11 +226,14 @@ export default function CelulaModal({
       if (showLeaderDropdown && leaderDropdownRef.current && !leaderDropdownRef.current.contains(target)) {
         setShowLeaderDropdown(false);
       }
+      if (showHostDropdown && hostDropdownRef.current && !hostDropdownRef.current.contains(target)) {
+        setShowHostDropdown(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showLeaderDropdown]);
+  }, [showLeaderDropdown, showHostDropdown]);
 
   const muiTheme = createTheme({
     palette: {
@@ -258,6 +278,15 @@ export default function CelulaModal({
       setCity(celula.city || '');
       setComplement(celula.complement || '');
       setState(celula.state || '');
+
+      // New fields
+      setHostId(celula.hostMemberId ?? null);
+      setHostName(celula.host?.name || '');
+      setHostQuery('');
+      setOpeningDate(celula.openingDate ? dayjs(celula.openingDate) : null);
+      setHasNextHost(celula.hasNextHost ?? false);
+      setCelulaType(celula.type || '');
+      setCelulaLevel(celula.level || '');
 
       // Encontrar a rede e congregação através do discipulado
       if (celula.discipuladoId) {
@@ -429,6 +458,13 @@ export default function CelulaModal({
     setCity('');
     setComplement('');
     setState('');
+    setHostQuery('');
+    setHostId(null);
+    setHostName('');
+    setOpeningDate(null);
+    setHasNextHost(false);
+    setCelulaType('');
+    setCelulaLevel('');
     setTouched({ name: false, discipulado: false });
     setGenderError('');
   };
@@ -511,8 +547,13 @@ export default function CelulaModal({
       weekday: weekday,
       time: time.format('HH:mm'),
       leaderMemberId: leaderId || undefined,
+      hostMemberId: hostId || undefined,
       discipuladoId: discipuladoId || undefined,
       leaderInTrainingIds: leaderInTrainingIds.length > 0 ? leaderInTrainingIds : undefined,
+      openingDate: openingDate ? openingDate.format('YYYY-MM-DD') : undefined,
+      hasNextHost: hasNextHost,
+      type: celulaType || undefined,
+      level: celulaLevel || undefined,
       country: country || undefined,
       zipCode: zipCode || undefined,
       street: street || undefined,
@@ -740,6 +781,51 @@ export default function CelulaModal({
               </div>
             </div>
 
+            {/* Anfitrião */}
+            <div>
+              <label className="block mb-1 text-sm">Anfitrião</label>
+              <div ref={hostDropdownRef} className="relative w-full">
+                <input
+                  placeholder="Buscar anfitrião"
+                  value={hostQuery || hostName}
+                  onChange={(e) => {
+                    setHostQuery(e.target.value);
+                    setHostName('');
+                    setHostId(null);
+                    setShowHostDropdown(true);
+                  }}
+                  onFocus={() => setShowHostDropdown(true)}
+                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
+                />
+                {showHostDropdown && (
+                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
+                    {members.filter(member => {
+                      const q = (hostQuery || '').toLowerCase();
+                      if (!q) return true;
+                      return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
+                    }).map(member => (
+                      <div
+                        key={member.id}
+                        className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                        onMouseDown={() => {
+                          setHostId(member.id);
+                          setHostName(member.name);
+                          setHostQuery('');
+                          setShowHostDropdown(false);
+                        }}
+                      >
+                        <div>
+                          <div className="text-sm font-medium text-white">{member.name}</div>
+                          <div className="text-xs text-gray-400">{member.email}</div>
+                        </div>
+                        <div className="text-xs text-green-600">Selecionar</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Líderes em Treinamento */}
             {(() => {
               // Mostrar campo de líderes em treinamento se:
@@ -951,6 +1037,90 @@ export default function CelulaModal({
                   }}
                 />
               </LocalizationProvider>
+            </div>
+
+            {/* Data de Abertura */}
+            <div>
+              <label className="block mb-1 text-sm">Data de Abertura</label>
+              <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
+                <DatePicker
+                  value={openingDate}
+                  onChange={(newValue: Dayjs | null) => setOpeningDate(newValue)}
+                  format="DD/MM/YYYY"
+                  localeText={{
+                    toolbarTitle: 'Selecionar data',
+                    cancelButtonLabel: 'Cancelar',
+                    okButtonLabel: 'OK',
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      size: 'small',
+                      placeholder: 'DD/MM/AAAA',
+                    },
+                  }}
+                />
+              </LocalizationProvider>
+            </div>
+
+            {/* Tipo */}
+            <div>
+              <FormControl className="w-full">
+                <InputLabel id="type-label" size='small'>Tipo</InputLabel>
+                <Select
+                  labelId="type-label"
+                  value={celulaType}
+                  onChange={(e) => setCelulaType(e.target.value)}
+                  label="Tipo"
+                  size="small"
+                  className="bg-gray-800 w-full">
+                  <MenuItem value="">Selecione o tipo</MenuItem>
+                  <MenuItem value="YOUNG">Jovens</MenuItem>
+                  <MenuItem value="ADULT">Adultos</MenuItem>
+                  <MenuItem value="TEENAGER">Adolescentes</MenuItem>
+                  <MenuItem value="CHILDISH">Crianças</MenuItem>
+                </Select>
+              </FormControl>
+            </div>
+
+            {/* Nível */}
+            <div>
+              <FormControl className="w-full">
+                <InputLabel id="level-label" size='small'>Nível</InputLabel>
+                <Select
+                  labelId="level-label"
+                  value={celulaLevel}
+                  onChange={(e) => setCelulaLevel(e.target.value)}
+                  label="Nível"
+                  size="small"
+                  className="bg-gray-800 w-full">
+                  <MenuItem value="">Selecione o nível</MenuItem>
+                  <MenuItem value="EVANGELISM">Evangelismo</MenuItem>
+                  <MenuItem value="EDIFICATION">Edificação</MenuItem>
+                  <MenuItem value="COMMUNION">Comunhão</MenuItem>
+                  <MenuItem value="MULTIPLICATION">Multiplicação</MenuItem>
+                  <MenuItem value="UNKNOWN">Desconhecido</MenuItem>
+                </Select>
+              </FormControl>
+            </div>
+
+            {/* Tem Próximo Anfitrião */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm">Tem Próximo Anfitrião?</label>
+              <button
+                type="button"
+                onClick={() => setHasNextHost(!hasNextHost)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  hasNextHost ? 'bg-blue-600' : 'bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    hasNextHost ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-xs text-gray-400">{hasNextHost ? 'Sim' : 'Não'}</span>
             </div>
 
             {/* Divider */}

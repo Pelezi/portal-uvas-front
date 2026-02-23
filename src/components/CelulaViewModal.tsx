@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Celula, Member } from '@/types';
-import { Calendar, Clock, MapPin, Network, BookOpen, Church } from 'lucide-react';
+import { Calendar, Clock, MapPin, Network, BookOpen, Church, Home, Tag } from 'lucide-react';
+import dayjs from 'dayjs';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -84,6 +85,34 @@ export default function CelulaViewModal({
     if (celula.state) parts.push(celula.state);
 
     return parts.length > 0 ? parts.join(' - ') : '—';
+  };
+
+  const getTypeLabel = (type?: string | null) => {
+    if (!type) return '—';
+    const types: Record<string, string> = {
+      YOUNG: 'Jovens',
+      ADULT: 'Adultos',
+      TEENAGER: 'Adolescentes',
+      CHILDISH: 'Crianças'
+    };
+    return types[type] || type;
+  };
+
+  const getLevelLabel = (level?: string | null) => {
+    if (!level) return '—';
+    const levels: Record<string, string> = {
+      EVANGELISM: 'Evangelismo',
+      EDIFICATION: 'Edificação',
+      COMMUNION: 'Comunhão',
+      MULTIPLICATION: 'Multiplicação',
+      UNKNOWN: 'Desconhecido'
+    };
+    return levels[level] || level;
+  };
+
+  const formatDate = (date?: string | null) => {
+    if (!date) return '—';
+    return dayjs(date).format('DD/MM/YYYY');
   };
 
   const getMemberRoles = (member: Member) => {
@@ -189,6 +218,57 @@ export default function CelulaViewModal({
                         referrerPolicy="no-referrer-when-downgrade"
                         src={`https://maps.google.com/maps?q=${encodeURIComponent(formatAddress(celula))}&output=embed`}
                       />
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Additional Information */}
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Informações Adicionais</h3>
+                <div className="space-y-3">
+                  {/* Host */}
+                  {celula.host && (
+                    <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                      <Home className="h-4 w-4 text-blue-400" />
+                      <div>
+                        <p className="text-xs text-gray-400">Anfitrião</p>
+                        <p className="text-sm font-medium text-white">{celula.host.name}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opening Date, Type, Level */}
+                  <div className="grid grid-cols-3 gap-3">
+                    {celula.openingDate && (
+                      <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                        <p className="text-xs text-gray-400 mb-1">Data de Abertura</p>
+                        <p className="text-sm font-medium text-white">{formatDate(celula.openingDate)}</p>
+                      </div>
+                    )}
+
+                    {celula.type && (
+                      <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                        <p className="text-xs text-gray-400 mb-1">Tipo</p>
+                        <p className="text-sm font-medium text-white">{getTypeLabel(celula.type)}</p>
+                      </div>
+                    )}
+
+                    {celula.level && (
+                      <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                        <p className="text-xs text-gray-400 mb-1">Nível</p>
+                        <p className="text-sm font-medium text-white">{getLevelLabel(celula.level)}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Has Next Host */}
+                  {celula.hasNextHost && (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default" className="text-xs bg-green-600">
+                        <Tag className="h-3 w-3 mr-1" />
+                        Possui próximo anfitrião
+                      </Badge>
                     </div>
                   )}
                 </div>
