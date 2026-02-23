@@ -29,6 +29,7 @@ const COLORS = ['#4f46e5', '#06b6d4', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'
 interface Statistics {
   total: number;
   withoutCelula: number;
+  leadership: number;
   gender: { male: number; female: number; other: number; notInformed: number };
   maritalStatus: { single: number; married: number; cohabitating: number; divorced: number; widowed: number; notInformed: number };
   ageRanges: { '0-17': number; '18-25': number; '26-35': number; '36-50': number; '51-65': number; '65+': number; notInformed: number };
@@ -332,7 +333,7 @@ export default function Dashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-gray-800 rounded-lg p-6 shadow">
           <div className="flex items-center justify-between">
             <div>
@@ -348,11 +349,11 @@ export default function Dashboard() {
         <div className="bg-gray-800 rounded-lg p-6 shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-400">Sem Célula</div>
-              <div className="text-3xl font-bold text-white mt-2">{stats.withoutCelula}</div>
+              <div className="text-sm text-gray-400">Com Célula</div>
+              <div className="text-3xl font-bold text-white mt-2">{stats.total - stats.withoutCelula - stats.leadership}</div>
             </div>
-            <div className="p-3 bg-red-900 rounded-full">
-              <UserX className="text-red-300" size={24} />
+            <div className="p-3 bg-green-900 rounded-full">
+              <Users className="text-green-300" size={24} />
             </div>
           </div>
         </div>
@@ -360,11 +361,23 @@ export default function Dashboard() {
         <div className="bg-gray-800 rounded-lg p-6 shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-400">Com Célula</div>
-              <div className="text-3xl font-bold text-white mt-2">{stats.total - stats.withoutCelula}</div>
+              <div className="text-sm text-gray-400">Liderança</div>
+              <div className="text-3xl font-bold text-white mt-2">{stats.leadership}</div>
             </div>
-            <div className="p-3 bg-green-900 rounded-full">
-              <Users className="text-green-300" size={24} />
+            <div className="p-3 bg-purple-900 rounded-full">
+              <Users className="text-purple-300" size={24} />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gray-800 rounded-lg p-6 shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-gray-400">Sem Célula</div>
+              <div className="text-3xl font-bold text-white mt-2">{stats.withoutCelula}</div>
+            </div>
+            <div className="p-3 bg-red-900 rounded-full">
+              <UserX className="text-red-300" size={24} />
             </div>
           </div>
         </div>

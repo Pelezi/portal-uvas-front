@@ -70,6 +70,7 @@ export default function CelulasPage() {
   const [oldLeaderName, setOldLeaderName] = useState('');
   const [showOldLeaderDropdown, setShowOldLeaderDropdown] = useState(false);
   const oldLeaderDropdownRef = useRef<HTMLDivElement>(null);
+  const [celulaLeadersInTraining, setCelulaLeadersInTraining] = useState<Member[]>([]);
 
   const { user, isLoading: authLoading } = useAuth();
 
@@ -139,15 +140,15 @@ export default function CelulasPage() {
         setMembers(u || []);
 
         // load discipulados for select
-        const d = await discipuladosService.getDiscipulados();
+        const d = await discipuladosService.getDiscipulados(isAdmin ? { all: true } : undefined);
         setDiscipulados(d || []);
 
         // load redes for select
-        const r = await redesService.getRedes({});
+        const r = await redesService.getRedes(isAdmin ? { all: true } : {});
         setRedes(r || []);
 
         // load congregacoes for select
-        const cong = await congregacoesService.getCongregacoes();
+        const cong = await congregacoesService.getCongregacoes(isAdmin ? { all: true } : undefined);
         setCongregacoes(cong || []);
       } catch (err) {
         console.error('failed load filters', err);
@@ -251,8 +252,11 @@ export default function CelulasPage() {
 
       // Se houver apenas um líder em treinamento, pré-seleciona ele como novo líder
       const leadersInTraining = m.filter(
-        member => member.ministryPosition?.type === 'LEADER_IN_TRAINING'
+        member => member.leadingInTrainingCelulas?.some(c => c.celulaId === g.id)
       );
+      // Include the current leader as a potential leader for the new celula
+      const allPotentialLeaders = g.leader ? [g.leader, ...leadersInTraining] : leadersInTraining;
+      setCelulaLeadersInTraining(allPotentialLeaders);
       if (leadersInTraining.length === 1) {
         setNewLeaderId(leadersInTraining[0].id);
         setNewLeaderName(leadersInTraining[0].name);
@@ -668,7 +672,7 @@ export default function CelulasPage() {
 
             <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm mb-1 text-gray-300">Líder da nova célula</label>
+                <label className="block text-sm mb-1 text-gray-300">Líder da célula atual</label>
                 <div ref={newLeaderDropdownRef} className="relative w-full">
                   <input
                     placeholder="Buscar líder"
@@ -684,7 +688,7 @@ export default function CelulasPage() {
                   />
                   {showNewLeaderDropdown && (
                     <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                      {members.filter(member => {
+                      {celulaLeadersInTraining.filter(member => {
                         const q = (newLeaderQuery || '').toLowerCase();
                         if (!q) return true;
                         return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
@@ -711,7 +715,7 @@ export default function CelulasPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm mb-1 text-gray-300">Líder da célula atual</label>
+                <label className="block text-sm mb-1 text-gray-300">Líder da nova célula</label>
                 <div ref={oldLeaderDropdownRef} className="relative w-full">
                   <input
                     placeholder="Buscar líder"
@@ -727,7 +731,7 @@ export default function CelulasPage() {
                   />
                   {showOldLeaderDropdown && (
                     <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                      {members.filter(member => {
+                      {celulaLeadersInTraining.filter(member => {
                         const q = (oldLeaderQuery || '').toLowerCase();
                         if (!q) return true;
                         return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
@@ -758,8 +762,8 @@ export default function CelulasPage() {
             <div className="mb-4">
               <div className="font-medium text-white mb-2">Membros para a nova célula</div>
               <div className="space-y-2 max-h-64 overflow-auto">
-                {availableMembers.length === 0 && <div className="text-sm text-gray-400 text-center py-4">Nenhum membro disponível</div>}
-                {availableMembers.map((m) => {
+                {availableMembers.filter(m => m.id !== newLeaderId && m.id !== oldLeaderId).length === 0 && <div className="text-sm text-gray-400 text-center py-4">Nenhum membro disponível</div>}
+                {availableMembers.filter(m => m.id !== newLeaderId && m.id !== oldLeaderId).map((m) => {
                   const selected = selectedMemberIds.includes(m.id);
                   return (
                     <button

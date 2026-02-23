@@ -234,6 +234,7 @@ export const memberService = {
   }): Promise<{
     total: number;
     withoutCelula: number;
+    leadership: number;
     gender: { male: number; female: number; other: number; notInformed: number };
     maritalStatus: { single: number; married: number; cohabitating: number; divorced: number; widowed: number; notInformed: number };
     ageRanges: { '0-17': number; '18-25': number; '26-35': number; '36-50': number; '51-65': number; '65+': number; notInformed: number };

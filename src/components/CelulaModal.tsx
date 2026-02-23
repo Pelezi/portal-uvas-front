@@ -228,14 +228,15 @@ export default function CelulaModal({
   useEffect(() => {
     const loadCongregacoes = async () => {
       try {
-        const data = await congregacoesService.getCongregacoes();
+        const isAdmin = user?.permission?.isAdmin || false;
+        const data = await congregacoesService.getCongregacoes(isAdmin ? { all: true } : undefined);
         setCongregacoes(data || []);
       } catch (error) {
         console.error('Error loading congregações:', error);
       }
     };
     loadCongregacoes();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (celula) {
