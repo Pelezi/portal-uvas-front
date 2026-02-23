@@ -41,11 +41,11 @@ export default function MembersManagementPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMember, setModalMember] = useState<Member | null>(null);
-  
+
   // View modal state
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingMember, setViewingMember] = useState<Member | null>(null);
-  
+
   // Filter modal state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
@@ -82,7 +82,7 @@ export default function MembersManagementPage() {
   useEffect(() => {
     const loadMembers = async () => {
       if (authLoading) return;
-      
+
       setLoading(true);
       try {
         const filters: MemberFilters = {};
@@ -135,7 +135,7 @@ export default function MembersManagementPage() {
     let savedMember: Member;
     const wasCreating = !modalMember;
     const wasEnablingAccess = !modalMember?.hasSystemAccess && data.hasSystemAccess;
-    
+
     try {
       if (modalMember) {
         // Editing
@@ -154,12 +154,12 @@ export default function MembersManagementPage() {
       // Check if user edited their own photo - if so, reload page to update sidebar
       const isEditingSelf = user && savedMember.id === user.id;
       const photoChanged = photo || deletePhoto;
-      
+
       if (isEditingSelf && photoChanged) {
         // Close modal first for better UX
         setIsModalOpen(false);
         setModalMember(null);
-        
+
         // Reload page to update sidebar picture
         window.location.reload();
         return savedMember;
@@ -188,8 +188,8 @@ export default function MembersManagementPage() {
         // Enviar em background sem bloquear
         memberService.sendInvite(savedMember.id)
           .then((response) => {
-            const message = response.whatsappSent 
-              ? 'Convite enviado por email e WhatsApp' 
+            const message = response.whatsappSent
+              ? 'Convite enviado por email e WhatsApp'
               : 'Convite enviado por email';
             toast.success(message);
           })
@@ -214,10 +214,17 @@ export default function MembersManagementPage() {
   // Verifica se o usuário pode editar/deletar um membro específico
   const canManageMember = (member: Member): boolean => {
     if (!user) return false;
-    
+
     // Admin pode gerenciar todos
     const isAdmin = user.roles?.some((r: any) => r.role?.isAdmin);
     if (isAdmin) return true;
+
+    // Pastor presidente da congregação principal pode gerenciar todos
+    const isPastorPresidente = user.congregacoesPastorGoverno?.some((c: Congregacao) => c.isPrincipal);
+    if (isPastorPresidente) return true;
+
+    // Verifica se é o próprio usuário - pode editar, mas não deletar
+    if (member.id === user.id) return true;
 
     // Se o ministryPosition do membro for igual ou superior ao do usuário, não pode gerenciar
     if (member.ministryPosition && user.ministryPosition) {
@@ -225,45 +232,93 @@ export default function MembersManagementPage() {
         return false;
       }
     }
-    
+
     // Membro sem célula pode ser gerenciado
-    if (!member.celulaId 
-      && !member.ledCelulas?.length 
-      && !member.leadingInTrainingCelulas?.length 
-      && !member.discipulados?.length 
-      && !member.redes?.length 
-      && !member.congregacoesPastorGoverno?.length 
-      && !member.congregacoesVicePresidente?.length 
+    if (!member.celulaId
+      && !member.ledCelulas?.length
+      && !member.leadingInTrainingCelulas?.length
+      && !member.discipulados?.length
+      && !member.redes?.length
+      && !member.congregacoesPastorGoverno?.length
+      && !member.congregacoesVicePresidente?.length
       && !member.congregacoesKidsLeader?.length
     ) {
       return true
     };
-    
+
     // Verificar se o membro está na mesma rede/discipulado/célula
     const memberCelula = celulas.find(c => c.id === member.celulaId);
-    
-    // Verificar se usuário tem célula e é a mesma célula do membro
-    if (user.celula?.id === member.celulaId) {
-      // Verificar hierarquia ministerial
+    const memberLedCelulas = member.ledCelulas || [];
+    const memberLedDiscipulados = member.discipulados || [];
+    const memberLedRedes = member.redes || [];
+    const memberCongregacoesPastorGoverno = member.congregacoesPastorGoverno || [];
+    const memberCongregacoesVicePresidente = member.congregacoesVicePresidente || [];
+    const memberCongregacoesKidsLeader = member.congregacoesKidsLeader || [];
+
+    // Verifica se usuário é líder ou líder em treinamento da célula do membro
+    if (user.permission?.celulaIds?.some(c => c === member.celulaId)) {
+      if (memberLedCelulas?.some(c => c.id === member.id)) {
+        return false; // Líder em treinamento não pode gerenciar líder da célula
+      }
       return isLowerMinistryLevel(member);
     }
-    
+
     // Verificar se o usuário é discipulador do membro
-    if (memberCelula?.discipuladoId) {
-      const memberDiscipulado = discipulados.find(d => d.id === memberCelula.discipuladoId);
-      if (memberDiscipulado?.discipuladorMemberId === user.id) {
+    const memberDiscipulado = memberCelula?.discipulado;
+    if (memberDiscipulado?.discipuladorMemberId === user.id) {
+      return isLowerMinistryLevel(member);
+    }
+    if (memberLedCelulas.some(c => c.discipulado?.discipuladorMemberId === user.id)) {
+      return isLowerMinistryLevel(member);
+    }
+
+    // Verifica se o usuário é discipuladora de rede kids do membro
+    // Confere pelo relacionamento entre discipulado kids e discipulas
+    if (member.discipleOf?.some(d => d.discipulado.discipuladorMemberId === user.id && d.discipulado.rede?.isKids)) {
+      return isLowerMinistryLevel(member);
+    }
+
+    // Verificar se o usuário é pastor de rede do membro
+    const memberRedesList: (Rede | undefined)[] = [
+      memberCelula?.discipulado?.rede,
+      ...memberLedCelulas.flatMap(c => c.discipulado?.rede || []),
+      memberDiscipulado?.rede,
+      ...memberLedDiscipulados.flatMap(d => d.rede || []),
+      ...memberLedRedes
+    ];
+
+    // Filter out undefined/null and get unique redes by ID
+    const uniqueRedes = new Set(
+      memberRedesList
+        .filter((r): r is Rede => r !== undefined && r !== null)
+    );
+
+    if (Array.from(uniqueRedes).some(r => r.pastorMemberId === user.id)) {
+      return isLowerMinistryLevel(member);
+    }
+
+    // Verifica se user é responsável kids da congregação e se alguma das redes do member é do tipo kids
+    const memberRedesKids = Array.from(uniqueRedes).filter(r => r.isKids);
+    if (memberRedesKids.length > 0) {
+      if (memberRedesKids.some(r => r.congregacao?.kidsLeaderMemberId === user.id)) {
         return isLowerMinistryLevel(member);
       }
-      
-      // Verificar se está na mesma rede
-      if (memberDiscipulado?.redeId) {
-        const memberRede = redes.find(r => r.id === memberDiscipulado.redeId);
-        if (memberRede?.pastorMemberId === user.id) {
-          return isLowerMinistryLevel(member);
-        }
-      }
     }
-    
+
+    // Verificar se o usuário é pastor de governo ou vice-presidente da congregação do membro
+    const memberCongregacoes = new Set([
+      ...(memberCelula?.discipulado?.rede?.congregacao ? [memberCelula.discipulado.rede.congregacao] : []),
+      ...memberLedCelulas.flatMap(c => c.discipulado?.rede?.congregacao ? [c.discipulado.rede.congregacao] : []),
+      ...memberLedDiscipulados.flatMap(d => d.rede?.congregacao ? [d.rede.congregacao] : []),
+      ...memberLedRedes.flatMap(r => r.congregacao ? [r.congregacao] : []),
+      ...memberCongregacoesVicePresidente,
+      ...memberCongregacoesKidsLeader
+    ]);
+    // Check if user is pastor de governo or vice-presidente of any of these congregações
+    if (Array.from(memberCongregacoes).some(c => c.pastorGovernoMemberId === user.id || c.vicePresidenteMemberId === user.id )) {
+      return isLowerMinistryLevel(member);
+    }
+
     return false;
   };
 
@@ -272,7 +327,7 @@ export default function MembersManagementPage() {
     if (!user?.ministryPosition?.priority || !member.ministryPosition?.priority) {
       return true; // Se não tem priority definido, permite
     }
-    
+
     // Priority maior = cargo menor na hierarquia
     return member.ministryPosition.priority > user.ministryPosition.priority;
   };
@@ -280,37 +335,42 @@ export default function MembersManagementPage() {
   // Retorna as tags de liderança do membro
   const getLeadershipTags = (member: Member): { label: string; color: string }[] => {
     const tags: { label: string; color: string }[] = [];
-    
+
     // Pastor de Governo de Congregação
     if (member.congregacoesPastorGoverno && member.congregacoesPastorGoverno.length > 0) {
       tags.push({ label: 'Pastor de Governo', color: 'text-purple-400' });
     }
-    
+
     // Vice-Presidente de Congregação
     if (member.congregacoesVicePresidente && member.congregacoesVicePresidente.length > 0) {
       tags.push({ label: 'Vice-Presidente', color: 'text-purple-400' });
     }
-    
+
+    // Responsável Kids de Congregação
+    if (member.congregacoesKidsLeader && member.congregacoesKidsLeader.length > 0) {
+      tags.push({ label: 'Responsável Kids', color: 'text-pink-400' });
+    }
+
     // Pastor de Rede
     if (member.redes && member.redes.length > 0) {
       tags.push({ label: 'Pastor de Rede', color: 'text-blue-400' });
     }
-    
+
     // Discipulador
     if (member.discipulados && member.discipulados.length > 0) {
       tags.push({ label: 'Discipulador', color: 'text-green-400' });
     }
-    
+
     // Líder de Célula
     if (member.ledCelulas && member.ledCelulas.length > 0) {
       tags.push({ label: 'Líder de Célula', color: 'text-yellow-400' });
     }
-    
+
     // Vice-Líder de Célula
     if (member.leadingInTrainingCelulas && member.leadingInTrainingCelulas.length > 0) {
       tags.push({ label: 'Líder em Treinamento', color: 'text-yellow-400' });
     }
-    
+
     return tags;
   };
 
@@ -501,11 +561,10 @@ export default function MembersManagementPage() {
           />
           <button
             onClick={() => setIsFilterModalOpen(true)}
-            className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${
-              hasActiveFilters
-                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                : 'bg-gray-700 hover:bg-gray-600 text-white'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${hasActiveFilters
+              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+              : 'bg-gray-700 hover:bg-gray-600 text-white'
+              }`}
             title="Filtros"
           >
             <FaFilter className="h-5 w-5" />
@@ -534,74 +593,74 @@ export default function MembersManagementPage() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-          <ul className="space-y-3">
-            {filteredMembers.map((m) => {
-              const leadershipTags = getLeadershipTags(m);
-              const hasLeadership = leadershipTags.length > 0;
-              const showNoCelula = !m.celulaId && !hasLeadership;
+            <ul className="space-y-3">
+              {filteredMembers.map((m) => {
+                const leadershipTags = getLeadershipTags(m);
+                const hasLeadership = leadershipTags.length > 0;
+                const showNoCelula = !m.celulaId && !hasLeadership;
 
-              return (
-                <li
-                  key={m.id}
-                  className={`bg-gray-800 border rounded-lg hover:border-gray-600 transition-colors ${showNoCelula ? 'border-red-700' : 'border-gray-700'}`}
-                >
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      {m.photoUrl ? (
-                        <Avatar className="w-10 h-10">
-                          <AvatarImage src={m.photoUrl} alt={m.name} />
-                          <AvatarFallback className="bg-gray-700 text-white text-sm">
-                            {getInitials(m.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                      ) : (
-                        <Avatar className={`w-10 h-10 ${showNoCelula ? 'bg-red-900/30' : ''}`}>
-                          <AvatarFallback className={`text-sm ${showNoCelula ? 'text-red-400' : 'bg-gray-700 text-white'}`}>
-                            {getInitials(m.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                      
-                      <div className="flex-1">
-                        <h4 className="font-medium text-white">
-                          {m.name}
-                          {showNoCelula && <span className="text-xs text-red-400 ml-2 font-semibold">(sem célula)</span>}
-                          {!m.isActive && <span className="text-xs text-gray-400 ml-2">(desligado)</span>}
-                        </h4>
-                        <p className="text-sm text-gray-400 mt-1">
-                          {m.celula && `${m.celula.name}`}
-                          {leadershipTags.map((tag, idx) => (
-                            <span key={idx} className={`${tag.color} ml-2 font-semibold`}>
-                              • {tag.label}
-                            </span>
-                          ))}
-                        </p>
+                return (
+                  <li
+                    key={m.id}
+                    className={`bg-gray-800 border rounded-lg hover:border-gray-600 transition-colors ${showNoCelula ? 'border-red-700' : 'border-gray-700'}`}
+                  >
+                    <div className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        {m.photoUrl ? (
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={m.photoUrl} alt={m.name} />
+                            <AvatarFallback className="bg-gray-700 text-white text-sm">
+                              {getInitials(m.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <Avatar className={`w-10 h-10 ${showNoCelula ? 'bg-red-900/30' : ''}`}>
+                            <AvatarFallback className={`text-sm ${showNoCelula ? 'text-red-400' : 'bg-gray-700 text-white'}`}>
+                              {getInitials(m.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+
+                        <div className="flex-1">
+                          <h4 className="font-medium text-white">
+                            {m.name}
+                            {showNoCelula && <span className="text-xs text-red-400 ml-2 font-semibold">(sem célula)</span>}
+                            {!m.isActive && <span className="text-xs text-gray-400 ml-2">(desligado)</span>}
+                          </h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            {m.celula && `${m.celula.name}`}
+                            {leadershipTags.map((tag, idx) => (
+                              <span key={idx} className={`${tag.color} ml-2 font-semibold`}>
+                                • {tag.label}
+                              </span>
+                            ))}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openViewModal(m)}
+                          className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
+                          title="Visualizar detalhes"
+                        >
+                          <FiEye className="h-4 w-4" />
+                        </button>
+                        {canManageMember(m) && (
+                          <button
+                            onClick={() => openEditModal(m)}
+                            className="p-2 text-gray-400 hover:bg-gray-700 rounded transition-colors"
+                            title="Editar"
+                          >
+                            <FiEdit2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openViewModal(m)}
-                        className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
-                        title="Visualizar detalhes"
-                      >
-                        <FiEye className="h-4 w-4" />
-                      </button>
-                      {canManageMember(m) && (
-                        <button
-                          onClick={() => openEditModal(m)}
-                          className="p-2 text-gray-400 hover:bg-gray-700 rounded transition-colors"
-                          title="Editar"
-                        >
-                          <FiEdit2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
 
@@ -639,7 +698,7 @@ export default function MembersManagementPage() {
         <FilterModal
           isOpen={isFilterModalOpen}
           onClose={() => setIsFilterModalOpen(false)}
-          onApply={() => {}}
+          onApply={() => { }}
           onClear={clearAllFilters}
           filters={filterConfigs}
           hasActiveFilters={hasActiveFilters}

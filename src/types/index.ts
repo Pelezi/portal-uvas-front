@@ -113,8 +113,9 @@ export interface Discipulado {
   discipuladorMemberId: number;
   rede: Rede;
   discipulador: Member;
-  disciples?: { id: number; member: Member }[];
   celulas?: Celula[];
+
+  disciples?: DiscipuladoDisciple[];
 }
 
 export interface Rede {
@@ -266,6 +267,8 @@ export interface Member {
   congregacoesPastorGoverno?: Congregacao[];
   congregacoesVicePresidente?: Congregacao[];
   congregacoesKidsLeader?: Congregacao[];
+
+  discipleOf?: DiscipuladoDisciple[];
   
   // Permission (populated after login)
   permission?: Permission | null;
@@ -279,6 +282,13 @@ export interface CelulaLeadersInTraining {
   member: Member;
 }
 
+export interface DiscipuladoDisciple {
+  id: number;
+  discipuladoId: number;
+  memberId: number;
+  discipulado: Discipulado;
+  member: Member;
+}
 export interface ReportCreateInput {
   memberIds: number[];
   /** Optional date for the report in yyyy-mm-dd format (defaults to today) */
@@ -308,6 +318,7 @@ export interface MemberFilters {
   all?: boolean;
   isActive?: boolean;
 }
+
 
 // Type for MUI Select events
 export type SelectChangeEvent<T = string> = React.ChangeEvent<{ value: T }>;

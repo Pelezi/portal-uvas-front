@@ -68,6 +68,13 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
       });
     }
     
+    // Responsável Kids de Congregação
+    if (member.congregacoesKidsLeader && member.congregacoesKidsLeader.length > 0) {
+      member.congregacoesKidsLeader.forEach(cong => {
+        tags.push({ label: `Responsável Kids - ${cong.name}`, color: 'text-pink-400' });
+      });
+    }
+    
     // Pastor de Rede
     if (member.redes && member.redes.length > 0) {
       member.redes.forEach(rede => {
