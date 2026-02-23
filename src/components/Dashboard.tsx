@@ -22,6 +22,7 @@ import { celulasService } from '@/services/celulasService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Users, UserX, Filter } from 'lucide-react';
 import { Rede, Discipulado, Celula, Congregacao } from '@/types';
+import FilterModal, { FilterConfig } from '@/components/FilterModal';
 
 const COLORS = ['#4f46e5', '#06b6d4', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
 
@@ -43,6 +44,10 @@ export default function Dashboard() {
   const [selectedRedeId, setSelectedRedeId] = useState<number | undefined>(undefined);
   const [selectedDiscipuladoId, setSelectedDiscipuladoId] = useState<number | undefined>(undefined);
   const [selectedCelulaId, setSelectedCelulaId] = useState<number | undefined>(undefined);
+  const [myLeadership, setMyLeadership] = useState(false);
+  
+  // Estados para modal de filtros
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   
   // Estados para opções de filtros
   const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
@@ -59,70 +64,33 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
-        if (isPastor) {
-          // Pastores podem ver todas as congregações e redes
-          const [congregacoesData, redesData] = await Promise.all([
-            congregacoesService.getCongregacoes(),
-            redesService.getRedes()
-          ]);
-          setCongregacoes(congregacoesData);
-          setRedes(redesData);
-        }
+        // Buscar todas as opções de filtros (sem restrições)
+        const [congregacoesData, redesData, discipuladosData, celulasData] = await Promise.all([
+          congregacoesService.getCongregacoes(),
+          redesService.getRedes(),
+          discipuladosService.getDiscipulados(),
+          celulasService.getCelulas()
+        ]);
         
-        if (isPastor || isDiscipulador) {
-          // Pastores e discipuladores podem ver todos os discipulados
-          const discipuladosData = await discipuladosService.getDiscipulados();
-          setDiscipulados(discipuladosData);
-        }
-        
-        if (isPastor || isDiscipulador || isLeader) {
-          // Todos podem ver as células
-          const celulasData = await celulasService.getCelulas();
-          setCelulas(celulasData);
-        }
+        setCongregacoes(congregacoesData);
+        setRedes(redesData);
+        setDiscipulados(discipuladosData);
+        setCelulas(celulasData);
       } catch (error) {
         console.error('Erro ao carregar opções de filtros:', error);
       }
     };
 
     fetchFilterOptions();
-  }, [isPastor, isDiscipulador, isLeader]);
-
-  // Definir filtros padrão baseado em permissões
-  useEffect(() => {
-    if (!user?.permission) return;
-    
-    // Se for líder (e não pastor/discipulador), mostrar apenas sua célula
-    if (isLeader && !isPastor && !isDiscipulador) {
-      const userCelulaIds = user.permission.celulaIds;
-      if (userCelulaIds && userCelulaIds.length > 0) {
-        setSelectedCelulaId(userCelulaIds[0]);
-      }
-    }
-    
-    // Se for discipulador (e não pastor), filtrar por seu discipulado
-    // Buscar o discipulado onde ele é o discipulador
-    if (isDiscipulador && !isPastor) {
-      const userDiscipulado = discipulados.find(d => d.discipuladorMemberId === user.id);
-      if (userDiscipulado) {
-        setSelectedDiscipuladoId(userDiscipulado.id);
-      }
-    }
-  }, [user, isPastor, isDiscipulador, isLeader, discipulados]);
+  }, []);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setLoading(true);
         
-        // Se for líder restrito e ainda não tiver célula selecionada, aguardar
-        if (isLeader && !isPastor && !isDiscipulador && !selectedCelulaId) {
-          setLoading(false);
-          return;
-        }
-        
         // Construir filtros baseado em seleções
-        const filters: { celulaId?: number; discipuladoId?: number; redeId?: number; congregacaoId?: number } = {};
+        const filters: { celulaId?: number; discipuladoId?: number; redeId?: number; congregacaoId?: number; myLeadership?: boolean } = {};
         
         if (selectedCelulaId !== undefined) {
           filters.celulaId = selectedCelulaId;
@@ -134,6 +102,9 @@ export default function Dashboard() {
           filters.congregacaoId = selectedCongregacaoId;
         }
         
+        // Adicionar filtro myLeadership
+        filters.myLeadership = myLeadership;
+        
         const data = await memberService.getStatistics(filters);
         setStats(data);
       } catch (error) {
@@ -144,7 +115,7 @@ export default function Dashboard() {
     };
 
     fetchStats();
-  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, isLeader, isPastor, isDiscipulador]);
+  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, myLeadership]);
 
   if (loading) {
     return (
@@ -189,180 +160,154 @@ export default function Dashboard() {
     { name: 'Não informado', value: stats.ageRanges.notInformed },
   ].filter(item => item.value > 0);
 
+  // Check if there are active filters
+  const hasActiveFilters = !!selectedCongregacaoId || !!selectedRedeId || !!selectedDiscipuladoId || !!selectedCelulaId || myLeadership;
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSelectedCongregacaoId(undefined);
+    setSelectedRedeId(undefined);
+    setSelectedDiscipuladoId(undefined);
+    setSelectedCelulaId(undefined);
+    setMyLeadership(false);
+  };
+
+  // Filter configurations for the modal
+  const filterConfigs: FilterConfig[] = [
+    {
+      type: 'switch',
+      label: '',
+      value: myLeadership,
+      onChange: setMyLeadership,
+      switchLabelOff: 'Toda a igreja',
+      switchLabelOn: 'Minha liderança',
+      inline: false
+    },
+    {
+      type: 'select',
+      label: 'Congregação',
+      value: selectedCongregacaoId,
+      onChange: (value: number | null) => {
+        setSelectedCongregacaoId(value ?? undefined);
+        if (!value) {
+          setSelectedRedeId(undefined);
+          setSelectedDiscipuladoId(undefined);
+          setSelectedCelulaId(undefined);
+        }
+      },
+      options: congregacoes.map(c => ({ value: c.id, label: c.name }))
+    },
+    {
+      type: 'select',
+      label: 'Rede',
+      value: selectedRedeId,
+      onChange: (value: number | null) => {
+        const redeId = value ?? undefined;
+        setSelectedRedeId(redeId);
+        setSelectedDiscipuladoId(undefined);
+        setSelectedCelulaId(undefined);
+        
+        // Auto-preencher congregação
+        if (redeId) {
+          const rede = redes.find(r => r.id === redeId);
+          if (rede?.congregacaoId) {
+            setSelectedCongregacaoId(rede.congregacaoId);
+          }
+        }
+      },
+      options: redes
+        .filter(rede => !selectedCongregacaoId || rede.congregacaoId === selectedCongregacaoId)
+        .map(r => ({ value: r.id, label: r.name }))
+    },
+    {
+      type: 'select',
+      label: 'Discipulado',
+      value: selectedDiscipuladoId,
+      onChange: (value: number | null) => {
+        const discipuladoId = value ?? undefined;
+        setSelectedDiscipuladoId(discipuladoId);
+        setSelectedCelulaId(undefined);
+        
+        // Auto-preencher rede e congregação apenas se não estiver desmarcando
+        if (discipuladoId) {
+          const discipulado = discipulados.find(d => d.id === discipuladoId);
+          if (discipulado?.redeId) {
+            setSelectedRedeId(discipulado.redeId);
+            const rede = redes.find(r => r.id === discipulado.redeId);
+            if (rede?.congregacaoId) {
+              setSelectedCongregacaoId(rede.congregacaoId);
+            }
+          }
+        } else {
+          // Limpar rede e congregação quando desmarcar discipulado
+          setSelectedRedeId(undefined);
+          setSelectedCongregacaoId(undefined);
+        }
+      },
+      options: discipulados
+        .filter(d => {
+          // Se nenhum discipulado selecionado, filtrar por rede (se selecionada)
+          // Se já há discipulado selecionado, mostrar todos para permitir troca
+          if (selectedDiscipuladoId) return true;
+          return !selectedRedeId || d.redeId === selectedRedeId;
+        })
+        .map(d => ({ value: d.id, label: d.discipulador ? d.discipulador.name : `Discipulado ${d.id}` }))
+    },
+    {
+      type: 'select',
+      label: 'Célula',
+      value: selectedCelulaId,
+      onChange: (value: number | null) => {
+        const celulaId = value ?? undefined;
+        setSelectedCelulaId(celulaId);
+        
+        // Auto-preencher discipulado, rede e congregação
+        if (celulaId) {
+          const celula = celulas.find(c => c.id === celulaId);
+          if (celula?.discipuladoId) {
+            setSelectedDiscipuladoId(celula.discipuladoId);
+            const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
+            if (discipulado?.redeId) {
+              setSelectedRedeId(discipulado.redeId);
+              const rede = redes.find(r => r.id === discipulado.redeId);
+              if (rede?.congregacaoId) {
+                setSelectedCongregacaoId(rede.congregacaoId);
+              }
+            }
+          }
+        }
+      },
+      options: celulas
+        .filter(c => {
+          if (selectedDiscipuladoId) return c.discipuladoId === selectedDiscipuladoId;
+          if (selectedRedeId) {
+            const discipulado = discipulados.find(d => d.id === c.discipuladoId);
+            return discipulado?.redeId === selectedRedeId;
+          }
+          return true;
+        })
+        .map(c => ({ value: c.id, label: c.name }))
+    }
+  ];
+
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-
-      {/* Filtros */}
-      <div className="bg-gray-800 rounded-lg p-4 shadow">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter size={20} className="text-gray-400" />
-          <h2 className="text-lg font-semibold text-white">Filtros</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Filtro de Congregação - apenas para pastores */}
-          {isPastor && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Congregação
-              </label>
-              <select
-                value={selectedCongregacaoId || ''}
-                onChange={(e) => {
-                  setSelectedCongregacaoId(e.target.value ? Number(e.target.value) : undefined);
-                  setSelectedRedeId(undefined);
-                  setSelectedDiscipuladoId(undefined);
-                  setSelectedCelulaId(undefined);
-                }}
-                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
-                disabled={!isPastor}
-              >
-                <option value="">Todas as congregações</option>
-                {congregacoes.map((congregacao) => (
-                  <option key={congregacao.id} value={congregacao.id}>
-                    {congregacao.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        
+        {/* Filtros Button */}
+        <button
+          onClick={() => setIsFilterModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+        >
+          <Filter size={20} />
+          <span>Filtros</span>
+          {hasActiveFilters && (
+            <span className="bg-blue-600 text-xs px-2 py-0.5 rounded-full">
+              Ativos
+            </span>
           )}
-
-          {/* Filtro de Rede - apenas para pastores */}
-          {isPastor && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Rede
-              </label>
-              <select
-                value={selectedRedeId || ''}
-                onChange={(e) => {
-                  const redeId = e.target.value ? Number(e.target.value) : undefined;
-                  setSelectedRedeId(redeId);
-                  setSelectedDiscipuladoId(undefined);
-                  setSelectedCelulaId(undefined);
-                  
-                  // Auto-preencher congregação
-                  if (redeId) {
-                    const rede = redes.find(r => r.id === redeId);
-                    if (rede?.congregacaoId) {
-                      setSelectedCongregacaoId(rede.congregacaoId);
-                    }
-                  }
-                }}
-                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
-                disabled={!isPastor}
-              >
-                <option value="">Todas as redes</option>
-                {redes.filter(rede => !selectedCongregacaoId || rede.congregacaoId === selectedCongregacaoId).map((rede) => (
-                  <option key={rede.id} value={rede.id}>
-                    {rede.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Filtro de Discipulado - para pastores e discipuladores */}
-          {(isPastor || isDiscipulador) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Discipulado
-              </label>
-              <select
-                value={selectedDiscipuladoId || ''}
-                onChange={(e) => {
-                  const discipuladoId = e.target.value ? Number(e.target.value) : undefined;
-                  setSelectedDiscipuladoId(discipuladoId);
-                  setSelectedCelulaId(undefined);
-                  
-                  // Auto-preencher rede e congregação apenas se não estiver desmarcando
-                  if (discipuladoId) {
-                    const discipulado = discipulados.find(d => d.id === discipuladoId);
-                    if (discipulado?.redeId) {
-                      setSelectedRedeId(discipulado.redeId);
-                      const rede = redes.find(r => r.id === discipulado.redeId);
-                      if (rede?.congregacaoId) {
-                        setSelectedCongregacaoId(rede.congregacaoId);
-                      }
-                    }
-                  } else {
-                    // Limpar rede e congregação quando desmarcar discipulado
-                    setSelectedRedeId(undefined);
-                    setSelectedCongregacaoId(undefined);
-                  }
-                }}
-                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
-                disabled={!isPastor && !isDiscipulador}
-              >
-                <option value="">Todos os discipulados</option>
-                {discipulados
-                  .filter(d => {
-                    // Se nenhum discipulado selecionado, filtrar por rede (se selecionada)
-                    // Se já há discipulado selecionado, mostrar todos para permitir troca
-                    if (selectedDiscipuladoId) return true;
-                    return !selectedRedeId || d.redeId === selectedRedeId;
-                  })
-                  .map((discipulado) => (
-                    <option key={discipulado.id} value={discipulado.id}>
-                      {discipulado.discipulador ? discipulado.discipulador.name : `Discipulado ${discipulado.id} `}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
-
-          {/* Filtro de Célula - para todos */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Célula
-            </label>
-            <select
-              value={selectedCelulaId || ''}
-              onChange={(e) => {
-                const celulaId = e.target.value ? Number(e.target.value) : undefined;
-                setSelectedCelulaId(celulaId);
-                
-                // Auto-preencher discipulado, rede e congregação
-                if (celulaId) {
-                  const celula = celulas.find(c => c.id === celulaId);
-                  if (celula?.discipuladoId) {
-                    setSelectedDiscipuladoId(celula.discipuladoId);
-                    const discipulado = discipulados.find(d => d.id === celula.discipuladoId);
-                    if (discipulado?.redeId) {
-                      setSelectedRedeId(discipulado.redeId);
-                      const rede = redes.find(r => r.id === discipulado.redeId);
-                      if (rede?.congregacaoId) {
-                        setSelectedCongregacaoId(rede.congregacaoId);
-                      }
-                    }
-                  }
-                }
-              }}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
-              disabled={isLeader && !isPastor && !isDiscipulador}
-            >
-              <option value="">Todas as células</option>
-              {celulas
-                .filter(c => {
-                  if (selectedDiscipuladoId) return c.discipuladoId === selectedDiscipuladoId;
-                  if (selectedRedeId) {
-                    const discipulado = discipulados.find(d => d.id === c.discipuladoId);
-                    return discipulado?.redeId === selectedRedeId;
-                  }
-                  // Líderes só podem ver suas células
-                  if (isLeader && !isPastor && !isDiscipulador) {
-                    return user?.permission?.celulaIds?.includes(c.id);
-                  }
-                  return true;
-                })
-                .map((celula) => (
-                  <option key={celula.id} value={celula.id}>
-                    {celula.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-        </div>
+        </button>
       </div>
 
       {/* Summary Cards */}
@@ -474,6 +419,16 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Filter Modal */}
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        onApply={() => {}}
+        onClear={clearAllFilters}
+        filters={filterConfigs}
+        hasActiveFilters={hasActiveFilters}
+      />
     </div>
   );
 }

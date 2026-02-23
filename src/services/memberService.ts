@@ -229,7 +229,8 @@ export const memberService = {
     celulaId?: number; 
     discipuladoId?: number; 
     redeId?: number; 
-    congregacaoId?: number 
+    congregacaoId?: number;
+    myLeadership?: boolean;
   }): Promise<{
     total: number;
     withoutCelula: number;
@@ -242,6 +243,7 @@ export const memberService = {
     if (filters?.discipuladoId) params.append('discipuladoId', filters.discipuladoId.toString());
     if (filters?.redeId) params.append('redeId', filters.redeId.toString());
     if (filters?.congregacaoId) params.append('congregacaoId', filters.congregacaoId.toString());
+    if (filters?.myLeadership !== undefined) params.append('myLeadership', filters.myLeadership.toString());
     const queryString = params.toString();
     const response = await apiClient.get(`/members/statistics${queryString ? `?${queryString}` : ''}`);
     return response.data;
