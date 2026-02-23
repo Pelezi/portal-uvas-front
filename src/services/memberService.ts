@@ -188,6 +188,7 @@ export const memberService = {
     city?: string;
     complement?: string;
     state?: string;
+    contactPrivacyLevel?: 'MY_LEADERSHIP_AND_DISCIPLES' | 'ALL_DISCIPULADO' | 'ALL_REDE' | 'ALL_CONGREGACAO' | 'ALL';
     // Social media
     socialMedia?: Array<{ type: string; username: string }>;
   }, photo?: File, deletePhoto?: boolean): Promise<Member> {

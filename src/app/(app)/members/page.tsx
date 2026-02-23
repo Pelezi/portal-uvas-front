@@ -91,6 +91,7 @@ export default function MembersManagementPage() {
         if (filterDiscipuladoId) filters.discipuladoId = filterDiscipuladoId;
         if (filterRedeId) filters.redeId = filterRedeId;
         if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
+        if (filterName) filters.name = filterName;
         if (!filterMyDisciples) filters.all = true;
         // filterInactive: true = apenas inativos, false = apenas ativos
         filters.isActive = !filterInactive;
@@ -105,7 +106,7 @@ export default function MembersManagementPage() {
       }
     };
     loadMembers();
-  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterMyDisciples, filterInactive, authLoading]);
+  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterName, filterMyDisciples, filterInactive, authLoading]);
 
   const openEditModal = (m: Member) => {
     setModalMember(m);
@@ -541,7 +542,8 @@ export default function MembersManagementPage() {
     }
   ];
 
-  const filteredMembers = members.filter(m => !filterName || m.name.toLowerCase().includes(filterName.toLowerCase()));
+  // Filtro de nome agora é feito pela API
+  const filteredMembers = members;
 
   return (
     <div className="relative pb-20">

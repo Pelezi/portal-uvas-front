@@ -76,10 +76,11 @@ export default function DiscipuladosPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const filters: { congregacaoId?: number; redeId?: number; discipuladorMemberId?: number; all?: boolean } = {};
+      const filters: { congregacaoId?: number; redeId?: number; discipuladorMemberId?: number; name?: string; all?: boolean } = {};
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterDiscipuladorId) filters.discipuladorMemberId = filterDiscipuladorId;
+      if (filterName) filters.name = filterName;
       if (!filterMyDiscipleships) filters.all = true;
       
       const d = await discipuladosService.getDiscipulados(filters);
@@ -98,7 +99,7 @@ export default function DiscipuladosPage() {
     }
   };
 
-  useEffect(() => { load(); }, [filterCongregacaoId, filterRedeId, filterDiscipuladorId, filterMyDiscipleships]);
+  useEffect(() => { load(); }, [filterCongregacaoId, filterRedeId, filterDiscipuladorId, filterName, filterMyDiscipleships]);
 
   useEffect(() => {
     const loadAux = async () => {
@@ -556,7 +557,8 @@ export default function DiscipuladosPage() {
     },
   });
 
-  const filteredList = list.filter(d => !filterName || d.discipulador?.name.toLowerCase().includes(filterName.toLowerCase()));
+  // Filtro de nome agora é feito pela API
+  const filteredList = list;
 
   return (
     <>

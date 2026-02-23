@@ -429,6 +429,28 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     setPhone(formatted);
   };
 
+  const handlePhoneBlur = () => {
+    // Sincronizar com redes sociais (WhatsApp) quando perder o foco
+    const phoneDigits = phone.replace(/\D/g, '');
+    const hasValidPhone = phoneDigits.length >= 12; // +55 + 11 dígitos (DDD + número)
+    
+    setSocialMedia(prevSocialMedia => {
+      const hasWhatsapp = prevSocialMedia.some(sm => sm.type === 'WHATSAPP');
+      
+      // Se já existe WhatsApp, não faz nada (mesmo que seja número diferente)
+      if (hasWhatsapp) {
+        return prevSocialMedia;
+      }
+      
+      // Se há um número válido e não existe WhatsApp, adicionar
+      if (hasValidPhone) {
+        return [...prevSocialMedia, { type: 'WHATSAPP', username: phone }];
+      }
+      
+      return prevSocialMedia;
+    });
+  };
+
   // Funções de manipulação de imagem
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -768,9 +790,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                           onChange={(e) => setSpouseId(e.target.value ? Number(e.target.value) : null)}
                           label="Cônjuge"
                           className="bg-gray-800"
-                          displayEmpty
                         >
-                          <MenuItem value="">Selecione o cônjuge</MenuItem>
                           {allMembers
                             .filter(m => m.id !== member?.id)
                             .map(m => (
@@ -811,6 +831,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
                       label="Telefone"
                       value={phone}
                       onChange={handlePhoneChange}
+                      onBlur={handlePhoneBlur}
                       placeholder="(11) 99999-9999"
                       inputProps={{ maxLength: 25 }}
                       className="bg-gray-800"

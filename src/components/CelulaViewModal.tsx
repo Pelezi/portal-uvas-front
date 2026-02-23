@@ -18,13 +18,13 @@ interface CelulaViewModalProps {
   congregacaoName?: string;
 }
 
-export default function CelulaViewModal({ 
-  celula, 
-  isOpen, 
-  onClose, 
-  discipuladorName, 
+export default function CelulaViewModal({
+  celula,
+  isOpen,
+  onClose,
+  discipuladorName,
   redeName,
-  congregacaoName 
+  congregacaoName
 }: CelulaViewModalProps) {
   const [celulaMembers, setCelulaMembers] = useState<Member[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -39,7 +39,7 @@ export default function CelulaViewModal({
 
   const loadMembers = async () => {
     if (!celula?.id) return;
-    
+
     setLoadingMembers(true);
     try {
       const members = await memberService.getAllMembers({ celulaId: celula.id, isActive: true });
@@ -82,7 +82,7 @@ export default function CelulaViewModal({
     if (celula.neighborhood) parts.push(celula.neighborhood);
     if (celula.city) parts.push(celula.city);
     if (celula.state) parts.push(celula.state);
-    
+
     return parts.length > 0 ? parts.join(' - ') : '—';
   };
 
@@ -136,7 +136,7 @@ export default function CelulaViewModal({
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Leaders in Training */}
                   {celula.leadersInTraining && celula.leadersInTraining.length > 0 && (
                     <div>
@@ -199,14 +199,14 @@ export default function CelulaViewModal({
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Hierarquia</h3>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
-                    <Network className="h-4 w-4 text-blue-500 mx-auto mb-1" />
-                    <p className="text-[10px] text-gray-400">Rede</p>
-                    <p className="text-sm font-medium text-white">{redeName || "—"}</p>
-                  </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
                     <BookOpen className="h-4 w-4 text-blue-500 mx-auto mb-1" />
                     <p className="text-[10px] text-gray-400">Discipulado</p>
                     <p className="text-sm font-medium text-white">{discipuladorName || "—"}</p>
+                  </div>
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                    <Network className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                    <p className="text-[10px] text-gray-400">Rede</p>
+                    <p className="text-sm font-medium text-white">{redeName || "—"}</p>
                   </div>
                   <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
                     <Church className="h-4 w-4 text-blue-500 mx-auto mb-1" />
@@ -229,13 +229,12 @@ export default function CelulaViewModal({
                     <p className="text-sm text-gray-400 py-2">Nenhum membro encontrado nesta célula.</p>
                   )}
                   {!loadingMembers && celulaMembers.map(member => (
-                    <div 
-                      key={member.id} 
-                      className={`flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors ${
-                        isLeaderInTraining(member.id) 
-                          ? 'border-2 border-blue-500/40' 
+                    <div
+                      key={member.id}
+                      className={`flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors ${isLeaderInTraining(member.id)
+                          ? 'border-2 border-blue-500/40'
                           : 'border border-transparent'
-                      }`}
+                        }`}
                     >
                       <Avatar className="h-8 w-8">
                         <AvatarImage src={member.photoUrl} alt={member.name} />

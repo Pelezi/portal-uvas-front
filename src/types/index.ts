@@ -253,6 +253,9 @@ export interface Member {
   hasLoggedIn?: boolean;
   isOwner?: boolean;
   
+  // Privacy
+  contactPrivacyLevel?: 'MY_LEADERSHIP_AND_DISCIPLES' | 'ALL_DISCIPULADO' | 'ALL_REDE' | 'ALL_CONGREGACAO' | 'ALL';
+  
   // Roles
   roles?: Array<{ id: number; role: Role }>;
   
@@ -315,6 +318,7 @@ export interface MemberFilters {
   discipuladoId?: number;
   redeId?: number;
   congregacaoId?: number;
+  name?: string;
   all?: boolean;
   isActive?: boolean;
 }

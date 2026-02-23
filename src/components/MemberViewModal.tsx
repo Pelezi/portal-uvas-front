@@ -3,6 +3,7 @@
 import React from 'react';
 import { Member } from '@/types';
 import { FiX } from 'react-icons/fi';
+import { MapPin, Users, Network, BookOpen, Church } from 'lucide-react';
 
 interface MemberViewModalProps {
   member: Member | null;
@@ -12,6 +13,25 @@ interface MemberViewModalProps {
 
 export default function MemberViewModal({ member, isOpen, onClose }: MemberViewModalProps) {
   if (!isOpen || !member) return null;
+
+  // Check if contact data is censored based on privacy settings
+  // The API censors ALL contact/address fields when privacy restrictions apply:
+  // phone, email, zipCode, street, streetNumber, neighborhood, city, complement, state, country, socialMedia
+  const isContactDataCensored = 
+    member.contactPrivacyLevel && // Member has a privacy level set
+    member.contactPrivacyLevel !== 'ALL' && // It's not public to all
+    // Check that all contact and address fields are null/empty (API censors all of them)
+    !member.phone && 
+    !member.email && 
+    !member.street && 
+    !member.streetNumber &&
+    !member.neighborhood &&
+    !member.city && 
+    !member.state &&
+    !member.zipCode &&
+    !member.country &&
+    !member.complement &&
+    (!member.socialMedia || member.socialMedia.length === 0);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
@@ -48,6 +68,108 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
       'OTHER': 'Outro'
     };
     return gender ? labels[gender] || gender : '-';
+  };
+
+  const formatAddress = (member: Member) => {
+    const parts = [];
+    if (member.street) {
+      let streetPart = member.street;
+      if (member.streetNumber) streetPart += `, ${member.streetNumber}`;
+      parts.push(streetPart);
+    }
+    if (member.neighborhood) parts.push(member.neighborhood);
+    if (member.city) parts.push(member.city);
+    if (member.state) parts.push(member.state);
+    
+    return parts.length > 0 ? parts.join(' - ') : '—';
+  };
+
+  // Determina qual hierarquia mostrar baseado na liderança do membro
+  const getLeadershipHierarchy = (member: Member): Array<{
+    title: string;
+    celula?: string;
+    discipulado?: string;
+    rede?: string;
+    congregacao?: string;
+  }> => {
+    const hierarchies: Array<{
+      title: string;
+      celula?: string;
+      discipulado?: string;
+      rede?: string;
+      congregacao?: string;
+    }> = [];
+
+    // Congregações - Pastor de Governo
+    if (member.congregacoesPastorGoverno && member.congregacoesPastorGoverno.length > 0) {
+      member.congregacoesPastorGoverno.forEach(cong => {
+        hierarchies.push({
+          title: `Pastor de Governo - ${cong.name}`,
+          congregacao: cong.name
+        });
+      });
+    }
+    
+    // Congregações - Vice-Presidente
+    if (member.congregacoesVicePresidente && member.congregacoesVicePresidente.length > 0) {
+      member.congregacoesVicePresidente.forEach(cong => {
+        hierarchies.push({
+          title: `Vice-Presidente - ${cong.name}`,
+          congregacao: cong.name
+        });
+      });
+    }
+    
+    // Redes - Pastor de Rede
+    if (member.redes && member.redes.length > 0) {
+      member.redes.forEach(rede => {
+        hierarchies.push({
+          title: `Pastor de Rede - ${rede.name}`,
+          rede: rede.name,
+          congregacao: rede.congregacao?.name
+        });
+      });
+    }
+    
+    // Discipulados - Discipulador
+    if (member.discipulados && member.discipulados.length > 0) {
+      member.discipulados.forEach(disc => {
+        hierarchies.push({
+          title: `Discipulador - ${disc.discipulador?.name || 'Discipulado'}`,
+          discipulado: disc.discipulador?.name,
+          rede: disc.rede?.name,
+          congregacao: disc.rede?.congregacao?.name
+        });
+      });
+    }
+    
+    // Células - Líder
+    if (member.ledCelulas && member.ledCelulas.length > 0) {
+      member.ledCelulas.forEach(cel => {
+        hierarchies.push({
+          title: `Líder - ${cel.name}`,
+          celula: cel.name,
+          discipulado: cel.discipulado?.discipulador?.name,
+          rede: cel.discipulado?.rede?.name,
+          congregacao: cel.discipulado?.rede?.congregacao?.name
+        });
+      });
+    }
+    
+    // Células - Líder em Treinamento
+    if (member.leadingInTrainingCelulas && member.leadingInTrainingCelulas.length > 0) {
+      member.leadingInTrainingCelulas.forEach(cl => {
+        hierarchies.push({
+          title: `Líder em Treinamento - ${cl.celula.name}`,
+          celula: cl.celula.name,
+          discipulado: cl.celula.discipulado?.discipulador?.name,
+          rede: cl.celula.discipulado?.rede?.name,
+          congregacao: cl.celula.discipulado?.rede?.congregacao?.name
+        });
+      });
+    }
+    
+    return hierarchies;
   };
 
   // Retorna as tags de liderança do membro
@@ -170,12 +292,24 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
                 
                 <div>
                   <label className="text-sm font-medium text-gray-400">Email</label>
-                  <p className="text-base mt-1">{member.email || '-'}</p>
+                  <p className="text-base mt-1">
+                    {isContactDataCensored ? (
+                      <span className="text-gray-500 italic">🔒 Privado</span>
+                    ) : (
+                      member.email || '-'
+                    )}
+                  </p>
                 </div>
                 
                 <div>
                   <label className="text-sm font-medium text-gray-400">Telefone</label>
-                  <p className="text-base mt-1">{formatPhone(member.phone)}</p>
+                  <p className="text-base mt-1">
+                    {isContactDataCensored ? (
+                      <span className="text-gray-500 italic">🔒 Privado</span>
+                    ) : (
+                      formatPhone(member.phone)
+                    )}
+                  </p>
                 </div>
                 
                 <div>
@@ -194,9 +328,27 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
                 </div>
                 
                 {member.maritalStatus === 'MARRIED' && member.spouse && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-400">Cônjuge</label>
-                    <p className="text-base mt-1">{member.spouse.name}</p>
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium text-gray-400 mb-2 block">Cônjuge</label>
+                    <div className="flex items-center gap-3">
+                      {member.spouse.photoUrl ? (
+                        <img
+                          src={member.spouse.photoUrl}
+                          alt={member.spouse.name}
+                          className="w-12 h-12 rounded-full object-cover border-2 border-red-600"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-gray-700 border-2 border-red-600 flex items-center justify-center">
+                          <span className="text-xl">👤</span>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-base font-medium">{member.spouse.name}</p>
+                        {member.spouse.phone && (
+                          <p className="text-sm text-gray-400">{formatPhone(member.spouse.phone)}</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -279,82 +431,190 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
           {/* Associations */}
           <section>
             <h3 className="text-lg font-semibold mb-3 text-blue-400">Associações</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-400">Célula</label>
-                <p className="text-base mt-1">
-                  {member.celula?.name || (
-                    <>
-                      {getLeadershipInfo(member).length > 0 ? (
-                        <span className="text-gray-400">-</span>
-                      ) : (
-                        <span className="text-red-400">Sem célula</span>
-                      )}
-                    </>
-                  )}
+            {(() => {
+              const allAssociations = [];
+              
+              // Se tem célula como membro, mostrar hierarquia da célula
+              if (member.celula) {
+                allAssociations.push(
+                  <div key="member-celula" className="space-y-2">
+                    <h4 className="text-xs font-semibold text-gray-400">Como Membro</h4>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <Users className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Célula</p>
+                        <p className="text-sm font-medium text-white">{member.celula.name}</p>
+                      </div>
+                      <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <BookOpen className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Discipulado</p>
+                        <p className="text-sm font-medium text-white">{member.celula.discipulado?.discipulador?.name || "—"}</p>
+                      </div>
+                      <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <Network className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Rede</p>
+                        <p className="text-sm font-medium text-white">{member.celula.discipulado?.rede?.name || "—"}</p>
+                      </div>
+                      <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <Church className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Congregação</p>
+                        <p className="text-sm font-medium text-white">{member.celula.discipulado?.rede?.congregacao?.name || "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Obter hierarquias de liderança
+              const hierarchies = getLeadershipHierarchy(member);
+              
+              // Se tem liderança, mostrar cada uma
+              if (hierarchies.length > 0) {
+                hierarchies.forEach((hierarchy, idx) => {
+                  const cards = [];
+                  
+                  if (hierarchy.celula) {
+                    cards.push(
+                      <div key={`${idx}-celula`} className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <Users className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Célula</p>
+                        <p className="text-sm font-medium text-white">{hierarchy.celula}</p>
+                      </div>
+                    );
+                  }
+                  
+                  if (hierarchy.discipulado) {
+                    cards.push(
+                      <div key={`${idx}-discipulado`} className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <BookOpen className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Discipulado</p>
+                        <p className="text-sm font-medium text-white">{hierarchy.discipulado}</p>
+                      </div>
+                    );
+                  }
+                  
+                  if (hierarchy.rede) {
+                    cards.push(
+                      <div key={`${idx}-rede`} className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <Network className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Rede</p>
+                        <p className="text-sm font-medium text-white">{hierarchy.rede}</p>
+                      </div>
+                    );
+                  }
+                  
+                  if (hierarchy.congregacao) {
+                    cards.push(
+                      <div key={`${idx}-congregacao`} className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                        <Church className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-[10px] text-gray-400">Congregação</p>
+                        <p className="text-sm font-medium text-white">{hierarchy.congregacao}</p>
+                      </div>
+                    );
+                  }
+                  
+                  if (cards.length > 0) {
+                    allAssociations.push(
+                      <div key={`leadership-${idx}`} className="space-y-2">
+                        <h4 className="text-xs font-semibold text-gray-400">{hierarchy.title}</h4>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                          {cards}
+                        </div>
+                      </div>
+                    );
+                  }
+                });
+              }
+              
+              // Se não tem célula e não tem liderança
+              if (allAssociations.length === 0) {
+                return (
+                  <div className="text-center py-4">
+                    <span className="text-red-400">Sem célula</span>
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="space-y-4">
+                  {allAssociations}
+                </div>
+              );
+            })()}
+          </section>
+
+          {/* Social Media */}
+          <section>
+            <h3 className="text-lg font-semibold mb-3 text-blue-400">Redes Sociais</h3>
+            {isContactDataCensored ? (
+              <div className="text-center py-8 bg-gray-800/50 rounded-lg border border-gray-700">
+                <p className="text-gray-400 text-sm">
+                  🔒 As redes sociais deste membro estão privadas
+                </p>
+                <p className="text-gray-500 text-xs mt-2">
+                  Este membro escolheu limitar quem pode ver suas informações de contato
                 </p>
               </div>
-              
-              {member.celula?.discipulado && (
-                <div>
-                  <label className="text-sm font-medium text-gray-400">Discipulado</label>
-                  <p className="text-base mt-1">{member.celula.discipulado.discipulador?.name || '-'}</p>
-                </div>
-              )}
-              
-              {member.celula?.discipulado?.rede && (
-                <div>
-                  <label className="text-sm font-medium text-gray-400">Rede</label>
-                  <p className="text-base mt-1">{member.celula.discipulado.rede.name}</p>
-                </div>
-              )}
-            </div>
+            ) : (
+              <div>
+                {member.socialMedia && member.socialMedia.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {member.socialMedia.map((sm, idx) => (
+                      <div key={idx} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold">
+                            {sm.type.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-400">{sm.type}</p>
+                            <p className="text-sm text-white truncate">{sm.username}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-gray-400 text-sm">Nenhuma rede social cadastrada</p>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Address */}
           <section>
             <h3 className="text-lg font-semibold mb-3 text-blue-400">Endereço</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-400">CEP</label>
-                <p className="text-base mt-1">{member.zipCode || '-'}</p>
+            {isContactDataCensored ? (
+              <div className="text-center py-8 bg-gray-800/50 rounded-lg border border-gray-700">
+                <p className="text-gray-400 text-sm">
+                  🔒 Os dados de endereço deste membro estão privados
+                </p>
+                <p className="text-gray-500 text-xs mt-2">
+                  Este membro escolheu limitar quem pode ver suas informações de contato
+                </p>
               </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Rua</label>
-                <p className="text-base mt-1">{member.street || '-'}</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 text-sm text-gray-200">
+                  <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                  <span>{formatAddress(member)}</span>
+                </div>
+                {(member.street || member.city) && (
+                  <div className="rounded-lg overflow-hidden border border-gray-600 h-48">
+                    <iframe
+                      title="Mapa"
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(formatAddress(member))}&output=embed`}
+                    />
+                  </div>
+                )}
               </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Número</label>
-                <p className="text-base mt-1">{member.streetNumber || '-'}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Complemento</label>
-                <p className="text-base mt-1">{member.complement || '-'}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Bairro</label>
-                <p className="text-base mt-1">{member.neighborhood || '-'}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Cidade</label>
-                <p className="text-base mt-1">{member.city || '-'}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">Estado</label>
-                <p className="text-base mt-1">{member.state || '-'}</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-400">País</label>
-                <p className="text-base mt-1">{member.country || '-'}</p>
-              </div>
-            </div>
+            )}
           </section>
         </div>
 

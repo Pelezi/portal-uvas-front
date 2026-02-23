@@ -69,9 +69,11 @@ export default function RedesPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const filters: { congregacaoId?: number; pastorMemberId?: number; all?: boolean } = {};
+      const filters: { congregacaoId?: number; pastorMemberId?: number; name?: string; isKids?: boolean; all?: boolean } = {};
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       if (filterPastorId) filters.pastorMemberId = filterPastorId;
+      if (filterName) filters.name = filterName;
+      if (filterIsKids !== null) filters.isKids = filterIsKids;
       if (!filterMyNetworks) filters.all = true;
       
       const r = await redesService.getRedes(filters);
@@ -86,7 +88,7 @@ export default function RedesPage() {
 
   useEffect(() => {
     load();
-  }, [filterCongregacaoId, filterPastorId, filterMyNetworks]);
+  }, [filterCongregacaoId, filterPastorId, filterName, filterIsKids, filterMyNetworks]);
 
   useEffect(() => {
     (async () => {
@@ -429,11 +431,8 @@ export default function RedesPage() {
     },
   });
 
-  const filteredRedes = redes
-    .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
-    .filter(r => !filterPastorId || r.pastorMemberId === filterPastorId)
-    .filter(r => filterIsKids === null || r.isKids === filterIsKids)
-    .filter(r => !filterName || r.name.toLowerCase().includes(filterName.toLowerCase()));
+  // Filtros agora são feitos pela API
+  const filteredRedes = redes;
 
   return (
     <ThemeProvider theme={muiTheme}>

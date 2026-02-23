@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { memberService } from '@/services/memberService';
 import { Member } from '@/types';
 import { toast } from 'react-hot-toast';
-import { Eye, EyeOff, Edit2, Save, X } from 'lucide-react';
+import { Eye, EyeOff, Edit2, Save, X, MapPin } from 'lucide-react';
 import { formatPhoneForDisplay, formatPhoneForInput, stripPhoneFormatting, ensureCountryCode } from '@/lib/phoneUtils';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider, TextField, Button, Slider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -57,6 +57,9 @@ export default function ProfilePage() {
 
   // Social Media state - array of { type, username }
   const [socialMedia, setSocialMedia] = useState<Array<{ type: string; username: string }>>([]);
+
+  // Privacy state
+  const [contactPrivacyLevel, setContactPrivacyLevel] = useState<'MY_LEADERSHIP_AND_DISCIPLES' | 'ALL_DISCIPULADO' | 'ALL_REDE' | 'ALL_CONGREGACAO' | 'ALL'>('MY_LEADERSHIP_AND_DISCIPLES');
 
   // For spouse selection
   const [allMembers, setAllMembers] = useState<Member[]>([]);
@@ -113,6 +116,9 @@ export default function ProfilePage() {
       
       // Initialize social media from array
       setSocialMedia(data.socialMedia?.map(sm => ({ type: sm.type, username: sm.username })) || []);
+      
+      // Initialize privacy level
+      setContactPrivacyLevel(data.contactPrivacyLevel || 'MY_LEADERSHIP_AND_DISCIPLES');
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
       toast.error('Erro ao carregar perfil');
@@ -185,6 +191,12 @@ export default function ProfilePage() {
       return;
     }
 
+    // Validação de datas: garantir que estão completas e válidas
+    if (birthDate && !birthDate.isValid()) {
+      toast.error('Data de nascimento inválida');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const strippedPhone = phone ? stripPhoneFormatting(phone) : '';
@@ -212,6 +224,7 @@ export default function ProfilePage() {
         complement: complement || undefined,
         state: state || undefined,
         socialMedia: validSocialMedia.length > 0 ? validSocialMedia : undefined,
+        contactPrivacyLevel: contactPrivacyLevel
       }, croppedImageFile || undefined, deletePhoto);
       
       toast.success('Perfil atualizado com sucesso!');
@@ -252,6 +265,9 @@ export default function ProfilePage() {
       
       // Reset social media from profile
       setSocialMedia(profile.socialMedia?.map(sm => ({ type: sm.type, username: sm.username })) || []);
+      
+      // Reset privacy level
+      setContactPrivacyLevel(profile.contactPrivacyLevel || 'MY_LEADERSHIP_AND_DISCIPLES');
       
       // Reset photo states
       setCroppedImage('');
@@ -393,6 +409,28 @@ export default function ProfilePage() {
     setPhone(formatted);
   };
 
+  const handlePhoneBlur = () => {
+    // Sincronizar com redes sociais (WhatsApp) quando perder o foco
+    const phoneDigits = phone.replace(/\D/g, '');
+    const hasValidPhone = phoneDigits.length >= 12; // +55 + 11 dígitos (DDD + número)
+    
+    setSocialMedia(prevSocialMedia => {
+      const hasWhatsapp = prevSocialMedia.some(sm => sm.type === 'WHATSAPP');
+      
+      // Se já existe WhatsApp, não faz nada (mesmo que seja número diferente)
+      if (hasWhatsapp) {
+        return prevSocialMedia;
+      }
+      
+      // Se há um número válido e não existe WhatsApp, adicionar
+      if (hasValidPhone) {
+        return [...prevSocialMedia, { type: 'WHATSAPP', username: phone }];
+      }
+      
+      return prevSocialMedia;
+    });
+  };
+
   const getMaritalStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       SINGLE: 'Solteiro(a)',
@@ -407,6 +445,20 @@ export default function ProfilePage() {
   const formatDate = (date: string | null | undefined) => {
     if (!date) return 'Não informado';
     return dayjs(date).format('DD/MM/YYYY');
+  };
+
+  const formatAddress = (member: Member) => {
+    const parts = [];
+    if (member.street) {
+      let streetPart = member.street;
+      if (member.streetNumber) streetPart += `, ${member.streetNumber}`;
+      parts.push(streetPart);
+    }
+    if (member.neighborhood) parts.push(member.neighborhood);
+    if (member.city) parts.push(member.city);
+    if (member.state) parts.push(member.state);
+    
+    return parts.length > 0 ? parts.join(' - ') : '—';
   };
 
   if (loading) {
@@ -488,27 +540,31 @@ export default function ProfilePage() {
               Editar Perfil
             </button>
           )}
-          {isEditing && (
-            <div className="flex gap-2">
-              <button
-                onClick={handleUpdateProfile}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save size={18} />
-                {isSaving ? 'Salvando...' : 'Salvar'}
-              </button>
+        </div>
+
+        {/* Botões flutuantes quando em modo de edição */}
+        {isEditing && (
+          <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 shadow-lg z-50">
+            <div className="container mx-auto px-6 py-4 flex justify-end gap-3">
               <button
                 onClick={handleCancelEdit}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-3 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X size={18} />
                 Cancelar
               </button>
+              <button
+                onClick={handleUpdateProfile}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save size={18} />
+                {isSaving ? 'Salvando...' : 'Salvar'}
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Aviso de senha padrão */}
         {profile?.hasDefaultPassword && (
@@ -637,6 +693,7 @@ export default function ProfilePage() {
                       label="Telefone"
                       value={phone}
                       onChange={handlePhoneChange}
+                      onBlur={handlePhoneBlur}
                       placeholder="(11) 99999-9999"
                       inputProps={{ maxLength: 25 }}
                       className="bg-gray-700"
@@ -892,40 +949,23 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400">País</label>
-                    <p className="text-gray-100">{profile?.country || 'Não informado'}</p>
+                  <div className="flex items-start gap-2 text-sm text-gray-200">
+                    <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                    <span>{profile ? formatAddress(profile) : '—'}</span>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400">CEP</label>
-                    <p className="text-gray-100">{profile?.zipCode || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400">Endereço</label>
-                    <p className="text-gray-100">
-                      {profile?.street && profile?.streetNumber
-                        ? `${profile.street}, ${profile.streetNumber}`
-                        : profile?.street || 'Não informado'}
-                    </p>
-                  </div>
-                  {profile?.complement && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400">Complemento</label>
-                      <p className="text-gray-100">{profile.complement}</p>
+                  {profile && (profile.street || profile.city) && (
+                    <div className="rounded-lg overflow-hidden border border-gray-600 h-48 mt-3">
+                      <iframe
+                        title="Mapa"
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        src={`https://maps.google.com/maps?q=${encodeURIComponent(formatAddress(profile))}&output=embed`}
+                      />
                     </div>
                   )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400">Bairro</label>
-                    <p className="text-gray-100">{profile?.neighborhood || 'Não informado'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400">Cidade</label>
-                    <p className="text-gray-100">
-                      {profile?.city && profile?.state
-                        ? `${profile.city} - ${profile.state}`
-                        : profile?.city || 'Não informado'}
-                    </p>
-                  </div>
                 </>
               )}
             </div>
@@ -1037,6 +1077,88 @@ export default function ProfilePage() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* PRIVACIDADE DE CONTATO */}
+        <div className="mt-6">
+          <div className="bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-100 border-b border-gray-700 pb-2">Privacidade de Contato</h2>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-400">
+                Escolha quem pode visualizar seus dados de contato (telefone, email, endereço e redes sociais) no sistema.
+              </p>
+              
+              {isEditing ? (
+                <div>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="privacy-label">Quem pode ver meus dados de contato</InputLabel>
+                    <Select
+                      labelId="privacy-label"
+                      value={contactPrivacyLevel}
+                      onChange={(e) => setContactPrivacyLevel(e.target.value as any)}
+                      label="Quem pode ver meus dados de contato"
+                      className="bg-gray-700"
+                      disabled={
+                        // Disable if member is only a cell member (not a leader)
+                        !profile?.ledCelulas?.length &&
+                        !profile?.discipulados?.length &&
+                        !profile?.redes?.length &&
+                        !profile?.congregacoesPastorGoverno?.length &&
+                        !profile?.congregacoesVicePresidente?.length &&
+                        profile?.ministryPosition?.type !== 'LEADER' &&
+                        profile?.ministryPosition?.type !== 'LEADER_IN_TRAINING' &&
+                        profile?.ministryPosition?.type !== 'DISCIPULADOR' &&
+                        profile?.ministryPosition?.type !== 'PASTOR' &&
+                        profile?.ministryPosition?.type !== 'PRESIDENT_PASTOR'
+                      }
+                    >
+                      <MenuItem value="MY_LEADERSHIP_AND_DISCIPLES">
+                        Minha liderança e discípulos
+                      </MenuItem>
+                      <MenuItem value="ALL_DISCIPULADO">
+                        Todos do mesmo discipulado
+                      </MenuItem>
+                      <MenuItem value="ALL_REDE">
+                        Todos da mesma rede
+                      </MenuItem>
+                      <MenuItem value="ALL_CONGREGACAO">
+                        Todos da mesma congregação
+                      </MenuItem>
+                      <MenuItem value="ALL">
+                        Todos
+                      </MenuItem>
+                    </Select>
+                  </FormControl>
+                  
+                  {(!profile?.ledCelulas?.length &&
+                    !profile?.discipulados?.length &&
+                    !profile?.redes?.length &&
+                    !profile?.congregacoesPastorGoverno?.length &&
+                    !profile?.congregacoesVicePresidente?.length &&
+                    profile?.ministryPosition?.type !== 'LEADER' &&
+                    profile?.ministryPosition?.type !== 'LEADER_IN_TRAINING' &&
+                    profile?.ministryPosition?.type !== 'DISCIPULADOR' &&
+                    profile?.ministryPosition?.type !== 'PASTOR' &&
+                    profile?.ministryPosition?.type !== 'PRESIDENT_PASTOR') && (
+                    <p className="text-sm text-yellow-500 mt-2">
+                      Como você é apenas membro de célula, suas configurações de privacidade estão limitadas a "Minha liderança e discípulos".
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400">Quem pode ver meus dados de contato</label>
+                  <p className="text-gray-100">
+                    {contactPrivacyLevel === 'MY_LEADERSHIP_AND_DISCIPLES' && 'Minha liderança e discípulos'}
+                    {contactPrivacyLevel === 'ALL_DISCIPULADO' && 'Todos do mesmo discipulado'}
+                    {contactPrivacyLevel === 'ALL_REDE' && 'Todos da mesma rede'}
+                    {contactPrivacyLevel === 'ALL_CONGREGACAO' && 'Todos da mesma congregação'}
+                    {contactPrivacyLevel === 'ALL' && 'Todos'}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
