@@ -179,6 +179,7 @@ export default function CelulasPage() {
     city?: string;
     complement?: string;
     state?: string;
+    parallelCelulaId?: number | null;
   }) => {
     try {
       if (editingCelula) {

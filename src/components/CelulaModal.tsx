@@ -37,6 +37,7 @@ interface CelulaModalProps {
     city?: string;
     complement?: string;
     state?: string;
+    parallelCelulaId?: number | null;
   }) => Promise<void>;
   members: Member[];
   discipulados: Discipulado[];
@@ -92,6 +93,8 @@ export default function CelulaModal({
   const [hasNextHost, setHasNextHost] = useState(false);
   const [celulaType, setCelulaType] = useState<string>('');
   const [celulaLevel, setCelulaLevel] = useState<string>('');
+  const [parallelCelulaId, setParallelCelulaId] = useState<number | null>(null);
+  const [parallelCelulaOptions, setParallelCelulaOptions] = useState<Celula[]>([]);
 
   // Validação
   const [touched, setTouched] = useState({
@@ -287,6 +290,7 @@ export default function CelulaModal({
       setHasNextHost(celula.hasNextHost ?? false);
       setCelulaType(celula.type || '');
       setCelulaLevel(celula.level || '');
+      setParallelCelulaId(celula.parallelCelulaId ?? null);
 
       // Encontrar a rede e congregação através do discipulado
       if (celula.discipuladoId) {
@@ -358,7 +362,23 @@ export default function CelulaModal({
       setCelulaMemberOptions([]);
       setAllMembers([]);
       setAllCelulas([]);
+      setParallelCelulaOptions([]);
     }
+  }, [isOpen]);
+
+  // Carregar todas as células para o select de célula paralela
+  useEffect(() => {
+    if (!isOpen) return;
+    const loadParallelCelulaOptions = async () => {
+      try {
+        const { celulasService } = await import('@/services/celulasService');
+        const data = await celulasService.getCelulas({ all: true });
+        setParallelCelulaOptions(data || []);
+      } catch (error) {
+        console.error('Error loading celulas for parallel select:', error);
+      }
+    };
+    loadParallelCelulaOptions();
   }, [isOpen]);
 
   // Carregar membros quando discipuladoId muda (para criação de células Kids)
@@ -465,6 +485,7 @@ export default function CelulaModal({
     setHasNextHost(false);
     setCelulaType('');
     setCelulaLevel('');
+    setParallelCelulaId(null);
     setTouched({ name: false, discipulado: false });
     setGenderError('');
   };
@@ -562,6 +583,7 @@ export default function CelulaModal({
       city: city || undefined,
       complement: complement || undefined,
       state: state || undefined,
+      parallelCelulaId: parallelCelulaId ?? null,
     });
 
     resetForm();
@@ -1121,6 +1143,30 @@ export default function CelulaModal({
                 />
               </button>
               <span className="text-xs text-gray-400">{hasNextHost ? 'Sim' : 'Não'}</span>
+            </div>
+
+            {/* Célula Paralela */}
+            <div>
+              <FormControl className="w-full">
+                <InputLabel id="parallel-celula-label" size='small'>Célula Paralela</InputLabel>
+                <Select
+                  labelId="parallel-celula-label"
+                  value={parallelCelulaId ?? ''}
+                  onChange={(e) => setParallelCelulaId(e.target.value !== '' ? Number(e.target.value) : null)}
+                  label="Célula Paralela"
+                  size="small"
+                  className="bg-gray-800 w-full">
+                  <MenuItem value="">Nenhuma</MenuItem>
+                  {parallelCelulaOptions
+                    .filter(c => c.id !== celula?.id)
+                    .map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        {c.name}{c.leader ? ` — ${c.leader.name}` : ''}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+              <p className="text-xs text-gray-400 mt-1">Associar a outra célula que acontece em paralelo</p>
             </div>
 
             {/* Divider */}

@@ -99,7 +99,9 @@ export interface Celula {
   hasNextHost?: boolean | null;
   type?: 'YOUNG' | 'ADULT' | 'TEENAGER' | 'CHILDISH' | null;
   level?: 'EVANGELISM' | 'EDIFICATION' | 'COMMUNION' | 'MULTIPLICATION' | 'UNKNOWN' | null;
-  
+  parallelCelulaId?: number | null;
+  parallelCelula?: Celula | null;
+
   // Address fields
   country?: string | null;
   zipCode?: string | null;

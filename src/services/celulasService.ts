@@ -49,6 +49,7 @@ export const celulasService = {
     city?: string;
     complement?: string;
     state?: string;
+    parallelCelulaId?: number;
   }): Promise<Celula> => {
     const res = await api.post<Celula>("/celulas", data);
     return res.data;
@@ -76,6 +77,7 @@ export const celulasService = {
       city?: string;
       complement?: string;
       state?: string;
+      parallelCelulaId?: number | null;
     },
   ): Promise<Celula> => {
     const res = await api.put<Celula>(`/celulas/${id}`, data);

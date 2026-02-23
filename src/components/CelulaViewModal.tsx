@@ -223,6 +223,30 @@ export default function CelulaViewModal({
                 </div>
               </section>
 
+              {/* Parallel Célula */}
+              {celula.parallelCelula && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Célula Paralela</h3>
+                  <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                    <Avatar className="h-11 w-11">
+                      <AvatarImage src={celula.parallelCelula.leader?.photoUrl} alt={celula.parallelCelula.leader?.name} />
+                      <AvatarFallback className="bg-purple-600 text-white text-sm font-semibold">
+                        {getInitials(celula.parallelCelula.leader?.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-white text-sm truncate">{celula.parallelCelula.name}</p>
+                      {celula.parallelCelula.leader && (
+                        <p className="text-xs text-gray-400 truncate">Líder: {celula.parallelCelula.leader.name}</p>
+                      )}
+                      {(celula.parallelCelula.weekday !== null && celula.parallelCelula.weekday !== undefined) && (
+                        <p className="text-xs text-gray-500">{getWeekdayLabel(celula.parallelCelula.weekday)}{celula.parallelCelula.time ? ` · ${formatTime(celula.parallelCelula.time)}` : ''}</p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+
               {/* Additional Information */}
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Informações Adicionais</h3>
