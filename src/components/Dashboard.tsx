@@ -44,7 +44,7 @@ export default function Dashboard() {
   const [selectedRedeId, setSelectedRedeId] = useState<number | undefined>(undefined);
   const [selectedDiscipuladoId, setSelectedDiscipuladoId] = useState<number | undefined>(undefined);
   const [selectedCelulaId, setSelectedCelulaId] = useState<number | undefined>(undefined);
-  const [myLeadership, setMyLeadership] = useState(false);
+  const [myLeadership, setMyLeadership] = useState(true);
   
   // Estados para modal de filtros
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -162,6 +162,15 @@ export default function Dashboard() {
 
   // Check if there are active filters
   const hasActiveFilters = !!selectedCongregacaoId || !!selectedRedeId || !!selectedDiscipuladoId || !!selectedCelulaId || myLeadership;
+  
+  // Count active filters
+  const activeFiltersCount = [
+    myLeadership,
+    selectedCongregacaoId,
+    selectedRedeId,
+    selectedDiscipuladoId,
+    selectedCelulaId
+  ].filter(Boolean).length;
 
   // Clear all filters
   const clearAllFilters = () => {
@@ -295,19 +304,31 @@ export default function Dashboard() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         
-        {/* Filtros Button */}
-        <button
-          onClick={() => setIsFilterModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-        >
-          <Filter size={20} />
-          <span>Filtros</span>
+        <div className="flex items-center gap-2">
+          {/* Botão Limpar Filtros */}
           {hasActiveFilters && (
-            <span className="bg-blue-600 text-xs px-2 py-0.5 rounded-full">
-              Ativos
-            </span>
+            <button
+              onClick={clearAllFilters}
+              className="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors"
+            >
+              Limpar Filtros
+            </button>
           )}
-        </button>
+          
+          {/* Filtros Button */}
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+          >
+            <Filter size={20} />
+            <span>Filtros</span>
+            {activeFiltersCount > 0 && (
+              <span className="bg-blue-600 text-xs px-2 py-0.5 rounded-full">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
