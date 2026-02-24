@@ -104,10 +104,11 @@ export default function DiscipuladosPage() {
   useEffect(() => {
     const loadAux = async () => {
       try {
+        const isAdmin = user?.permission?.isAdmin;
         const [c, r, u] = await Promise.all([
-          congregacoesService.getCongregacoes(),
-          redesService.getRedes({}),
-          memberService.getAllMembers({ all: true })
+          congregacoesService.getCongregacoes({ all: isAdmin ? true : undefined }),
+          redesService.getRedes({ all: isAdmin ? true : undefined }),
+          memberService.getMembersAutocomplete({ all: true })
         ]);
         setCongregacoes(c || []);
         setRedes(r || []);
@@ -115,7 +116,7 @@ export default function DiscipuladosPage() {
       } catch (err) { console.error('failed loading congregacoes/redes/users', err); }
     };
     loadAux();
-  }, []);
+  }, [user?.permission?.isAdmin]);
 
   // Validar gênero quando rede Kids é selecionada no modo de criação
   useEffect(() => {
@@ -616,7 +617,6 @@ export default function DiscipuladosPage() {
               {filteredList.map(d => {
                 const cellCount = discipuladoCellCountMap[d.id] ?? 0;
                 const canDelete = cellCount === 0;
-                const discipulador = users.find(u => u.id === d.discipuladorMemberId);
                 
                 return (
                   <li 
@@ -629,11 +629,11 @@ export default function DiscipuladosPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 flex-1">
-                        {discipulador ? (
+                        {d.discipulador ? (
                           <Avatar className="w-10 h-10">
-                            <AvatarImage src={discipulador.photoUrl} alt={discipulador.name} />
+                            <AvatarImage src={d.discipulador.photoUrl} alt={d.discipulador.name} />
                             <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
-                              {getInitials(discipulador.name)}
+                              {getInitials(d.discipulador.name)}
                             </AvatarFallback>
                           </Avatar>
                         ) : (
@@ -646,7 +646,7 @@ export default function DiscipuladosPage() {
                         
                         <div className="flex-1">
                           <h4 className="font-medium text-white">
-                            {discipulador?.name || (
+                            {d.discipulador?.name || (
                               <span className="text-red-400">Sem discipulador</span>
                             )}
                           </h4>
@@ -790,6 +790,10 @@ export default function DiscipuladosPage() {
                   {showCreateDiscipuladoresDropdown && (
                     <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                       {users.filter(u => {
+                        // Apenas membros com ministério >= Discipulador
+                        const allowedTypes: (string | null | undefined)[] = ['PRESIDENT_PASTOR', 'PASTOR', 'DISCIPULADOR'];
+                        if (!allowedTypes.includes(u.ministryPosition?.type)) return false;
+
                         // Se a rede selecionada for Kids, filtrar apenas membros do gênero feminino
                         const selectedRede = redes.find(r => r.id === createRedeId);
                         if (selectedRede?.isKids && u.gender !== 'FEMALE') {
@@ -965,6 +969,10 @@ export default function DiscipuladosPage() {
                   {showEditDiscipuladoresDropdown && (
                     <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
                       {users.filter(u => {
+                        // Apenas membros com ministério >= Discipulador
+                        const allowedTypes: (string | null | undefined)[] = ['PRESIDENT_PASTOR', 'PASTOR', 'DISCIPULADOR'];
+                        if (!allowedTypes.includes(u.ministryPosition?.type)) return false;
+
                         // Se a rede selecionada for Kids, filtrar apenas membros do gênero feminino
                         const selectedRede = redes.find(r => r.id === editRedeId);
                         if (selectedRede?.isKids && u.gender !== 'FEMALE') {

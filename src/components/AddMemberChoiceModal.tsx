@@ -55,7 +55,7 @@ export default function AddMemberChoiceModal({
   const loadAllMembers = async () => {
     setLoading(true);
     try {
-      const members = await memberService.getAllMembers();
+      const members = await memberService.getMembersAutocomplete();
       setAllMembers(members);
       setFilteredMembers(members);
     } catch (err) {

@@ -23,9 +23,9 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   const [celulaName, setCelulaName] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMember, setModalMember] = useState<Member | null>(null);
+  const [modalMemberId, setModalMemberId] = useState<number | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [viewingMember, setViewingMember] = useState<Member | null>(null);
+  const [viewingMemberId, setViewingMemberId] = useState<number | null>(null);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [duplicateMembers, setDuplicateMembers] = useState<Member[]>([]);
   const [pendingMemberData, setPendingMemberData] = useState<{ data: Partial<Member>, photo?: File } | null>(null);
@@ -78,17 +78,17 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   }, [resolvedParams.id]);
 
   const openEditModal = (member: Member) => {
-    setModalMember(member);
+    setModalMemberId(member.id);
     setIsModalOpen(true);
   };
 
   const openAddModal = () => {
-    setModalMember(null);
+    setModalMemberId(null);
     setIsModalOpen(true);
   };
 
   const openViewModal = (member: Member) => {
-    setViewingMember(member);
+    setViewingMemberId(member.id);
     setIsViewModalOpen(true);
   };
 
@@ -103,12 +103,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
 
   const checkForDuplicates = async (name: string, gender: string): Promise<Member[]> => {
     try {
-      // Buscar membros com mesmo nome e gênero
-      const allMembers = await memberService.getAllMembers({ all: true });
-      const duplicates = allMembers.filter(
-        (m) => m.name.toLowerCase().trim() === name.toLowerCase().trim() && m.gender === gender
-      );
-      return duplicates;
+      return await memberService.checkDuplicateMember(name, gender);
     } catch (err) {
       console.error('Erro ao verificar duplicatas:', err);
       return [];
@@ -185,15 +180,15 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const handleModalSave = async (memberData: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
+  const handleModalSave = async (memberData: Partial<Member>, photo?: File, deletePhoto?: boolean, originalMember?: Member | null): Promise<Member> => {
     let savedMember: Member;
-    const wasCreating = !modalMember?.id;
-    const wasEnablingAccess = !modalMember?.hasSystemAccess && memberData.hasSystemAccess;
+    const wasCreating = !modalMemberId;
+    const wasEnablingAccess = !originalMember?.hasSystemAccess && memberData.hasSystemAccess;
     
     try {
-      if (modalMember?.id) {
+      if (modalMemberId) {
         // Edit existing member
-        savedMember = await memberService.updateMember(celulaId, modalMember.id, memberData, photo, deletePhoto);
+        savedMember = await memberService.updateMember(celulaId, modalMemberId, memberData, photo, deletePhoto);
         toast.success('Membro atualizado com sucesso');
       } else {
         // Create new member - check for duplicates first
@@ -206,7 +201,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
             setPendingMemberData({ data: memberData, photo });
             setIsDuplicateModalOpen(true);
             setIsModalOpen(false);
-            setModalMember(null);
+            setModalMemberId(null);
             // Return a placeholder - the actual save will happen in handleAddExistingMember or handleCreateNewMemberAnyway
             return duplicates[0];
           }
@@ -225,7 +220,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
       if (isEditingSelf && photoChanged) {
         // Close modal first for better UX
         setIsModalOpen(false);
-        setModalMember(null);
+        setModalMemberId(null);
         
         // Reload page to update sidebar picture
         window.location.reload();
@@ -233,13 +228,13 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
       }
 
       setIsModalOpen(false);
-      setModalMember(null);
+      setModalMemberId(null);
       load();
 
       // Enviar convite em background após fechar o modal
       const shouldSendInvite = memberData.hasSystemAccess && memberData.email && memberData.email.trim() && (
         wasCreating || // Criar novo membro com acesso
-        (wasEnablingAccess && modalMember?.hasDefaultPassword !== false && !modalMember?.inviteSent) // Ativando acesso pela primeira vez
+        (wasEnablingAccess && originalMember?.hasDefaultPassword !== false && !originalMember?.inviteSent) // Ativando acesso pela primeira vez
       );
 
       if (shouldSendInvite) {
@@ -260,7 +255,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
       return savedMember;
     } catch (err) {
       console.error(err);
-      toast.error(modalMember?.id ? ErrorMessages.updateMember(err) : ErrorMessages.createMember(err));
+      toast.error(modalMemberId ? ErrorMessages.updateMember(err) : ErrorMessages.createMember(err));
       throw err;
     }
   };
@@ -375,20 +370,20 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
       />
 
       <MemberViewModal
-        member={viewingMember}
+        memberId={viewingMemberId}
         isOpen={isViewModalOpen}
         onClose={() => {
           setIsViewModalOpen(false);
-          setViewingMember(null);
+          setViewingMemberId(null);
         }}
       />
 
       <MemberModal
-        member={modalMember}
+        memberId={modalMemberId}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setModalMember(null);
+          setModalMemberId(null);
         }}
         celulas={celulas}
         onSave={handleModalSave}

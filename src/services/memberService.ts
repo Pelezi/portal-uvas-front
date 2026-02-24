@@ -1,5 +1,5 @@
 import apiClient from '@/lib/apiClient';
-import { Member } from '@/types';
+import { Member, PaginatedResponse } from '@/types';
 
 export interface MemberInput {
   email?: string;
@@ -42,9 +42,12 @@ export const memberService = {
     discipleOfId?: number; 
     ministryType?: string; 
     gender?: string;
+    name?: string;
     all?: boolean;
     isActive?: boolean;
-  }): Promise<Member[]> {
+    page?: number;
+    pageSize?: number;
+  }, options?: { signal?: AbortSignal }): Promise<PaginatedResponse<Member>> {
     const params = new URLSearchParams();
     if (filters?.celulaId !== undefined && filters?.celulaId !== null) {
       params.append('celulaId', filters.celulaId.toString());
@@ -55,12 +58,53 @@ export const memberService = {
     if (filters?.discipleOfId) params.append('discipleOfId', filters.discipleOfId.toString());
     if (filters?.ministryType) params.append('ministryType', filters.ministryType);
     if (filters?.gender) params.append('gender', filters.gender);
+    if (filters?.name) params.append('name', filters.name);
     if (filters?.all !== undefined) params.append('all', filters.all.toString());
     if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.pageSize) params.append('pageSize', filters.pageSize.toString());
     
     const queryString = params.toString();
     const url = queryString ? `/members?${queryString}` : '/members';
+    const response = await apiClient.get(url, { signal: options?.signal });
+    return response.data;
+  },
+
+  /**
+   * Slim member list for autocomplete/select pickers.
+   * Returns: id, name, email, phone, gender, celulaId, photoUrl, celula (shallow), ministryPosition, roles.
+   * Replaces getAllMembers() when the full member graph isn’t needed.
+   */
+  async getMembersAutocomplete(filters?: {
+    name?: string;
+    ministryType?: string;
+    gender?: string;
+    all?: boolean;
+    celulaId?: number;
+    isActive?: boolean;
+    discipleOfId?: number;
+  }): Promise<Member[]> {
+    const params = new URLSearchParams();
+    if (filters?.name) params.append('name', filters.name);
+    if (filters?.ministryType) params.append('ministryType', filters.ministryType);
+    if (filters?.gender) params.append('gender', filters.gender);
+    if (filters?.all !== undefined) params.append('all', filters.all.toString());
+    if (filters?.celulaId !== undefined) params.append('celulaId', filters.celulaId.toString());
+    if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
+    if (filters?.discipleOfId !== undefined) params.append('discipleOfId', filters.discipleOfId.toString());
+    const qs = params.toString();
+    const url = qs ? `/members/autocomplete?${qs}` : '/members/autocomplete';
     const response = await apiClient.get(url);
+    return response.data;
+  },
+
+  /**
+   * Check for existing members with the same name and gender (duplicate detection).
+   * Returns a slim subset—no deep relations.
+   */
+  async checkDuplicateMember(name: string, gender: string): Promise<Member[]> {
+    const params = new URLSearchParams({ name, gender });
+    const response = await apiClient.get(`/members/check-duplicate?${params.toString()}`);
     return response.data;
   },
 

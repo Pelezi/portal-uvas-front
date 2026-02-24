@@ -25,6 +25,9 @@ export default function MembersManagementPage() {
   const [redes, setRedes] = useState<Rede[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalMembers, setTotalMembers] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
   // Filters
   const [filterName, setFilterName] = useState('');
@@ -35,19 +38,35 @@ export default function MembersManagementPage() {
   const [filterCongregacaoId, setFilterCongregacaoId] = useState<number | null>(null);
   const [filterRedeId, setFilterRedeId] = useState<number | null>(null);
 
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const canSeeAllFilters = !!user?.permission?.isAdmin || !!user?.permission?.pastorPresidente || !filterMyDisciples;
+
   const [confirmingMember, setConfirmingMember] = useState<Member | null>(null);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMember, setModalMember] = useState<Member | null>(null);
+  const [modalMemberId, setModalMemberId] = useState<number | null>(null);
 
   // View modal state
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [viewingMember, setViewingMember] = useState<Member | null>(null);
+  const [viewingMemberId, setViewingMemberId] = useState<number | null>(null);
 
   // Filter modal state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const membersRequestControllerRef = useRef<AbortController | null>(null);
+
+  // Reset to first page when any filter changes
+  const prevFiltersRef = useRef({ filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterName, filterMyDisciples, filterInactive, pageSize });
+  useEffect(() => {
+    const prev = prevFiltersRef.current;
+    const changed = prev.filterCelulaId !== filterCelulaId || prev.filterDiscipuladoId !== filterDiscipuladoId ||
+      prev.filterRedeId !== filterRedeId || prev.filterCongregacaoId !== filterCongregacaoId ||
+      prev.filterName !== filterName || prev.filterMyDisciples !== filterMyDisciples || prev.filterInactive !== filterInactive ||
+      prev.pageSize !== pageSize;
+    if (changed) {
+      setCurrentPage(1);
+    }
+    prevFiltersRef.current = { filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterName, filterMyDisciples, filterInactive, pageSize };
+  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterName, filterMyDisciples, filterInactive, pageSize]);
 
   const muiTheme = createTheme({
     palette: {
@@ -63,10 +82,10 @@ export default function MembersManagementPage() {
       if (authLoading) return;
       try {
         const [c, d, r, cong] = await Promise.all([
-          celulasService.getCelulas(),
-          discipuladosService.getDiscipulados(),
-          redesService.getRedes({}),
-          congregacoesService.getCongregacoes()
+          celulasService.getCelulas(canSeeAllFilters ? { all: true } : undefined),
+          discipuladosService.getDiscipulados(canSeeAllFilters ? { all: true } : undefined),
+          redesService.getRedes(canSeeAllFilters ? { all: true } : {}),
+          congregacoesService.getCongregacoes(canSeeAllFilters ? { all: true } : undefined)
         ]);
         setCelulas(c);
         setDiscipulados(d);
@@ -77,11 +96,16 @@ export default function MembersManagementPage() {
       }
     };
     loadFilters();
-  }, [authLoading]);
+  }, [authLoading, canSeeAllFilters]);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const loadMembers = async () => {
       if (authLoading) return;
+
+      membersRequestControllerRef.current?.abort();
+      membersRequestControllerRef.current = controller;
 
       setLoading(true);
       try {
@@ -95,31 +119,47 @@ export default function MembersManagementPage() {
         if (!filterMyDisciples) filters.all = true;
         // filterInactive: true = apenas inativos, false = apenas ativos
         filters.isActive = !filterInactive;
+        filters.page = currentPage;
+        filters.pageSize = pageSize;
 
-        const m = await memberService.getAllMembers(filters);
-        setMembers(m);
+        const result = await memberService.getAllMembers(filters, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setMembers(result.data);
+        setTotalMembers(result.total);
       } catch (e) {
+        if ((e as { code?: string; name?: string })?.code === 'ERR_CANCELED' || (e as { code?: string; name?: string })?.name === 'CanceledError') {
+          return;
+        }
         console.error(e);
         toast.error('Falha ao carregar membros');
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted && membersRequestControllerRef.current === controller) {
+          setLoading(false);
+        }
       }
     };
     loadMembers();
-  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterName, filterMyDisciples, filterInactive, authLoading]);
+
+    return () => {
+      controller.abort();
+      if (membersRequestControllerRef.current === controller) {
+        membersRequestControllerRef.current = null;
+      }
+    };
+  }, [filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterName, filterMyDisciples, filterInactive, currentPage, pageSize, authLoading]);
 
   const openEditModal = (m: Member) => {
-    setModalMember(m);
+    setModalMemberId(m.id);
     setIsModalOpen(true);
   };
 
   const openViewModal = (m: Member) => {
-    setViewingMember(m);
+    setViewingMemberId(m.id);
     setIsViewModalOpen(true);
   };
 
   const openCreateModal = () => {
-    setModalMember(null);
+    setModalMemberId(null);
     setIsModalOpen(true);
   };
 
@@ -132,15 +172,15 @@ export default function MembersManagementPage() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  const handleModalSave = async (data: Partial<Member>, photo?: File, deletePhoto?: boolean): Promise<Member> => {
+  const handleModalSave = async (data: Partial<Member>, photo?: File, deletePhoto?: boolean, originalMember?: Member | null): Promise<Member> => {
     let savedMember: Member;
-    const wasCreating = !modalMember;
-    const wasEnablingAccess = !modalMember?.hasSystemAccess && data.hasSystemAccess;
+    const wasCreating = !modalMemberId;
+    const wasEnablingAccess = !originalMember?.hasSystemAccess && data.hasSystemAccess;
 
     try {
-      if (modalMember) {
+      if (modalMemberId) {
         // Editing
-        savedMember = await memberService.updateMember(modalMember.celulaId || 0, modalMember.id, data, photo, deletePhoto);
+        savedMember = await memberService.updateMember(0, modalMemberId, data, photo, deletePhoto);
         toast.success('Membro atualizado');
       } else {
         // Creating - name is required
@@ -159,7 +199,7 @@ export default function MembersManagementPage() {
       if (isEditingSelf && photoChanged) {
         // Close modal first for better UX
         setIsModalOpen(false);
-        setModalMember(null);
+        setModalMemberId(null);
 
         // Reload page to update sidebar picture
         window.location.reload();
@@ -174,15 +214,18 @@ export default function MembersManagementPage() {
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       if (!filterMyDisciples) filters.all = true;
       filters.isActive = !filterInactive;
+      filters.page = currentPage;
+      filters.pageSize = pageSize;
       const refreshed = await memberService.getAllMembers(filters);
-      setMembers(refreshed);
+      setMembers(refreshed.data);
+      setTotalMembers(refreshed.total);
       setIsModalOpen(false);
-      setModalMember(null);
+      setModalMemberId(null);
 
       // Enviar convite em background após fechar o modal
       const shouldSendInvite = data.hasSystemAccess && data.email && data.email.trim() && (
         wasCreating || // Criar novo membro com acesso
-        (wasEnablingAccess && modalMember?.hasDefaultPassword !== false && !modalMember?.inviteSent) // Ativando acesso pela primeira vez
+        (wasEnablingAccess && originalMember?.hasDefaultPassword !== false && !originalMember?.inviteSent) // Ativando acesso pela primeira vez
       );
 
       if (shouldSendInvite) {
@@ -212,168 +255,7 @@ export default function MembersManagementPage() {
     setConfirmingMember(member);
   };
 
-  // Verifica se o usuário pode editar/deletar um membro específico
-  const canManageMember = (member: Member): boolean => {
-    if (!user) return false;
 
-    // Admin pode gerenciar todos
-    const isAdmin = user.roles?.some((r: any) => r.role?.isAdmin);
-    if (isAdmin) return true;
-
-    // Pastor presidente da congregação principal pode gerenciar todos
-    const isPastorPresidente = user.congregacoesPastorGoverno?.some((c: Congregacao) => c.isPrincipal);
-    if (isPastorPresidente) return true;
-
-    // Verifica se é o próprio usuário - pode editar, mas não deletar
-    if (member.id === user.id) return true;
-
-    // Se o ministryPosition do membro for igual ou superior ao do usuário, não pode gerenciar
-    if (member.ministryPosition && user.ministryPosition) {
-      if (member.ministryPosition.priority <= user.ministryPosition.priority) {
-        return false;
-      }
-    }
-
-    // Membro sem célula pode ser gerenciado
-    if (!member.celulaId
-      && !member.ledCelulas?.length
-      && !member.leadingInTrainingCelulas?.length
-      && !member.discipulados?.length
-      && !member.redes?.length
-      && !member.congregacoesPastorGoverno?.length
-      && !member.congregacoesVicePresidente?.length
-      && !member.congregacoesKidsLeader?.length
-    ) {
-      return true
-    };
-
-    // Verificar se o membro está na mesma rede/discipulado/célula
-    const memberCelula = celulas.find(c => c.id === member.celulaId);
-    const memberLedCelulas = member.ledCelulas || [];
-    const memberLedDiscipulados = member.discipulados || [];
-    const memberLedRedes = member.redes || [];
-    const memberCongregacoesPastorGoverno = member.congregacoesPastorGoverno || [];
-    const memberCongregacoesVicePresidente = member.congregacoesVicePresidente || [];
-    const memberCongregacoesKidsLeader = member.congregacoesKidsLeader || [];
-
-    // Verifica se usuário é líder ou líder em treinamento da célula do membro
-    if (user.permission?.celulaIds?.some(c => c === member.celulaId)) {
-      if (memberLedCelulas?.some(c => c.id === member.id)) {
-        return false; // Líder em treinamento não pode gerenciar líder da célula
-      }
-      return isLowerMinistryLevel(member);
-    }
-
-    // Verificar se o usuário é discipulador do membro
-    const memberDiscipulado = memberCelula?.discipulado;
-    if (memberDiscipulado?.discipuladorMemberId === user.id) {
-      return isLowerMinistryLevel(member);
-    }
-    if (memberLedCelulas.some(c => c.discipulado?.discipuladorMemberId === user.id)) {
-      return isLowerMinistryLevel(member);
-    }
-
-    // Verifica se o usuário é discipuladora de rede kids do membro
-    // Confere pelo relacionamento entre discipulado kids e discipulas
-    if (member.discipleOf?.some(d => d.discipulado.discipuladorMemberId === user.id && d.discipulado.rede?.isKids)) {
-      return isLowerMinistryLevel(member);
-    }
-
-    // Verificar se o usuário é pastor de rede do membro
-    const memberRedesList: (Rede | undefined)[] = [
-      memberCelula?.discipulado?.rede,
-      ...memberLedCelulas.flatMap(c => c.discipulado?.rede || []),
-      memberDiscipulado?.rede,
-      ...memberLedDiscipulados.flatMap(d => d.rede || []),
-      ...memberLedRedes
-    ];
-
-    // Filter out undefined/null and get unique redes by ID
-    const uniqueRedes = new Set(
-      memberRedesList
-        .filter((r): r is Rede => r !== undefined && r !== null)
-    );
-
-    if (Array.from(uniqueRedes).some(r => r.pastorMemberId === user.id)) {
-      return isLowerMinistryLevel(member);
-    }
-
-    // Verifica se user é responsável kids da congregação e se alguma das redes do member é do tipo kids
-    const memberRedesKids = Array.from(uniqueRedes).filter(r => r.isKids);
-    if (memberRedesKids.length > 0) {
-      if (memberRedesKids.some(r => r.congregacao?.kidsLeaderMemberId === user.id)) {
-        return isLowerMinistryLevel(member);
-      }
-    }
-
-    // Verificar se o usuário é pastor de governo ou vice-presidente da congregação do membro
-    const memberCongregacoes = new Set([
-      ...(memberCelula?.discipulado?.rede?.congregacao ? [memberCelula.discipulado.rede.congregacao] : []),
-      ...memberLedCelulas.flatMap(c => c.discipulado?.rede?.congregacao ? [c.discipulado.rede.congregacao] : []),
-      ...memberLedDiscipulados.flatMap(d => d.rede?.congregacao ? [d.rede.congregacao] : []),
-      ...memberLedRedes.flatMap(r => r.congregacao ? [r.congregacao] : []),
-      ...memberCongregacoesVicePresidente,
-      ...memberCongregacoesKidsLeader
-    ]);
-    // Check if user is pastor de governo or vice-presidente of any of these congregações
-    if (Array.from(memberCongregacoes).some(c => c.pastorGovernoMemberId === user.id || c.vicePresidenteMemberId === user.id )) {
-      return isLowerMinistryLevel(member);
-    }
-
-    return false;
-  };
-
-  // Verifica se o membro tem nível ministerial inferior ao usuário logado
-  const isLowerMinistryLevel = (member: Member): boolean => {
-    if (!user?.ministryPosition?.priority || !member.ministryPosition?.priority) {
-      return true; // Se não tem priority definido, permite
-    }
-
-    // Priority maior = cargo menor na hierarquia
-    return member.ministryPosition.priority > user.ministryPosition.priority;
-  };
-
-  // Retorna as tags de liderança do membro
-  const getLeadershipTags = (member: Member): { label: string; color: string }[] => {
-    const tags: { label: string; color: string }[] = [];
-
-    // Pastor de Governo de Congregação
-    if (member.congregacoesPastorGoverno && member.congregacoesPastorGoverno.length > 0) {
-      tags.push({ label: 'Pastor de Governo', color: 'text-purple-400' });
-    }
-
-    // Vice-Presidente de Congregação
-    if (member.congregacoesVicePresidente && member.congregacoesVicePresidente.length > 0) {
-      tags.push({ label: 'Vice-Presidente', color: 'text-purple-400' });
-    }
-
-    // Responsável Kids de Congregação
-    if (member.congregacoesKidsLeader && member.congregacoesKidsLeader.length > 0) {
-      tags.push({ label: 'Responsável Kids', color: 'text-pink-400' });
-    }
-
-    // Pastor de Rede
-    if (member.redes && member.redes.length > 0) {
-      tags.push({ label: 'Pastor de Rede', color: 'text-blue-400' });
-    }
-
-    // Discipulador
-    if (member.discipulados && member.discipulados.length > 0) {
-      tags.push({ label: 'Discipulador', color: 'text-green-400' });
-    }
-
-    // Líder de Célula
-    if (member.ledCelulas && member.ledCelulas.length > 0) {
-      tags.push({ label: 'Líder de Célula', color: 'text-yellow-400' });
-    }
-
-    // Vice-Líder de Célula
-    if (member.leadingInTrainingCelulas && member.leadingInTrainingCelulas.length > 0) {
-      tags.push({ label: 'Líder em Treinamento', color: 'text-yellow-400' });
-    }
-
-    return tags;
-  };
 
   const performDeleteMember = async () => {
     const member = confirmingMember;
@@ -390,8 +272,15 @@ export default function MembersManagementPage() {
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       if (!filterMyDisciples) filters.all = true;
       filters.isActive = !filterInactive;
+      filters.page = currentPage;
+      filters.pageSize = pageSize;
       const refreshed = await memberService.getAllMembers(filters);
-      setMembers(refreshed);
+      setMembers(refreshed.data);
+      setTotalMembers(refreshed.total);
+      // If current page is now empty and not the first page, go back one page
+      if (refreshed.data.length === 0 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      }
       setConfirmingMember(null);
     } catch (e) {
       console.error(e);
@@ -544,6 +433,7 @@ export default function MembersManagementPage() {
 
   // Filtro de nome agora é feito pela API
   const filteredMembers = members;
+  const totalPages = Math.max(1, Math.ceil(totalMembers / pageSize));
 
   return (
     <div className="relative pb-20">
@@ -589,7 +479,7 @@ export default function MembersManagementPage() {
         </div>
 
         <div>
-          <h3 className="font-medium mb-3">Exibindo {filteredMembers.length} de {members.length} membros</h3>
+          <h3 className="font-medium mb-3">{totalMembers} membro{totalMembers !== 1 ? 's' : ''} encontrado{totalMembers !== 1 ? 's' : ''}</h3>
           {loading ? (
             <div className="flex justify-center items-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -597,7 +487,7 @@ export default function MembersManagementPage() {
           ) : (
             <ul className="space-y-3">
               {filteredMembers.map((m) => {
-                const leadershipTags = getLeadershipTags(m);
+                const leadershipTags: { label: string; color: string }[] = (m as any).leadershipTags || [];
                 const hasLeadership = leadershipTags.length > 0;
                 const showNoCelula = !m.celulaId && !hasLeadership;
 
@@ -648,7 +538,7 @@ export default function MembersManagementPage() {
                         >
                           <FiEye className="h-4 w-4" />
                         </button>
-                        {canManageMember(m) && (
+                        {(m as any).canManage && (
                           <button
                             onClick={() => openEditModal(m)}
                             className="p-2 text-gray-400 hover:bg-gray-700 rounded transition-colors"
@@ -664,6 +554,56 @@ export default function MembersManagementPage() {
               })}
             </ul>
           )}
+
+          {/* Pagination controls */}
+          {!loading && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-300">Itens por página</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="bg-gray-800 border border-gray-700 text-sm rounded px-2 py-1"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1 || totalPages === 1}
+                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || totalPages === 1}
+                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors"
+              >
+                ‹ Anterior
+              </button>
+              <span className="px-3 py-2 text-sm text-gray-300">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 1}
+                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors"
+              >
+                Próxima ›
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || totalPages === 1}
+                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors"
+              >
+                »
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Floating Action Button */}
@@ -677,11 +617,11 @@ export default function MembersManagementPage() {
 
         {/* Member Modal */}
         <MemberModal
-          member={modalMember}
+          memberId={modalMemberId}
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);
-            setModalMember(null);
+            setModalMemberId(null);
           }}
           onSave={handleModalSave}
           celulas={celulas}
@@ -689,11 +629,11 @@ export default function MembersManagementPage() {
 
         {/* Member View Modal */}
         <MemberViewModal
-          member={viewingMember}
+          memberId={viewingMemberId}
           isOpen={isViewModalOpen}
           onClose={() => {
             setIsViewModalOpen(false);
-            setViewingMember(null);
+            setViewingMemberId(null);
           }}
         />
         {/* FilterModal */}

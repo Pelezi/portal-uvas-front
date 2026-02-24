@@ -94,16 +94,16 @@ export default function RedesPage() {
     (async () => {
       try { 
         // Carregar apenas usuários que podem ser pastores (PRESIDENT_PASTOR ou PASTOR)
-        const u = await memberService.getAllMembers({ ministryType: 'PRESIDENT_PASTOR,PASTOR', all: true }); 
+        const u = await memberService.getMembersAutocomplete({ ministryType: 'PRESIDENT_PASTOR,PASTOR', all: true }); 
         setUsers(u || []); 
       } catch (err) { console.error(err); }
       
       try {
-        const c = await congregacoesService.getCongregacoes();
+        const c = await congregacoesService.getCongregacoes({ all: user?.permission?.isAdmin ? true : undefined });
         setCongregacoes(c || []);
       } catch (err) { console.error(err); }
     })();
-  }, []);
+  }, [user?.permission?.isAdmin]);
 
   // Permission checks for rede
   const canEditRede = (r: Rede): boolean => {

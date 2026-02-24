@@ -21,16 +21,16 @@ import { Area } from 'react-easy-crop';
 import getCroppedImg from '@/utils/cropImage';
 
 interface MemberModalProps {
-  member: Member | null;
+  memberId: number | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Partial<Member>, photo?: File, deletePhoto?: boolean) => Promise<Member>;
+  onSave: (data: Partial<Member>, photo?: File, deletePhoto?: boolean, originalMember?: Member | null) => Promise<Member>;
   celulas: Celula[];
   initialCelulaId?: number | null;
 }
 
-export default function MemberModal({ member, isOpen, onClose, onSave, celulas = [], initialCelulaId }: MemberModalProps) {
-  const isEditing = !!member;
+export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas = [], initialCelulaId }: MemberModalProps) {
+  const isEditing = !!memberId;
   const { user } = useAuth();
 
   // Ref para o campo de nome
@@ -75,6 +75,22 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
   const [loadingCep, setLoadingCep] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isResendingInvite, setIsResendingInvite] = useState(false);
+
+  // Internal member state — fetched from API when editing
+  const [member, setMember] = useState<Member | null>(null);
+  const [loadingMember, setLoadingMember] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !memberId) {
+      setMember(null);
+      return;
+    }
+    setLoadingMember(true);
+    memberService.getById(memberId)
+      .then(setMember)
+      .catch(err => { console.error(err); toast.error('Erro ao carregar membro'); })
+      .finally(() => setLoadingMember(false));
+  }, [isOpen, memberId]);
 
   // Estados para upload e crop de imagem
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -132,7 +148,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
           configService.getMinistries(),
           configService.getWinnerPaths(),
           configService.getRoles(),
-          memberService.getAllMembers(),
+          memberService.getMembersAutocomplete(),
           congregacoesService.getCongregacoes(),
           redesService.getRedes(),
           discipuladosService.getDiscipulados(),
@@ -602,7 +618,7 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
     setIsSaving(true);
     try {
       // Salvar o membro - onSave agora retorna o membro salvo e aceita foto
-      await onSave(data, croppedImageFile || undefined, shouldDeletePhoto);
+      await onSave(data, croppedImageFile || undefined, shouldDeletePhoto, member);
       // Modal fecha imediatamente após salvar com sucesso
       // O envio do convite continuará em background no parent
     } catch (error) {
@@ -653,6 +669,14 @@ export default function MemberModal({ member, isOpen, onClose, onSave, celulas =
   };
 
   if (!isOpen) return null;
+
+  if (loadingMember) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {

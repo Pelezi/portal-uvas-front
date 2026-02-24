@@ -662,12 +662,7 @@ export default function ReportPage() {
 
   const checkForDuplicates = async (name: string, gender: string): Promise<Member[]> => {
     try {
-      // Buscar membros com mesmo nome e gênero
-      const allMembers = await memberService.getAllMembers({ all: true });
-      const duplicates = allMembers.filter(
-        (m) => m.name.toLowerCase().trim() === name.toLowerCase().trim() && m.gender === gender
-      );
-      return duplicates;
+      return await memberService.checkDuplicateMember(name, gender);
     } catch (err) {
       console.error('Erro ao verificar duplicatas:', err);
       return [];
@@ -1506,7 +1501,7 @@ const handleAddExistingMember = async (member: Member) => {
       />
 
       <MemberModal
-        member={null}
+        memberId={null}
         isOpen={isAddMemberModalOpen}
         onClose={() => setIsAddMemberModalOpen(false)}
         onSave={handleSaveMember}

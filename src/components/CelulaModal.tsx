@@ -337,7 +337,7 @@ export default function CelulaModal({
           if (selectedRede?.isKids) {
             
             // Buscar todos os discípulos do discipulador (célula Kids)
-            const allMembersData = await memberService.getAllMembers({ 
+            const allMembersData = await memberService.getMembersAutocomplete({ 
               discipleOfId: selectedDiscipulado.id,
               all: true 
             });
@@ -405,7 +405,7 @@ export default function CelulaModal({
         const { celulasService } = await import('@/services/celulasService');
         
         // Buscar todos os discípulos do discipulador (célula Kids)
-        const allMembersData = await memberService.getAllMembers({ 
+        const allMembersData = await memberService.getMembersAutocomplete({ 
           discipleOfId: selectedDiscipulado.id,
           all: true 
         });
@@ -1152,7 +1152,7 @@ export default function CelulaModal({
                 <Select
                   labelId="parallel-celula-label"
                   value={parallelCelulaId ?? ''}
-                  onChange={(e) => setParallelCelulaId(e.target.value !== '' ? Number(e.target.value) : null)}
+                  onChange={(e) => setParallelCelulaId(String(e.target.value) !== '' ? Number(e.target.value) : null)}
                   label="Célula Paralela"
                   size="small"
                   className="bg-gray-800 w-full">

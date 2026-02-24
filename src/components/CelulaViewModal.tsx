@@ -43,7 +43,7 @@ export default function CelulaViewModal({
 
     setLoadingMembers(true);
     try {
-      const members = await memberService.getAllMembers({ celulaId: celula.id, isActive: true });
+      const members = await memberService.getMembersAutocomplete({ celulaId: celula.id, isActive: true, all: true });
       setCelulaMembers(members || []);
     } catch (error) {
       console.error('Erro ao carregar membros:', error);

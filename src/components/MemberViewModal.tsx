@@ -1,18 +1,42 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Member } from '@/types';
+import { memberService } from '@/services/memberService';
 import { FiX } from 'react-icons/fi';
 import { MapPin, Users, Network, BookOpen, Church } from 'lucide-react';
 
 interface MemberViewModalProps {
-  member: Member | null;
+  memberId: number | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export default function MemberViewModal({ member, isOpen, onClose }: MemberViewModalProps) {
-  if (!isOpen || !member) return null;
+export default function MemberViewModal({ memberId, isOpen, onClose }: MemberViewModalProps) {
+  const [member, setMember] = useState<Member | null>(null);
+  const [loadingMember, setLoadingMember] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !memberId) {
+      setMember(null);
+      return;
+    }
+    setLoadingMember(true);
+    memberService.getById(memberId)
+      .then(setMember)
+      .catch(err => console.error('Erro ao carregar membro:', err))
+      .finally(() => setLoadingMember(false));
+  }, [isOpen, memberId]);
+
+  if (!isOpen) return null;
+
+  if (loadingMember || !member) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   // Check if contact data is censored based on privacy settings
   // The API censors ALL contact/address fields when privacy restrictions apply:
@@ -41,11 +65,16 @@ export default function MemberViewModal({ member, isOpen, onClose }: MemberViewM
   const formatPhone = (phone?: string | null) => {
     if (!phone) return '-';
     // Format: (XX) XXXXX-XXXX or (XX) XXXX-XXXX
+    // Strip Brazil DDI (55) if present before formatting
     const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length === 11) {
-      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
-    } else if (cleaned.length === 10) {
-      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+    const local =
+      cleaned.startsWith('55') && (cleaned.length === 12 || cleaned.length === 13)
+        ? cleaned.slice(2)
+        : cleaned;
+    if (local.length === 11) {
+      return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+    } else if (local.length === 10) {
+      return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
     }
     return phone;
   };

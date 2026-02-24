@@ -133,7 +133,7 @@ export default function CelulasPage() {
       try {
         // Carregar apenas usuários que podem ser líderes (PRESIDENT_PASTOR, PASTOR, DISCIPULADOR, LEADER ou LEADER_IN_TRAINING)
         const isAdmin = user?.permission?.isAdmin || false;
-        const u = await memberService.getAllMembers({ 
+        const u = await memberService.getMembersAutocomplete({ 
           ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING',
           ...(isAdmin && { all: true })
         });
@@ -182,13 +182,14 @@ export default function CelulasPage() {
     parallelCelulaId?: number | null;
   }) => {
     try {
+      const payload = { ...data, parallelCelulaId: data.parallelCelulaId ?? undefined };
       if (editingCelula) {
         // Edit mode
-        await celulasService.updateCelula(editingCelula.id, data);
+        await celulasService.updateCelula(editingCelula.id, payload);
         toast.success('Célula atualizada com sucesso!');
       } else {
         // Create mode
-        await celulasService.createCelula(data);
+        await celulasService.createCelula(payload);
         toast.success('Célula criada com sucesso!');
       }
       setShowCelulaModal(false);
