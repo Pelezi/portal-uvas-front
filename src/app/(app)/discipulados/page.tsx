@@ -160,6 +160,20 @@ export default function DiscipuladosPage() {
     }
   }, [editRedeId, editDiscipuladorId, redes, users]);
 
+  // Remover discipuladora da lista de discípulas quando selecionada no modo de criação
+  useEffect(() => {
+    if (createDiscipuladorId && createDiscipleIds.includes(createDiscipuladorId)) {
+      setCreateDiscipleIds(prev => prev.filter(id => id !== createDiscipuladorId));
+    }
+  }, [createDiscipuladorId]);
+
+  // Remover discipuladora da lista de discípulas quando selecionada no modo de edição
+  useEffect(() => {
+    if (editDiscipuladorId && editDiscipleIds.includes(editDiscipuladorId)) {
+      setEditDiscipleIds(prev => prev.filter(id => id !== editDiscipuladorId));
+    }
+  }, [editDiscipuladorId]);
+
   const [discipuladoCellCountMap, setDiscipuladoCellCountMap] = useState<Record<number, number>>({});
 
   const create = async () => {
@@ -820,52 +834,88 @@ export default function DiscipuladosPage() {
                 {/* Discípulas - apenas para redes Kids */}
                 {redes.find(r => r.id === createRedeId)?.isKids && (
                   <div className="w-full">
-                    <FormControl className="w-full">
-                      <InputLabel id="create-disciples-label" size='small'>Discípulas</InputLabel>
-                      <Select
-                        labelId="create-disciples-label"
-                        multiple
-                        value={createDiscipleIds}
-                        onChange={(e) => {
-                          const value = e.target.value as number[];
-                          setCreateDiscipleIds(value);
-                        }}
-                        label="Discípulas"
-                        size="small"
-                        className="bg-gray-800 w-full"
-                        renderValue={(selected) => {
-                          const selectedMembers = users.filter(m => selected.includes(m.id));
-                          return selectedMembers.map(m => m.name).join(', ');
-                        }}
-                      >
-                        {users
-                          .filter(u => {
-                            // Apenas membros femininos
-                            if (u.gender !== 'FEMALE') return false;
-                            // Verificar se já está associada a outro discipulado Kids
-                            const alreadyInKidsDiscipulado = list.some(d => {
-                              const rede = redes.find(r => r.id === d.redeId);
-                              return rede?.isKids && d.disciples?.some(disc => disc.member.id === u.id);
-                            });
-                            return !alreadyInKidsDiscipulado;
-                          })
-                          .map((user) => (
-                            <MenuItem key={user.id} value={user.id}>
+                    <label className="text-sm text-gray-300 font-medium mb-1 block">Discípulas</label>
+                    <Autocomplete
+                      size="small"
+                      fullWidth
+                      options={users.filter(u => {
+                        if (u.gender !== 'FEMALE') return false;
+                        if (createDiscipleIds.includes(u.id)) return false;
+                        if (u.id === createDiscipuladorId) return false;
+                        const alreadyInKidsDiscipulado = list.some(d => {
+                          const rede = redes.find(r => r.id === d.redeId);
+                          return rede?.isKids && d.disciples?.some(disc => disc.member.id === u.id);
+                        });
+                        return !alreadyInKidsDiscipulado;
+                      })}
+                      getOptionLabel={(option) => option.name}
+                      value={null}
+                      onChange={(_, newValue) => {
+                        if (newValue) {
+                          setCreateDiscipleIds(prev => [...prev, newValue.id]);
+                        }
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Buscar discípula para adicionar..."
+                          className="bg-gray-800"
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="w-6 h-6">
+                              <AvatarImage src={option.photoUrl} alt={option.name} />
+                              <AvatarFallback className="bg-pink-600 text-white text-[10px] font-semibold">
+                                {getInitials(option.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="text-sm font-medium">{option.name}</div>
+                              <div className="text-xs text-gray-400">{option.email}</div>
+                            </div>
+                          </div>
+                        </li>
+                      )}
+                      ListboxProps={{ style: { maxHeight: 200 } }}
+                      noOptionsText="Nenhuma discípula disponível"
+                      blurOnSelect
+                      clearOnBlur
+                    />
+                    {createDiscipleIds.filter(id => id !== createDiscipuladorId).length > 0 && (
+                      <div className="mt-2 max-h-40 overflow-y-auto space-y-1 rounded border border-gray-700 p-2">
+                        {createDiscipleIds.map(id => {
+                          const member = users.find(u => u.id === id);
+                          if (!member || member.id === createDiscipuladorId) return null;
+                          return (
+                            <div key={id} className="flex items-center justify-between bg-gray-800 rounded px-3 py-2">
                               <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={createDiscipleIds.includes(user.id)}
-                                  readOnly
-                                  className="h-4 w-4"
-                                />
-                                <span>{user.name}</span>
+                                <Avatar className="w-7 h-7">
+                                  <AvatarImage src={member.photoUrl} alt={member.name} />
+                                  <AvatarFallback className="bg-pink-600 text-white text-[10px] font-semibold">
+                                    {getInitials(member.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm text-white">{member.name}</span>
                               </div>
-                            </MenuItem>
-                          ))}
-                      </Select>
-                    </FormControl>
+                              <button
+                                type="button"
+                                onClick={() => setCreateDiscipleIds(prev => prev.filter(did => did !== id))}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded p-1 transition-colors"
+                                title="Remover discípula"
+                              >
+                                <FiTrash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <p className="text-xs text-gray-400 mt-1">
-                      Apenas membros femininos que não estejam em outro discipulado Kids
+                      {createDiscipleIds.filter(id => id !== createDiscipuladorId).length > 0
+                        ? `${createDiscipleIds.filter(id => id !== createDiscipuladorId).length} discípula${createDiscipleIds.filter(id => id !== createDiscipuladorId).length > 1 ? 's' : ''} selecionada${createDiscipleIds.filter(id => id !== createDiscipuladorId).length > 1 ? 's' : ''}`
+                        : 'Apenas membros femininos que não estejam em outro discipulado Kids'}
                     </p>
                   </div>
                 )}
@@ -998,53 +1048,89 @@ export default function DiscipuladosPage() {
                 {/* Discípulas - apenas para redes Kids */}
                 {redes.find(r => r.id === editRedeId)?.isKids && (
                   <div className="w-full">
-                    <FormControl className="w-full">
-                      <InputLabel id="edit-disciples-label" size='small'>Discípulas</InputLabel>
-                      <Select
-                        labelId="edit-disciples-label"
-                        multiple
-                        value={editDiscipleIds}
-                        onChange={(e) => {
-                          const value = e.target.value as number[];
-                          setEditDiscipleIds(value);
-                        }}
-                        label="Discípulas"
-                        size="small"
-                        className="bg-gray-800 w-full"
-                        renderValue={(selected) => {
-                          const selectedMembers = users.filter(m => selected.includes(m.id));
-                          return selectedMembers.map(m => m.name).join(', ');
-                        }}
-                      >
-                        {users
-                          .filter(u => {
-                            // Apenas membros femininos
-                            if (u.gender !== 'FEMALE') return false;
-                            // Verificar se já está associada a outro discipulado Kids (exceto o atual)
-                            const alreadyInKidsDiscipulado = list.some(d => {
-                              if (d.id === editDiscipuladoId) return false; // Ignorar o discipulado atual
-                              const rede = redes.find(r => r.id === d.redeId);
-                              return rede?.isKids && d.disciples?.some(disc => disc.member.id === u.id);
-                            });
-                            return !alreadyInKidsDiscipulado;
-                          })
-                          .map((user) => (
-                            <MenuItem key={user.id} value={user.id}>
+                    <label className="text-sm text-gray-300 font-medium mb-1 block">Discípulas</label>
+                    <Autocomplete
+                      size="small"
+                      fullWidth
+                      options={users.filter(u => {
+                        if (u.gender !== 'FEMALE') return false;
+                        if (editDiscipleIds.includes(u.id)) return false;
+                        if (u.id === editDiscipuladorId) return false;
+                        const alreadyInKidsDiscipulado = list.some(d => {
+                          if (d.id === editDiscipuladoId) return false;
+                          const rede = redes.find(r => r.id === d.redeId);
+                          return rede?.isKids && d.disciples?.some(disc => disc.member.id === u.id);
+                        });
+                        return !alreadyInKidsDiscipulado;
+                      })}
+                      getOptionLabel={(option) => option.name}
+                      value={null}
+                      onChange={(_, newValue) => {
+                        if (newValue) {
+                          setEditDiscipleIds(prev => [...prev, newValue.id]);
+                        }
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Buscar discípula para adicionar..."
+                          className="bg-gray-800"
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <li {...props} key={option.id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="w-6 h-6">
+                              <AvatarImage src={option.photoUrl} alt={option.name} />
+                              <AvatarFallback className="bg-pink-600 text-white text-[10px] font-semibold">
+                                {getInitials(option.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="text-sm font-medium">{option.name}</div>
+                              <div className="text-xs text-gray-400">{option.email}</div>
+                            </div>
+                          </div>
+                        </li>
+                      )}
+                      ListboxProps={{ style: { maxHeight: 200 } }}
+                      noOptionsText="Nenhuma discípula disponível"
+                      blurOnSelect
+                      clearOnBlur
+                    />
+                    {editDiscipleIds.filter(id => id !== editDiscipuladorId).length > 0 && (
+                      <div className="mt-2 max-h-40 overflow-y-auto space-y-1 rounded border border-gray-700 p-2">
+                        {editDiscipleIds.map(id => {
+                          const member = users.find(u => u.id === id);
+                          if (!member || member.id === editDiscipuladorId) return null;
+                          return (
+                            <div key={id} className="flex items-center justify-between bg-gray-800 rounded px-3 py-2">
                               <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={editDiscipleIds.includes(user.id)}
-                                  readOnly
-                                  className="h-4 w-4"
-                                />
-                                <span>{user.name}</span>
+                                <Avatar className="w-7 h-7">
+                                  <AvatarImage src={member.photoUrl} alt={member.name} />
+                                  <AvatarFallback className="bg-pink-600 text-white text-[10px] font-semibold">
+                                    {getInitials(member.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm text-white">{member.name}</span>
                               </div>
-                            </MenuItem>
-                          ))}
-                      </Select>
-                    </FormControl>
+                              <button
+                                type="button"
+                                onClick={() => setEditDiscipleIds(prev => prev.filter(did => did !== id))}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded p-1 transition-colors"
+                                title="Remover discípula"
+                              >
+                                <FiTrash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <p className="text-xs text-gray-400 mt-1">
-                      Apenas membros femininos que não estejam em outro discipulado Kids
+                      {editDiscipleIds.filter(id => id !== editDiscipuladorId).length > 0
+                        ? `${editDiscipleIds.filter(id => id !== editDiscipuladorId).length} discípula${editDiscipleIds.filter(id => id !== editDiscipuladorId).length > 1 ? 's' : ''} selecionada${editDiscipleIds.filter(id => id !== editDiscipuladorId).length > 1 ? 's' : ''}`
+                        : 'Apenas membros femininos que não estejam em outro discipulado Kids'}
                     </p>
                   </div>
                 )}

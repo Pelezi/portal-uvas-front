@@ -35,6 +35,7 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
 
   // Ref para o campo de nome
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const configRequestControllerRef = useRef<AbortController | null>(null);
 
   // Estados para todos os campos
   const [name, setName] = useState('');
@@ -142,17 +143,30 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
   }, [isOpen, onClose, isEditing]);
 
   useEffect(() => {
+    if (!isOpen) return;
+    
+    const controller = new AbortController();
+    
     const loadConfigData = async () => {
+      configRequestControllerRef.current?.abort();
+      configRequestControllerRef.current = controller;
+      
+      // Determinar se deve buscar todos os dados
+      const canSeeAllFilters = !!user?.permission?.isAdmin || !!user?.permission?.pastorPresidente;
+      
       try {
         const [ministriesData, winnerPathsData, rolesData, membersData, congregacoesData, redesData, discipuladosData] = await Promise.all([
           configService.getMinistries(),
           configService.getWinnerPaths(),
           configService.getRoles(),
-          memberService.getMembersAutocomplete(),
-          congregacoesService.getCongregacoes(),
-          redesService.getRedes(),
-          discipuladosService.getDiscipulados(),
+          memberService.getMembersAutocomplete({ all: true }),
+          congregacoesService.getCongregacoes(canSeeAllFilters ? { all: true } : undefined),
+          redesService.getRedes(canSeeAllFilters ? { all: true } : {}),
+          discipuladosService.getDiscipulados(canSeeAllFilters ? { all: true } : undefined),
         ]);
+        
+        if (controller.signal.aborted) return;
+        
         setMinistries(ministriesData);
         setWinnerPaths(winnerPathsData);
         setRoles(rolesData);
@@ -161,11 +175,21 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
         setRedes(redesData || []);
         setDiscipulados(discipuladosData || []);
       } catch (err) {
+        if ((err as { code?: string; name?: string })?.code === 'ERR_CANCELED' || (err as { code?: string; name?: string })?.name === 'CanceledError') {
+          return;
+        }
         console.error('Failed to load config data:', err);
       }
     };
     loadConfigData();
-  }, []);
+    
+    return () => {
+      controller.abort();
+      if (configRequestControllerRef.current === controller) {
+        configRequestControllerRef.current = null;
+      }
+    };
+  }, [isOpen, user?.permission?.isAdmin, user?.permission?.pastorPresidente]);
 
   // Verificar se usuário pode gerenciar acesso ao sistema
   const canManageSystemAccess = useMemo(() => {

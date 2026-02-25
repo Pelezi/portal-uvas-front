@@ -52,7 +52,7 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     const loadCelulas = async () => {
       try {
-        const c = await celulasService.getCelulas()
+        const c = await celulasService.getCelulas({ all: true });
         setCelulas(c);
       } catch (e) {
         console.error(e);

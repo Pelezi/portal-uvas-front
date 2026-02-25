@@ -341,7 +341,28 @@ export default function CelulaModal({
               discipleOfId: selectedDiscipulado.id,
               all: true 
             });
-            setAllMembers(allMembersData || []);
+            
+            // Incluir também a discipuladora e a pastora da rede
+            const additionalMembers: any[] = [];
+            
+            // Adicionar discipuladora se existir
+            if (selectedDiscipulado.discipuladorMemberId && selectedDiscipulado.discipulador) {
+              const alreadyIncluded = (allMembersData || []).some(m => m.id === selectedDiscipulado.discipuladorMemberId);
+              if (!alreadyIncluded) {
+                additionalMembers.push(selectedDiscipulado.discipulador);
+              }
+            }
+            
+            // Adicionar pastora da rede se existir
+            if (selectedRede.pastorMemberId && selectedRede.pastor) {
+              const alreadyIncluded = (allMembersData || []).some(m => m.id === selectedRede.pastorMemberId) || 
+                                     additionalMembers.some(m => m.id === selectedRede.pastorMemberId);
+              if (!alreadyIncluded) {
+                additionalMembers.push(selectedRede.pastor);
+              }
+            }
+            
+            setAllMembers([...(allMembersData || []), ...additionalMembers]);
             
             // Buscar todas as células para verificar disponibilidade
             const allCelulasData = await celulasService.getCelulas();
@@ -409,7 +430,28 @@ export default function CelulaModal({
           discipleOfId: selectedDiscipulado.id,
           all: true 
         });
-        setAllMembers(allMembersData || []);
+        
+        // Incluir também a discipuladora e a pastora da rede
+        const additionalMembers: any[] = [];
+        
+        // Adicionar discipuladora se existir
+        if (selectedDiscipulado.discipuladorMemberId && selectedDiscipulado.discipulador) {
+          const alreadyIncluded = (allMembersData || []).some(m => m.id === selectedDiscipulado.discipuladorMemberId);
+          if (!alreadyIncluded) {
+            additionalMembers.push(selectedDiscipulado.discipulador);
+          }
+        }
+        
+        // Adicionar pastora da rede se existir
+        if (selectedRede.pastorMemberId && selectedRede.pastor) {
+          const alreadyIncluded = (allMembersData || []).some(m => m.id === selectedRede.pastorMemberId) || 
+                                 additionalMembers.some(m => m.id === selectedRede.pastorMemberId);
+          if (!alreadyIncluded) {
+            additionalMembers.push(selectedRede.pastor);
+          }
+        }
+        
+        setAllMembers([...(allMembersData || []), ...additionalMembers]);
         
         // Buscar todas as células para verificar disponibilidade
         const allCelulasData = await celulasService.getCelulas();
@@ -923,8 +965,6 @@ export default function CelulaModal({
                             if (m.id === leaderId) return false;
                             // Apenas membros femininos
                             if (m.gender !== 'FEMALE') return false;
-                            // Verificar nível ministerial
-                            if (!hasMinistryLevel(m.ministryPosition?.type)) return false;
                             return true;
                           });
                           

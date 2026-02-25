@@ -53,6 +53,7 @@ export default function MembersManagementPage() {
   // Filter modal state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const membersRequestControllerRef = useRef<AbortController | null>(null);
+  const filtersRequestControllerRef = useRef<AbortController | null>(null);
 
   // Reset to first page when any filter changes
   const prevFiltersRef = useRef({ filterCelulaId, filterDiscipuladoId, filterRedeId, filterCongregacaoId, filterName, filterMyDisciples, filterInactive, pageSize });
@@ -78,8 +79,14 @@ export default function MembersManagementPage() {
   });
 
   useEffect(() => {
+    const controller = new AbortController();
+    
     const loadFilters = async () => {
       if (authLoading) return;
+      
+      filtersRequestControllerRef.current?.abort();
+      filtersRequestControllerRef.current = controller;
+      
       try {
         const [c, d, r, cong] = await Promise.all([
           celulasService.getCelulas(canSeeAllFilters ? { all: true } : undefined),
@@ -87,15 +94,28 @@ export default function MembersManagementPage() {
           redesService.getRedes(canSeeAllFilters ? { all: true } : {}),
           congregacoesService.getCongregacoes(canSeeAllFilters ? { all: true } : undefined)
         ]);
+        
+        if (controller.signal.aborted) return;
+        
         setCelulas(c);
         setDiscipulados(d);
         setRedes(r);
         setCongregacoes(cong);
       } catch (e) {
+        if ((e as { code?: string; name?: string })?.code === 'ERR_CANCELED' || (e as { code?: string; name?: string })?.name === 'CanceledError') {
+          return;
+        }
         console.error(e);
       }
     };
     loadFilters();
+    
+    return () => {
+      controller.abort();
+      if (filtersRequestControllerRef.current === controller) {
+        filtersRequestControllerRef.current = null;
+      }
+    };
   }, [authLoading, canSeeAllFilters]);
 
   useEffect(() => {
