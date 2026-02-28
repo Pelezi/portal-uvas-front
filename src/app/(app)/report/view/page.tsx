@@ -1067,8 +1067,6 @@ export default function ViewReportPage() {
             </div>
           </div>
 
-          </div>
-
           {/* Resultados */}
           {isLoading ? (
             <div className="text-center py-12">
