@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Celula, Member } from '@/types';
 import { Calendar, Clock, MapPin, Network, BookOpen, Church, Home, Tag } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -9,41 +10,66 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { memberService } from '@/services/memberService';
+import { celulasService } from '@/services/celulasService';
+
+const MemberViewModal = dynamic(() => import('./MemberViewModal'), { ssr: false });
+const DiscipuladoViewModal = dynamic(() => import('./DiscipuladoViewModal'), { ssr: false });
+const RedeViewModal = dynamic(() => import('./RedeViewModal'), { ssr: false });
+const CongregacaoViewModal = dynamic(() => import('./CongregacaoViewModal'), { ssr: false });
 
 interface CelulaViewModalProps {
-  celula: Celula | null;
+  celulaId: number | null;
   isOpen: boolean;
   onClose: () => void;
-  discipuladorName?: string;
-  redeName?: string;
-  congregacaoName?: string;
 }
 
 export default function CelulaViewModal({
-  celula,
+  celulaId,
   isOpen,
   onClose,
-  discipuladorName,
-  redeName,
-  congregacaoName
 }: CelulaViewModalProps) {
+  const [celula, setCelula] = useState<Celula | null>(null);
+  const [loadingCelula, setLoadingCelula] = useState(false);
   const [celulaMembers, setCelulaMembers] = useState<Member[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [viewingMemberId, setViewingMemberId] = useState<number | null>(null);
+  const [viewingDiscipuladoId, setViewingDiscipuladoId] = useState<number | null>(null);
+  const [viewingRedeId, setViewingRedeId] = useState<number | null>(null);
+  const [viewingCongregacaoId, setViewingCongregacaoId] = useState<number | null>(null);
+
+  // ESC key handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (celula?.id && isOpen) {
-      loadMembers();
+    if (celulaId && isOpen) {
+      setLoadingCelula(true);
+      celulasService.getCelula(celulaId)
+        .then(data => {
+          setCelula(data);
+          loadMembers(celulaId);
+        })
+        .catch(err => {
+          console.error('Erro ao carregar célula:', err);
+          setCelula(null);
+        })
+        .finally(() => setLoadingCelula(false));
     } else {
+      setCelula(null);
       setCelulaMembers([]);
     }
-  }, [celula?.id, isOpen]);
+  }, [celulaId, isOpen]);
 
-  const loadMembers = async () => {
-    if (!celula?.id) return;
-
+  const loadMembers = async (id: number) => {
     setLoadingMembers(true);
     try {
-      const members = await memberService.getMembersAutocomplete({ celulaId: celula.id, isActive: true, all: true });
+      const members = await memberService.getMembersAutocomplete({ celulaId: id, isActive: true, all: true });
       setCelulaMembers(members || []);
     } catch (error) {
       console.error('Erro ao carregar membros:', error);
@@ -132,7 +158,12 @@ export default function CelulaViewModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl bg-gray-800 p-0 gap-0 overflow-hidden max-h-[90vh] rounded-lg">
-        {celula && (
+        {loadingCelula && (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+          </div>
+        )}
+        {!loadingCelula && celula && (
           <ScrollArea className="max-h-[90vh]">
             <div className="p-6 space-y-6">
               {/* Header */}
@@ -152,7 +183,10 @@ export default function CelulaViewModal({
                 <div className="space-y-3">
                   {/* Leader */}
                   {celula.leader && (
-                    <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                    <div 
+                      className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600 cursor-pointer hover:border-blue-500 transition-colors"
+                      onClick={() => setViewingMemberId(celula.leader!.id)}
+                    >
                       <Avatar className="h-11 w-11">
                         <AvatarImage src={celula.leader.photoUrl} alt={celula.leader.name} />
                         <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
@@ -172,7 +206,11 @@ export default function CelulaViewModal({
                       <p className="text-xs text-gray-400 mb-2">Líderes em Treinamento</p>
                       <div className="flex flex-wrap gap-2">
                         {celula.leadersInTraining.map(lit => (
-                          <div key={lit.id} className="flex items-center gap-2 bg-gray-900 rounded-full pl-1 pr-3 py-1 border border-gray-600">
+                          <div 
+                            key={lit.id} 
+                            className="flex items-center gap-2 bg-gray-900 rounded-full pl-1 pr-3 py-1 border border-gray-600 cursor-pointer hover:border-blue-500 transition-colors"
+                            onClick={() => setViewingMemberId(lit.member.id)}
+                          >
                             <Avatar className="h-6 w-6">
                               <AvatarImage src={lit.member.photoUrl} alt={lit.member.name} />
                               <AvatarFallback className="bg-gray-600 text-gray-300 text-[10px] font-medium">
@@ -227,7 +265,12 @@ export default function CelulaViewModal({
               {celula.parallelCelula && (
                 <section>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Célula Paralela</h3>
-                  <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                  <div 
+                    className={`flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600 transition-colors ${
+                      celula.parallelCelula.leader ? 'cursor-pointer hover:border-blue-500' : ''
+                    }`}
+                    onClick={() => celula.parallelCelula?.leader && setViewingMemberId(celula.parallelCelula.leader.id)}
+                  >
                     <Avatar className="h-11 w-11">
                       <AvatarImage src={celula.parallelCelula.leader?.photoUrl} alt={celula.parallelCelula.leader?.name} />
                       <AvatarFallback className="bg-purple-600 text-white text-sm font-semibold">
@@ -253,7 +296,10 @@ export default function CelulaViewModal({
                 <div className="space-y-3">
                   {/* Host */}
                   {celula.host && (
-                    <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                    <div 
+                      className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600 cursor-pointer hover:border-blue-500 transition-colors"
+                      onClick={() => setViewingMemberId(celula.host!.id)}
+                    >
                       <Home className="h-4 w-4 text-blue-400" />
                       <div>
                         <p className="text-xs text-gray-400">Anfitrião</p>
@@ -302,20 +348,29 @@ export default function CelulaViewModal({
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Hierarquia</h3>
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                  <div 
+                    className={`bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center ${celula.discipulado ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}
+                    onClick={() => celula.discipulado && setViewingDiscipuladoId(celula.discipulado.id)}
+                  >
                     <BookOpen className="h-4 w-4 text-blue-500 mx-auto mb-1" />
                     <p className="text-[10px] text-gray-400">Discipulado</p>
-                    <p className="text-sm font-medium text-white">{discipuladorName || "—"}</p>
+                    <p className="text-sm font-medium text-white">{celula.discipulado?.discipulador?.name || "—"}</p>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                  <div 
+                    className={`bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center ${celula.discipulado?.rede ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}
+                    onClick={() => celula.discipulado?.rede && setViewingRedeId(celula.discipulado.rede.id)}
+                  >
                     <Network className="h-4 w-4 text-blue-500 mx-auto mb-1" />
                     <p className="text-[10px] text-gray-400">Rede</p>
-                    <p className="text-sm font-medium text-white">{redeName || "—"}</p>
+                    <p className="text-sm font-medium text-white">{celula.discipulado?.rede?.name || "—"}</p>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                  <div 
+                    className={`bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center ${celula.discipulado?.rede?.congregacao ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}
+                    onClick={() => celula.discipulado?.rede?.congregacao && setViewingCongregacaoId(celula.discipulado.rede.congregacao.id)}
+                  >
                     <Church className="h-4 w-4 text-blue-500 mx-auto mb-1" />
                     <p className="text-[10px] text-gray-400">Congregação</p>
-                    <p className="text-sm font-medium text-white">{congregacaoName || "—"}</p>
+                    <p className="text-sm font-medium text-white">{celula.discipulado?.rede?.congregacao?.name || "—"}</p>
                   </div>
                 </div>
               </section>
@@ -335,10 +390,11 @@ export default function CelulaViewModal({
                   {!loadingMembers && celulaMembers.map(member => (
                     <div
                       key={member.id}
-                      className={`flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors ${isLeaderInTraining(member.id)
+                      className={`flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors cursor-pointer ${isLeaderInTraining(member.id)
                           ? 'border-2 border-blue-500/40'
                           : 'border border-transparent'
                         }`}
+                      onClick={() => setViewingMemberId(member.id)}
                     >
                       <Avatar className="h-8 w-8">
                         <AvatarImage src={member.photoUrl} alt={member.name} />
@@ -358,6 +414,38 @@ export default function CelulaViewModal({
           </ScrollArea>
         )}
       </DialogContent>
+
+      {viewingMemberId !== null && (
+        <MemberViewModal
+          memberId={viewingMemberId}
+          isOpen={true}
+          onClose={() => setViewingMemberId(null)}
+        />
+      )}
+
+      {viewingDiscipuladoId !== null && (
+        <DiscipuladoViewModal
+          discipuladoId={viewingDiscipuladoId}
+          isOpen={true}
+          onClose={() => setViewingDiscipuladoId(null)}
+        />
+      )}
+
+      {viewingRedeId !== null && (
+        <RedeViewModal
+          redeId={viewingRedeId}
+          isOpen={true}
+          onClose={() => setViewingRedeId(null)}
+        />
+      )}
+
+      {viewingCongregacaoId !== null && (
+        <CongregacaoViewModal
+          congregacaoId={viewingCongregacaoId}
+          isOpen={true}
+          onClose={() => setViewingCongregacaoId(null)}
+        />
+      )}
     </Dialog>
   );
 }

@@ -23,6 +23,11 @@ export const redesService = {
     return res.data;
   }
   ,
+  getRede: async (id: number): Promise<Rede> => {
+    const res = await api.get<Rede>(`/redes/${id}`);
+    return res.data;
+  },
+
   deleteRede: async (id: number): Promise<void> => {
     await api.delete(`/redes/${id}`);
   }

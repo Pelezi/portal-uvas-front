@@ -1,24 +1,59 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Congregacao } from '@/types';
 import { Church, MapPin, User, Users } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { congregacoesService } from '@/services/congregacoesService';
+
+const MemberViewModal = dynamic(() => import('./MemberViewModal'), { ssr: false });
+const RedeViewModal = dynamic(() => import('./RedeViewModal'), { ssr: false });
 
 interface CongregacaoViewModalProps {
-  congregacao: Congregacao | null;
+  congregacaoId: number | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export default function CongregacaoViewModal({ 
-  congregacao, 
+  congregacaoId, 
   isOpen, 
   onClose
 }: CongregacaoViewModalProps) {
+  const [congregacao, setCongregacao] = useState<Congregacao | null>(null);
+  const [loadingCongregacao, setLoadingCongregacao] = useState(false);
+  const [viewingMemberId, setViewingMemberId] = useState<number | null>(null);
+  const [viewingRedeId, setViewingRedeId] = useState<number | null>(null);
+
+  // ESC key handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (congregacaoId && isOpen) {
+      setLoadingCongregacao(true);
+      congregacoesService.getCongregacao(congregacaoId)
+        .then(setCongregacao)
+        .catch(err => {
+          console.error('Erro ao carregar congregação:', err);
+          setCongregacao(null);
+        })
+        .finally(() => setLoadingCongregacao(false));
+    } else {
+      setCongregacao(null);
+    }
+  }, [congregacaoId, isOpen]);
+
   const getInitials = (name?: string | null) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -47,7 +82,12 @@ export default function CongregacaoViewModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl bg-gray-800 p-0 gap-0 overflow-hidden max-h-[90vh] rounded-lg">
-        {congregacao && (
+        {loadingCongregacao && (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+          </div>
+        )}
+        {!loadingCongregacao && congregacao && (
           <ScrollArea className="max-h-[90vh]">
             <div className="p-6 space-y-6">
               {/* Header */}
@@ -72,7 +112,10 @@ export default function CongregacaoViewModal({
                 <div className="space-y-3">
                   {/* Pastor de Governo */}
                   {congregacao.pastorGoverno ? (
-                    <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                    <div 
+                      onClick={() => setViewingMemberId(congregacao.pastorGoverno!.id)}
+                      className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600 cursor-pointer hover:bg-gray-700 hover:border-blue-500 transition-all"
+                    >
                       <Avatar className="h-11 w-11">
                         <AvatarImage src={congregacao.pastorGoverno.photoUrl} alt={congregacao.pastorGoverno.name} />
                         <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
@@ -100,7 +143,10 @@ export default function CongregacaoViewModal({
 
                   {/* Vice Presidente */}
                   {congregacao.vicePresidente && (
-                    <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                    <div 
+                      onClick={() => setViewingMemberId(congregacao.vicePresidente!.id)}
+                      className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600 cursor-pointer hover:bg-gray-700 hover:border-blue-500 transition-all"
+                    >
                       <Avatar className="h-11 w-11">
                         <AvatarImage src={congregacao.vicePresidente.photoUrl} alt={congregacao.vicePresidente.name} />
                         <AvatarFallback className="bg-purple-600 text-white text-sm font-semibold">
@@ -116,7 +162,10 @@ export default function CongregacaoViewModal({
 
                   {/* Kids Leader */}
                   {congregacao.kidsLeader && (
-                    <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                    <div 
+                      onClick={() => setViewingMemberId(congregacao.kidsLeader!.id)}
+                      className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600 cursor-pointer hover:bg-gray-700 hover:border-blue-500 transition-all"
+                    >
                       <Avatar className="h-11 w-11">
                         <AvatarImage src={congregacao.kidsLeader.photoUrl} alt={congregacao.kidsLeader.name} />
                         <AvatarFallback className="bg-pink-600 text-white text-sm font-semibold">
@@ -191,8 +240,9 @@ export default function CongregacaoViewModal({
                   )}
                   {congregacao?.redes?.map(rede => (
                     <div 
-                      key={rede.id} 
-                      className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors border border-transparent"
+                      key={rede.id}
+                      onClick={() => setViewingRedeId(rede.id)}
+                      className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors border border-transparent cursor-pointer hover:border-blue-500"
                     >
                       <Avatar className="h-8 w-8">
                         {rede.pastor ? (
@@ -229,6 +279,22 @@ export default function CongregacaoViewModal({
           </ScrollArea>
         )}
       </DialogContent>
+
+      {viewingMemberId !== null && (
+        <MemberViewModal
+          memberId={viewingMemberId}
+          isOpen={true}
+          onClose={() => setViewingMemberId(null)}
+        />
+      )}
+
+      {viewingRedeId !== null && (
+        <RedeViewModal
+          redeId={viewingRedeId}
+          isOpen={true}
+          onClose={() => setViewingRedeId(null)}
+        />
+      )}
     </Dialog>
   );
 }

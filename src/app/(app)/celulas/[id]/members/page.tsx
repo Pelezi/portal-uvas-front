@@ -7,9 +7,11 @@ import { Celula, Member } from '@/types';
 import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import MemberModal from '@/components/MemberModal';
-import MemberViewModal from '@/components/MemberViewModal';
 import DuplicateMemberModal from '@/components/DuplicateMemberModal';
+
+const MemberViewModal = dynamic(() => import('@/components/MemberViewModal'), { ssr: false });
 import ModalConfirm from '@/components/ModalConfirm';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { FiEdit2, FiTrash2, FiUserPlus, FiEye } from 'react-icons/fi';
@@ -388,6 +390,8 @@ export default function CelulaMembersPage({ params }: { params: Promise<{ id: st
         celulas={celulas}
         onSave={handleModalSave}
         initialCelulaId={celulaId}
+        showSearchUnassigned
+        onMemberAssigned={load}
       />
 
       <ModalConfirm

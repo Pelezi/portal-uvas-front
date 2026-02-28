@@ -22,6 +22,11 @@ export const discipuladosService = {
     const res = await api.put<Discipulado>(`/discipulados/${id}`, data);
     return res.data;
   },
+  getDiscipulado: async (id: number): Promise<Discipulado> => {
+    const res = await api.get<Discipulado>(`/discipulados/${id}`);
+    return res.data;
+  },
+
   deleteDiscipulado: async (id: number): Promise<void> => {
     await api.delete(`/discipulados/${id}`);
   },

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Celula, Member, Discipulado, Rede, Congregacao } from '@/types';
 import { congregacoesService } from '@/services/congregacoesService';
-import { createTheme, FormControl, InputLabel, MenuItem, Select, ThemeProvider } from '@mui/material';
+import { createTheme, ThemeProvider, TextField } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -12,9 +12,12 @@ import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/pt-br';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import SingleMemberSelect from '@/components/SingleMemberSelect';
+import MultiMemberSelect from '@/components/MultiMemberSelect';
+import StyledSelect from '@/components/StyledSelect';
 
 interface CelulaModalProps {
-  celula: Celula | null;
+  celulaId?: number | null;
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: {
@@ -45,7 +48,7 @@ interface CelulaModalProps {
 }
 
 export default function CelulaModal({
-  celula,
+  celulaId,
   isOpen,
   onClose,
   onSave,
@@ -53,19 +56,18 @@ export default function CelulaModal({
   discipulados,
   redes
 }: CelulaModalProps) {
-  const isEditing = !!celula;
+  const isEditing = !!celulaId;
   const { user } = useAuth();
 
   // Estados
+  const [celula, setCelula] = useState<Celula | null>(null);
+  const [loadingCelula, setLoadingCelula] = useState(false);
   const [name, setName] = useState('');
   const [congregacoes, setCongregacoes] = useState<Congregacao[]>([]);
   const [congregacaoId, setCongregacaoId] = useState<number | null>(null);
   const [redeId, setRedeId] = useState<number | null>(null);
   const [discipuladoId, setDiscipuladoId] = useState<number | null>(null);
-  const [leaderQuery, setLeaderQuery] = useState('');
   const [leaderId, setLeaderId] = useState<number | null>(null);
-  const [leaderName, setLeaderName] = useState('');
-  const [showLeaderDropdown, setShowLeaderDropdown] = useState(false);
   const [leaderInTrainingIds, setLeaderInTrainingIds] = useState<number[]>([]);
   const [celulaMemberOptions, setCelulaMemberOptions] = useState<Member[]>([]);
   const [allMembers, setAllMembers] = useState<Member[]>([]); // Todos os membros para células Kids
@@ -85,16 +87,14 @@ export default function CelulaModal({
   const [loadingCep, setLoadingCep] = useState(false);
 
   // New fields
-  const [hostQuery, setHostQuery] = useState('');
   const [hostId, setHostId] = useState<number | null>(null);
-  const [hostName, setHostName] = useState('');
-  const [showHostDropdown, setShowHostDropdown] = useState(false);
   const [openingDate, setOpeningDate] = useState<Dayjs | null>(null);
   const [hasNextHost, setHasNextHost] = useState(false);
   const [celulaType, setCelulaType] = useState<string>('');
   const [celulaLevel, setCelulaLevel] = useState<string>('');
   const [parallelCelulaId, setParallelCelulaId] = useState<number | null>(null);
   const [parallelCelulaOptions, setParallelCelulaOptions] = useState<Celula[]>([]);
+  const [hasLoadedMainCongregacaoAddress, setHasLoadedMainCongregacaoAddress] = useState(false);
 
   // Validação
   const [touched, setTouched] = useState({
@@ -105,8 +105,7 @@ export default function CelulaModal({
   // Kids validation
   const [genderError, setGenderError] = useState('');
 
-  const leaderDropdownRef = useRef<HTMLDivElement>(null);
-  const hostDropdownRef = useRef<HTMLDivElement>(null);
+
 
   // Lógica de permissões para edição
   const editPermissions = useMemo(() => {
@@ -223,20 +222,30 @@ export default function CelulaModal({
     };
   }, [isOpen, onClose]);
 
+  // Fetch celula data by ID when editing
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (showLeaderDropdown && leaderDropdownRef.current && !leaderDropdownRef.current.contains(target)) {
-        setShowLeaderDropdown(false);
+    const fetchCelula = async () => {
+      if (!celulaId || !isOpen) {
+        setCelula(null);
+        return;
       }
-      if (showHostDropdown && hostDropdownRef.current && !hostDropdownRef.current.contains(target)) {
-        setShowHostDropdown(false);
+
+      setLoadingCelula(true);
+      try {
+        const { celulasService } = await import('@/services/celulasService');
+        const data = await celulasService.getCelula(celulaId);
+        setCelula(data);
+      } catch (error) {
+        console.error('Error loading celula:', error);
+        toast.error('Erro ao carregar dados da célula');
+        onClose();
+      } finally {
+        setLoadingCelula(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showLeaderDropdown, showHostDropdown]);
+    fetchCelula();
+  }, [celulaId, isOpen, onClose]);
 
   const muiTheme = createTheme({
     palette: {
@@ -254,20 +263,28 @@ export default function CelulaModal({
         const isAdmin = user?.permission?.isAdmin || false;
         const data = await congregacoesService.getCongregacoes(isAdmin ? { all: true } : undefined);
         setCongregacoes(data || []);
+        
+        // Preencher cidade e estado da congregação principal automaticamente (apenas na criação)
+        if (!celula && data && data.length > 0 && !hasLoadedMainCongregacaoAddress) {
+          const mainCongregacao = data.find(c => c.isPrincipal);
+          if (mainCongregacao) {
+            if (mainCongregacao.city) setCity(mainCongregacao.city);
+            if (mainCongregacao.state) setState(mainCongregacao.state);
+            setHasLoadedMainCongregacaoAddress(true);
+          }
+        }
       } catch (error) {
         console.error('Error loading congregações:', error);
       }
     };
     loadCongregacoes();
-  }, [user]);
+  }, [user, celulaId, hasLoadedMainCongregacaoAddress]);
 
   useEffect(() => {
     if (celula) {
       // Modo edição
       setName(celula.name || '');
       setLeaderId(celula.leaderMemberId ?? null);
-      setLeaderName(celula.leader?.name || '');
-      setLeaderQuery('');
       setDiscipuladoId(celula.discipuladoId ?? null);
       setWeekday(celula.weekday ?? null);
       setTime(celula.time ? dayjs(celula.time, 'HH:mm') : dayjs().hour(19).minute(30));
@@ -284,8 +301,6 @@ export default function CelulaModal({
 
       // New fields
       setHostId(celula.hostMemberId ?? null);
-      setHostName(celula.host?.name || '');
-      setHostQuery('');
       setOpeningDate(celula.openingDate ? dayjs(celula.openingDate) : null);
       setHasNextHost(celula.hasNextHost ?? false);
       setCelulaType(celula.type || '');
@@ -489,8 +504,6 @@ export default function CelulaModal({
       const selectedMember = membersList.find(m => m.id === leaderId);
       if (selectedMember && selectedMember.gender !== 'FEMALE') {
         setLeaderId(null);
-        setLeaderName('');
-        setLeaderQuery('');
         setGenderError('Redes Kids só podem ter líderes do gênero feminino');
       }
     } else {
@@ -503,9 +516,7 @@ export default function CelulaModal({
     setCongregacaoId(null);
     setRedeId(null);
     setDiscipuladoId(null);
-    setLeaderQuery('');
     setLeaderId(null);
-    setLeaderName('');
     setLeaderInTrainingIds([]);
     setCelulaMemberOptions([]);
     setAllMembers([]);
@@ -520,9 +531,7 @@ export default function CelulaModal({
     setCity('');
     setComplement('');
     setState('');
-    setHostQuery('');
     setHostId(null);
-    setHostName('');
     setOpeningDate(null);
     setHasNextHost(false);
     setCelulaType('');
@@ -530,6 +539,7 @@ export default function CelulaModal({
     setParallelCelulaId(null);
     setTouched({ name: false, discipulado: false });
     setGenderError('');
+    setHasLoadedMainCongregacaoAddress(false);
   };
 
   const formatCep = (value: string) => {
@@ -612,7 +622,7 @@ export default function CelulaModal({
       leaderMemberId: leaderId || undefined,
       hostMemberId: hostId || undefined,
       discipuladoId: discipuladoId || undefined,
-      leaderInTrainingIds: leaderInTrainingIds.length > 0 ? leaderInTrainingIds : undefined,
+      leaderInTrainingIds: leaderInTrainingIds,
       openingDate: openingDate ? openingDate.format('YYYY-MM-DD') : undefined,
       hasNextHost: hasNextHost,
       type: celulaType || undefined,
@@ -653,98 +663,140 @@ export default function CelulaModal({
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {/* Nome */}
+            {loadingCelula ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <>
+            {/* ===== SEÇÃO: INFORMAÇÕES BÁSICAS ===== */}
             <div>
-              <label className="block mb-1 text-sm">Nome *</label>
-              <input
-                placeholder="Nome da célula"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => setTouched({ ...touched, name: true })}
-                className={`border p-2 rounded w-full bg-gray-800 text-white h-10 ${touched.name && !name.trim() ? 'border-red-500' : ''
-                  }`}
-              />
+              <h4 className="text-md font-semibold mb-4 text-blue-400 flex items-center gap-2">
+                <span>📋</span> Informações Básicas
+              </h4>
+              
+              {/* Nome */}
+              <div className="mb-4">
+                <label className="block mb-1 text-sm">Nome *</label>
+                <input
+                  placeholder="Nome da célula"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={() => setTouched({ ...touched, name: true })}
+                  className={`border p-2 rounded w-full bg-gray-800 text-white h-10 ${touched.name && !name.trim() ? 'border-red-500' : ''
+                    }`}
+                />
+              </div>
+
+              {/* Tipo e Nível */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <StyledSelect
+                    id="type"
+                    label="Tipo"
+                    value={celulaType}
+                    onChange={(val) => setCelulaType(String(val))}
+                    options={[
+                      { value: 'YOUNG', label: 'Jovens' },
+                      { value: 'ADULT', label: 'Adultos' },
+                      { value: 'TEENAGER', label: 'Adolescentes' },
+                      { value: 'CHILDISH', label: 'Crianças' },
+                    ]}
+                    placeholder="Selecione o tipo"
+                  />
+                </div>
+
+                <div>
+                  <StyledSelect
+                    id="level"
+                    label="Nível"
+                    value={celulaLevel}
+                    onChange={(val) => setCelulaLevel(String(val))}
+                    options={[
+                      { value: 'EVANGELISM', label: 'Evangelismo' },
+                      { value: 'EDIFICATION', label: 'Edificação' },
+                      { value: 'COMMUNION', label: 'Comunhão' },
+                      { value: 'MULTIPLICATION', label: 'Multiplicação' },
+                      { value: 'UNKNOWN', label: 'Desconhecido' },
+                    ]}
+                    placeholder="Selecione o nível"
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Congregação */}
-            <div>
-              <FormControl className="w-full">
-                <InputLabel id="congregacao-label" size='small'>Congregação *</InputLabel>
-                <Select
-                  labelId="congregacao-label"
-                  value={congregacaoId ?? ''}
-                  onChange={(e) => {
-                    setCongregacaoId(e.target.value ? Number(e.target.value) : null);
-                    setRedeId(null);
-                    setDiscipuladoId(null);
-                  }}
-                  label="Congregação"
-                  size="small"
-                  className="bg-gray-800 w-full"
-                  disabled={!editPermissions.canEditCongregacao}>
-                  <MenuItem value="">Selecione congregação</MenuItem>
-                  {congregacoes.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {!editPermissions.canEditCongregacao && isEditing && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Você não tem permissão para alterar a congregação
-                </p>
-              )}
-            </div>
+            {/* Divider */}
+            <div className="border-t border-gray-700 my-6"></div>
 
-            {/* Rede */}
+            {/* ===== SEÇÃO: HIERARQUIA ORGANIZACIONAL ===== */}
             <div>
-              <FormControl className="w-full">
-                <InputLabel id="rede-label" size='small'>Rede *</InputLabel>
-                <Select
-                  labelId="rede-label"
-                  value={redeId ?? ''}
-                  onChange={(e) => {
-                    const selectedRedeId = e.target.value ? Number(e.target.value) : null;
-                    setRedeId(selectedRedeId);
-                    setDiscipuladoId(null);
-                    // Auto-preencher congregação quando rede é selecionada
-                    if (selectedRedeId) {
-                      const rede = redes.find(r => r.id === selectedRedeId);
-                      if (rede?.congregacaoId) {
-                        setCongregacaoId(rede.congregacaoId);
+              <h4 className="text-md font-semibold mb-4 text-purple-400 flex items-center gap-2">
+                <span>🏛️</span> Hierarquia Organizacional
+              </h4>
+
+              {/* Congregação e Rede */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <StyledSelect
+                    id="congregacao"
+                    label="Congregação"
+                    required
+                    value={congregacaoId ?? ''}
+                    onChange={(val) => {
+                      setCongregacaoId(val ? Number(val) : null);
+                      setRedeId(null);
+                      setDiscipuladoId(null);
+                    }}
+                    options={congregacoes.map((c) => ({ value: c.id, label: c.name }))}
+                    placeholder="Selecione congregação"
+                    disabled={!editPermissions.canEditCongregacao}
+                  />
+                  {!editPermissions.canEditCongregacao && isEditing && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Você não tem permissão para alterar a congregação
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <StyledSelect
+                    id="rede"
+                    label="Rede"
+                    required
+                    value={redeId ?? ''}
+                    onChange={(val) => {
+                      const selectedRedeId = val ? Number(val) : null;
+                      setRedeId(selectedRedeId);
+                      setDiscipuladoId(null);
+                      if (selectedRedeId) {
+                        const rede = redes.find(r => r.id === selectedRedeId);
+                        if (rede?.congregacaoId) {
+                          setCongregacaoId(rede.congregacaoId);
+                        }
                       }
-                    }
-                  }}
-                  label="Rede"
-                  size="small"
-                  className="bg-gray-800 w-full"
-                  disabled={!editPermissions.canEditRede}>
-                  <MenuItem value="">Selecione rede</MenuItem>
-                  {redes.filter(r => !congregacaoId || r.congregacaoId === congregacaoId).map((r) => (
-                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {!editPermissions.canEditRede && isEditing && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Você não tem permissão para alterar a rede
-                </p>
-              )}
-            </div>
+                    }}
+                    options={redes.filter(r => !congregacaoId || r.congregacaoId === congregacaoId).map((r) => ({ value: r.id, label: r.name }))}
+                    placeholder="Selecione rede"
+                    disabled={!editPermissions.canEditRede}
+                  />
+                  {!editPermissions.canEditRede && isEditing && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Você não tem permissão para alterar a rede
+                    </p>
+                  )}
+                </div>
+              </div>
 
-            {/* Discipulado */}
-            <div>
-              <FormControl
-                className="w-full"
-                error={touched.discipulado && !discipuladoId}
-              >
-                <InputLabel id="discipulado-label" size='small'>Discipulado *</InputLabel>
-                <Select
-                  labelId="discipulado-label"
+              {/* Discipulado */}
+              <div>
+                <StyledSelect
+                  id="discipulado"
+                  label="Discipulado"
+                  required
                   value={discipuladoId ?? ''}
-                  onChange={(e) => {
-                    const selectedDiscipuladoId = e.target.value ? Number(e.target.value) : null;
+                  onChange={(val) => {
+                    const selectedDiscipuladoId = val ? Number(val) : null;
                     setDiscipuladoId(selectedDiscipuladoId);
-                    // Auto-preencher rede e congregação quando discipulado é selecionado
                     if (selectedDiscipuladoId) {
                       const discipulado = discipulados.find(d => d.id === selectedDiscipuladoId);
                       if (discipulado?.redeId) {
@@ -757,279 +809,35 @@ export default function CelulaModal({
                     }
                   }}
                   onBlur={() => setTouched({ ...touched, discipulado: true })}
-                  label="Discipulado"
-                  size="small"
-                  className="bg-gray-800 w-full"
-                  disabled={!editPermissions.canEditDiscipulado}>
-                  <MenuItem value="">Selecione discipulado</MenuItem>
-                  {discipulados.filter(d => !redeId || d.redeId === redeId).map((d) => (
-                    <MenuItem key={d.id} value={d.id}>{d.discipulador?.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {!editPermissions.canEditDiscipulado && isEditing && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Você não tem permissão para alterar o discipulado
-                </p>
-              )}
-            </div>
-
-            {/* Líder */}
-            <div>
-              <label className="block mb-1 text-sm">Líder</label>
-              <div ref={leaderDropdownRef} className="relative w-full">
-                <input
-                  placeholder="Buscar líder"
-                  value={leaderQuery || leaderName}
-                  onChange={(e) => {
-                    setLeaderQuery(e.target.value);
-                    setLeaderName('');
-                    setLeaderId(null);
-                    setShowLeaderDropdown(true);
-                  }}
-                  onFocus={() => setShowLeaderDropdown(true)}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-                  disabled={!editPermissions.canEditLeader}
+                  options={discipulados.filter(d => !redeId || d.redeId === redeId).map((d) => ({ value: d.id, label: d.discipulador?.name || `Discipulado ${d.id}` }))}
+                  placeholder="Selecione discipulado"
+                  error={touched.discipulado && !discipuladoId}
+                  disabled={!editPermissions.canEditDiscipulado}
                 />
-                {genderError && <div className="text-red-500 text-xs mt-1">{genderError}</div>}
-                {!editPermissions.canEditLeader && isEditing && (
+                {!editPermissions.canEditDiscipulado && isEditing && (
                   <p className="text-xs text-gray-400 mt-1">
-                    Você não tem permissão para alterar o líder
+                    Você não tem permissão para alterar o discipulado
                   </p>
                 )}
-                {showLeaderDropdown && editPermissions.canEditLeader && (
-                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                    {(() => {
-                      // Encontrar a rede - pode vir direto do redeId ou do discipulado
-                      let selectedRede = redes.find(r => r.id === redeId);
-                      
-                      // Se não tem redeId mas tem discipuladoId, buscar a rede do discipulado
-                      if (!selectedRede && discipuladoId) {
-                        const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
-                        if (selectedDiscipulado) {
-                          selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
-                        }
-                      }
-                      
-                      // Se for rede Kids, usar apenas os discípulos do discipulado (allMembers)
-                      // Caso contrário, usar todos os membros disponíveis
-                      const availableMembers = selectedRede?.isKids ? allMembers : members;
-                      
-                      return availableMembers.filter(member => {
-                        // Para rede Kids, os membros já são apenas discípulos femininos
-                        // Para outras redes, não tem filtro de gênero
-                        const q = (leaderQuery || '').toLowerCase();
-                        if (!q) return true;
-                        return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
-                      }).map(member => (
-                      <div
-                        key={member.id}
-                        className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
-                        onMouseDown={() => {
-                          setLeaderId(member.id);
-                          setLeaderName(member.name);
-                          setLeaderQuery('');
-                          setShowLeaderDropdown(false);
-                        }}
-                      >
-                        <div>
-                          <div className="text-sm font-medium text-white">{member.name}</div>
-                          <div className="text-xs text-gray-400">{member.email}</div>
-                        </div>
-                        <div className="text-xs text-green-600">Selecionar</div>
-                      </div>
-                      ));
-                    })()}
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Anfitrião */}
+            {/* Divider */}
+            <div className="border-t border-gray-700 my-6"></div>
+
+            {/* ===== SEÇÃO: LIDERANÇA ===== */}
             <div>
-              <label className="block mb-1 text-sm">Anfitrião</label>
-              <div ref={hostDropdownRef} className="relative w-full">
-                <input
-                  placeholder="Buscar anfitrião"
-                  value={hostQuery || hostName}
-                  onChange={(e) => {
-                    setHostQuery(e.target.value);
-                    setHostName('');
-                    setHostId(null);
-                    setShowHostDropdown(true);
-                  }}
-                  onFocus={() => setShowHostDropdown(true)}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-                />
-                {showHostDropdown && (
-                  <div className="absolute left-0 right-0 bg-gray-800 border mt-1 rounded max-h-44 overflow-auto z-50">
-                    {members.filter(member => {
-                      const q = (hostQuery || '').toLowerCase();
-                      if (!q) return true;
-                      return (member.name.toLowerCase().includes(q) || (member.email || '').toLowerCase().includes(q));
-                    }).map(member => (
-                      <div
-                        key={member.id}
-                        className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
-                        onMouseDown={() => {
-                          setHostId(member.id);
-                          setHostName(member.name);
-                          setHostQuery('');
-                          setShowHostDropdown(false);
-                        }}
-                      >
-                        <div>
-                          <div className="text-sm font-medium text-white">{member.name}</div>
-                          <div className="text-xs text-gray-400">{member.email}</div>
-                        </div>
-                        <div className="text-xs text-green-600">Selecionar</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+              <h4 className="text-md font-semibold mb-4 text-green-400 flex items-center gap-2">
+                <span>👥</span> Liderança
+              </h4>
 
-            {/* Líderes em Treinamento */}
-            {(() => {
-              // Mostrar campo de líderes em treinamento se:
-              // 1. Estiver editando OU
-              // 2. Estiver criando E for rede Kids com membros carregados
-              if (isEditing) return true;
-              
-              if (!discipuladoId) return false;
-              
-              const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
-              if (!selectedDiscipulado) return false;
-              
-              const selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
-              return selectedRede?.isKids && allMembers.length > 0;
-            })() && (
-              <div className="md:col-span-2">
-                <label className="block mb-1 text-sm">Líderes em Treinamento</label>
-                <ThemeProvider theme={muiTheme}>
-                  <FormControl className="w-full">
-                    <InputLabel id="leader-in-training-label" size='small'>Selecione os líderes em treinamento</InputLabel>
-                    <Select
-                      labelId="leader-in-training-label"
-                      multiple
-                      value={leaderInTrainingIds}
-                      onChange={(e) => {
-                        const value = e.target.value as number[];
-                        setLeaderInTrainingIds(value);
-                      }}
-                      label="Selecione os líderes em treinamento"
-                      size="small"
-                      className="bg-gray-800 w-full"
-                      renderValue={(selected) => {
-                        const selectedRede = (() => {
-                          let sr = redes.find(r => r.id === redeId);
-                          if (!sr && discipuladoId) {
-                            const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
-                            if (selectedDiscipulado) {
-                              sr = redes.find(r => r.id === selectedDiscipulado.redeId);
-                            }
-                          }
-                          return sr;
-                        })();
-                        
-                        const membersList = selectedRede?.isKids ? allMembers : celulaMemberOptions;
-                        const selectedMembers = membersList.filter(m => selected.includes(m.id));
-                        
-                        return selectedMembers.map(m => m.name).join(', ');
-                      }}
-                    >
-                      {(() => {
-                        // Encontrar a rede
-                        let selectedRede = redes.find(r => r.id === redeId);
-                        
-                        if (!selectedRede && discipuladoId) {
-                          const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
-                          if (selectedDiscipulado) {
-                            selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
-                          }
-                        }
-                        
-                        // Função para verificar se o ministério é >= LEADER_IN_TRAINING
-                        const hasMinistryLevel = (ministryType: string | null | undefined): boolean => {
-                          const ministryHierarchy = ['VISITOR', 'REGULAR_ATTENDEE', 'MEMBER', 'LEADER_IN_TRAINING', 'LEADER', 'DISCIPULADOR', 'PASTOR', 'PRESIDENT_PASTOR'];
-                          const requiredIndex = ministryHierarchy.indexOf('LEADER_IN_TRAINING');
-                          const memberIndex = ministryType ? ministryHierarchy.indexOf(ministryType) : -1;
-                          return memberIndex >= requiredIndex;
-                        };
-                        
-                        // Se for rede Kids, usar lógica especial
-                        if (selectedRede?.isKids) {
-                          const filteredMembers = allMembers.filter(m => {
-                            // Não incluir o líder
-                            if (m.id === leaderId) return false;
-                            // Apenas membros femininos
-                            if (m.gender !== 'FEMALE') return false;
-                            return true;
-                          });
-                          
-                          const menuItems = filteredMembers
-                            .map((member) => {
-                              // Verificar se já está em outra célula
-                              const isInAnotherCelula = allCelulas.some(c => 
-                                c.id !== celula?.id && 
-                                c.leadersInTraining?.some(lit => lit.member.id === member.id)
-                              );
-                              
-                              return (
-                                <MenuItem 
-                                  key={member.id} 
-                                  value={member.id}
-                                  disabled={isInAnotherCelula}
-                                >
-                                  <div className="flex items-center gap-2 w-full">
-                                    <input
-                                      type="checkbox"
-                                      checked={leaderInTrainingIds.includes(member.id)}
-                                      readOnly
-                                      className="h-4 w-4"
-                                      disabled={isInAnotherCelula}
-                                    />
-                                    <div className="flex-1">
-                                      <span className={isInAnotherCelula ? 'text-gray-500' : ''}>
-                                        {member.name}
-                                      </span>
-                                      {isInAnotherCelula && (
-                                        <span className="text-xs text-gray-500 ml-2">(Já em outra célula)</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </MenuItem>
-                              );
-                            });
-                          
-                          return menuItems;
-                        } else {
-                          // Lógica padrão para células não-Kids
-                          const nonKidsItems = celulaMemberOptions
-                            .filter(m => m.id !== leaderId)
-                            .map((member) => (
-                              <MenuItem key={member.id} value={member.id}>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={leaderInTrainingIds.includes(member.id)}
-                                    readOnly
-                                    className="h-4 w-4"
-                                  />
-                                  <span>{member.name}</span>
-                                </div>
-                              </MenuItem>
-                            ));
-                          
-                          return nonKidsItems;
-                        }
-                      })()}
-                    </Select>
-                  </FormControl>
-                </ThemeProvider>
-                <p className="text-xs text-gray-400 mt-1">
-                  {(() => {
+              {/* Líder */}
+              <div className="mb-4">
+                <SingleMemberSelect
+                  label="Líder"
+                  value={leaderId}
+                  onChange={(id) => setLeaderId(id)}
+                  options={(() => {
                     let selectedRede = redes.find(r => r.id === redeId);
                     if (!selectedRede && discipuladoId) {
                       const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
@@ -1037,278 +845,455 @@ export default function CelulaModal({
                         selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
                       }
                     }
-                    
-                    if (selectedRede?.isKids) {
-                      return 'Apenas discípulos do discipulado. Membros já em outra célula estão bloqueados.';
-                    } else {
-                      return 'Apenas membros desta célula podem ser selecionados como líderes em treinamento';
-                    }
+                    return selectedRede?.isKids ? allMembers : members;
                   })()}
-                </p>
+                  placeholder="Buscar líder..."
+                  disabled={!editPermissions.canEditLeader}
+                  avatarColor="bg-green-600"
+                />
+                {genderError && <div className="text-red-500 text-xs mt-1">{genderError}</div>}
+                {!editPermissions.canEditLeader && isEditing && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Você não tem permissão para alterar o líder
+                  </p>
+                )}
               </div>
-            )}
 
-            {/* Dia da Semana */}
-            <div>
-              <FormControl className="w-full">
-                <InputLabel id="weekday-label" size='small'>Dia da Semana *</InputLabel>
-                <Select
-                  labelId="weekday-label"
-                  value={weekday ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    // Se não houver valor (string vazia) ou for undefined, define null
-                    // Caso contrário, converte para número (incluindo 0 para domingo)
-                    setWeekday(!val && val !== 0 ? null : Number(val));
-                  }}
-                  label="Dia da Semana *"
-                  size="small"
-                  className="bg-gray-800 w-full">
-                  <MenuItem value="">Selecione o dia</MenuItem>
-                  <MenuItem value={0}>Domingo</MenuItem>
-                  <MenuItem value={1}>Segunda-feira</MenuItem>
-                  <MenuItem value={2}>Terça-feira</MenuItem>
-                  <MenuItem value={3}>Quarta-feira</MenuItem>
-                  <MenuItem value={4}>Quinta-feira</MenuItem>
-                  <MenuItem value={5}>Sexta-feira</MenuItem>
-                  <MenuItem value={6}>Sábado</MenuItem>
-                </Select>
-              </FormControl>
-            </div>
-
-            {/* Horário */}
-            <div>
-              <label className="block mb-1 text-sm">Horário *</label>
-              <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
-                <TimePicker
-                  value={time}
-                  onChange={(newValue: Dayjs | null) => setTime(newValue)}
-                  format="HH:mm"
-                  ampm={false}
-                  localeText={{
-                    toolbarTitle: 'Selecionar horário',
-                    cancelButtonLabel: 'Cancelar',
-                    okButtonLabel: 'OK',
-                  }}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      size: 'small',
-                      placeholder: '19:30',
-                    },
-                  }}
+              {/* Anfitrião */}
+              <div className="mb-4">
+                <SingleMemberSelect
+                  label="Anfitrião"
+                  value={hostId}
+                  onChange={(id) => setHostId(id)}
+                  options={members}
+                  placeholder="Buscar anfitrião..."
+                  avatarColor="bg-purple-600"
                 />
-              </LocalizationProvider>
-            </div>
+              </div>
 
-            {/* Data de Abertura */}
-            <div>
-              <label className="block mb-1 text-sm">Data de Abertura</label>
-              <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
-                <DatePicker
-                  value={openingDate}
-                  onChange={(newValue: Dayjs | null) => setOpeningDate(newValue)}
-                  format="DD/MM/YYYY"
-                  localeText={{
-                    toolbarTitle: 'Selecionar data',
-                    cancelButtonLabel: 'Cancelar',
-                    okButtonLabel: 'OK',
-                  }}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      size: 'small',
-                      placeholder: 'DD/MM/AAAA',
-                    },
-                  }}
-                />
-              </LocalizationProvider>
-            </div>
-
-            {/* Tipo */}
-            <div>
-              <FormControl className="w-full">
-                <InputLabel id="type-label" size='small'>Tipo</InputLabel>
-                <Select
-                  labelId="type-label"
-                  value={celulaType}
-                  onChange={(e) => setCelulaType(e.target.value)}
-                  label="Tipo"
-                  size="small"
-                  className="bg-gray-800 w-full">
-                  <MenuItem value="">Selecione o tipo</MenuItem>
-                  <MenuItem value="YOUNG">Jovens</MenuItem>
-                  <MenuItem value="ADULT">Adultos</MenuItem>
-                  <MenuItem value="TEENAGER">Adolescentes</MenuItem>
-                  <MenuItem value="CHILDISH">Crianças</MenuItem>
-                </Select>
-              </FormControl>
-            </div>
-
-            {/* Nível */}
-            <div>
-              <FormControl className="w-full">
-                <InputLabel id="level-label" size='small'>Nível</InputLabel>
-                <Select
-                  labelId="level-label"
-                  value={celulaLevel}
-                  onChange={(e) => setCelulaLevel(e.target.value)}
-                  label="Nível"
-                  size="small"
-                  className="bg-gray-800 w-full">
-                  <MenuItem value="">Selecione o nível</MenuItem>
-                  <MenuItem value="EVANGELISM">Evangelismo</MenuItem>
-                  <MenuItem value="EDIFICATION">Edificação</MenuItem>
-                  <MenuItem value="COMMUNION">Comunhão</MenuItem>
-                  <MenuItem value="MULTIPLICATION">Multiplicação</MenuItem>
-                  <MenuItem value="UNKNOWN">Desconhecido</MenuItem>
-                </Select>
-              </FormControl>
-            </div>
-
-            {/* Tem Próximo Anfitrião */}
-            <div className="flex items-center gap-3">
-              <label className="text-sm">Tem Próximo Anfitrião?</label>
-              <button
-                type="button"
-                onClick={() => setHasNextHost(!hasNextHost)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  hasNextHost ? 'bg-blue-600' : 'bg-gray-700'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    hasNextHost ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-              <span className="text-xs text-gray-400">{hasNextHost ? 'Sim' : 'Não'}</span>
-            </div>
-
-            {/* Célula Paralela */}
-            <div>
-              <FormControl className="w-full">
-                <InputLabel id="parallel-celula-label" size='small'>Célula Paralela</InputLabel>
-                <Select
-                  labelId="parallel-celula-label"
-                  value={parallelCelulaId ?? ''}
-                  onChange={(e) => setParallelCelulaId(String(e.target.value) !== '' ? Number(e.target.value) : null)}
-                  label="Célula Paralela"
-                  size="small"
-                  className="bg-gray-800 w-full">
-                  <MenuItem value="">Nenhuma</MenuItem>
-                  {parallelCelulaOptions
-                    .filter(c => c.id !== celula?.id)
-                    .map((c) => (
-                      <MenuItem key={c.id} value={c.id}>
-                        {c.name}{c.leader ? ` — ${c.leader.name}` : ''}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-              <p className="text-xs text-gray-400 mt-1">Associar a outra célula que acontece em paralelo</p>
+              {/* Líderes em Treinamento */}
+              {(() => {
+                if (isEditing) return true;
+                if (!discipuladoId) return false;
+                const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+                if (!selectedDiscipulado) return false;
+                const selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+                return selectedRede?.isKids && allMembers.length > 0;
+              })() && (
+                <div>
+                  <MultiMemberSelect
+                    label="Líderes em Treinamento"
+                    options={(() => {
+                      let selectedRede = redes.find(r => r.id === redeId);
+                      if (!selectedRede && discipuladoId) {
+                        const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+                        if (selectedDiscipulado) {
+                          selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+                        }
+                      }
+                      if (selectedRede?.isKids) {
+                        return allMembers.filter(m => m.id !== leaderId && m.gender === 'FEMALE');
+                      }
+                      return celulaMemberOptions.filter(m => m.id !== leaderId);
+                    })()}
+                    selectedIds={leaderInTrainingIds}
+                    onChange={setLeaderInTrainingIds}
+                    placeholder="Buscar membro para adicionar..."
+                    avatarColor="bg-yellow-600"
+                    isOptionDisabled={(member) => {
+                      const isInAnother = allCelulas.some(c =>
+                        c.id !== celula?.id &&
+                        c.leadersInTraining?.some(lit => lit.member.id === member.id)
+                      );
+                      return isInAnother ? 'Já em outra célula' : false;
+                    }}
+                    helperText={(() => {
+                      let selectedRede = redes.find(r => r.id === redeId);
+                      if (!selectedRede && discipuladoId) {
+                        const selectedDiscipulado = discipulados.find(d => d.id === discipuladoId);
+                        if (selectedDiscipulado) {
+                          selectedRede = redes.find(r => r.id === selectedDiscipulado.redeId);
+                        }
+                      }
+                      if (selectedRede?.isKids) {
+                        return 'Apenas discípulos do discipulado. Membros já em outra célula estão bloqueados.';
+                      }
+                      return 'Apenas membros desta célula podem ser selecionados como líderes em treinamento';
+                    })()}
+                    noOptionsText="Nenhum membro disponível"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Divider */}
-            <div className="border-t border-gray-700 my-4"></div>
-            <h4 className="text-md font-semibold mb-3">Endereço da Célula</h4>
+            <div className="border-t border-gray-700 my-6"></div>
 
-            {/* CEP */}
+            {/* ===== SEÇÃO: AGENDA ===== */}
             <div>
-              <label className="block mb-1 text-sm">CEP</label>
-              <div className="relative">
-                <input
-                  placeholder="00000-000"
-                  value={zipCode}
-                  onChange={handleCepChange}
-                  maxLength={9}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-                />
-                {loadingCep && (
-                  <div className="absolute right-2 top-2">
-                    <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                  </div>
-                )}
-              </div>
-            </div>
+              <h4 className="text-md font-semibold mb-4 text-yellow-400 flex items-center gap-2">
+                <span>📅</span> Agenda
+              </h4>
 
-            {/* Rua e Número */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
-                <label className="block mb-1 text-sm">Rua</label>
-                <input
-                  placeholder="Nome da rua"
-                  value={street}
-                  onChange={(e) => setStreet(e.target.value)}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-                />
+              {/* Dia da Semana e Horário */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <StyledSelect
+                    id="weekday"
+                    label="Dia da Semana"
+                    required
+                    value={weekday ?? ''}
+                    onChange={(val) => {
+                      setWeekday(val !== '' ? Number(val) : null);
+                    }}
+                    options={[
+                      { value: 0, label: 'Domingo' },
+                      { value: 1, label: 'Segunda-feira' },
+                      { value: 2, label: 'Terça-feira' },
+                      { value: 3, label: 'Quarta-feira' },
+                      { value: 4, label: 'Quinta-feira' },
+                      { value: 5, label: 'Sexta-feira' },
+                      { value: 6, label: 'Sábado' },
+                    ]}
+                    placeholder="Selecione o dia"
+                  />
+                </div>
+
+                <div>
+                  <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
+                    <TimePicker
+                      label="Horário *"
+                      value={time}
+                      onChange={(newValue: Dayjs | null) => setTime(newValue)}
+                      format="HH:mm"
+                      ampm={false}
+                      localeText={{
+                        toolbarTitle: 'Selecionar horário',
+                        cancelButtonLabel: 'Cancelar',
+                        okButtonLabel: 'OK',
+                      }}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          size: 'small',
+                          placeholder: '19:30',
+                          sx: {
+                            '& .MuiOutlinedInput-root': {
+                              backgroundColor: 'rgb(31 41 55)',
+                              borderRadius: '0.5rem',
+                              '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                              '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                              '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                            },
+                            '& .MuiInputBase-input': { color: 'white' },
+                            '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                            '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                            '& .MuiSvgIcon-root': { color: 'rgb(156 163 175)' },
+                          },
+                        },
+                      }}
+                    />
+                  </LocalizationProvider>
+                </div>
               </div>
+
+              {/* Data de Abertura */}
               <div>
-                <label className="block mb-1 text-sm">Número</label>
-                <input
-                  placeholder="123"
-                  value={streetNumber}
-                  onChange={(e) => setStreetNumber(e.target.value)}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-                />
+                <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
+                  <DatePicker
+                    label="Data de Abertura"
+                    value={openingDate}
+                    onChange={(newValue: Dayjs | null) => setOpeningDate(newValue)}
+                    format="DD/MM/YYYY"
+                    localeText={{
+                      toolbarTitle: 'Selecionar data',
+                      cancelButtonLabel: 'Cancelar',
+                      okButtonLabel: 'OK',
+                    }}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        size: 'small',
+                        placeholder: 'DD/MM/AAAA',
+                        sx: {
+                          '& .MuiOutlinedInput-root': {
+                            backgroundColor: 'rgb(31 41 55)',
+                            borderRadius: '0.5rem',
+                            '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                            '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                            '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                          },
+                          '& .MuiInputBase-input': { color: 'white' },
+                          '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                          '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                          '& .MuiSvgIcon-root': { color: 'rgb(156 163 175)' },
+                        },
+                      },
+                    }}
+                  />
+                </LocalizationProvider>
               </div>
             </div>
 
-            {/* Bairro */}
+            {/* Divider */}
+            <div className="border-t border-gray-700 my-6"></div>
+
+            {/* ===== SEÇÃO: ENDEREÇO ===== */}
             <div>
-              <label className="block mb-1 text-sm">Bairro</label>
-              <input
-                placeholder="Nome do bairro"
-                value={neighborhood}
-                onChange={(e) => setNeighborhood(e.target.value)}
-                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-              />
-            </div>
+              <h4 className="text-md font-semibold mb-4 text-orange-400 flex items-center gap-2">
+                <span>📍</span> Endereço da Célula
+              </h4>
 
-            {/* Cidade e Estado */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
-                <label className="block mb-1 text-sm">Cidade</label>
-                <input
-                  placeholder="Nome da cidade"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10"
+              {/* CEP */}
+              <div className="mb-4">
+                <div className="relative">
+                  <TextField
+                    label="CEP"
+                    placeholder="00000-000"
+                    value={zipCode}
+                    onChange={handleCepChange}
+                    inputProps={{ maxLength: 9 }}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'rgb(31 41 55)',
+                        borderRadius: '0.5rem',
+                        '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                        '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                        '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                      },
+                      '& .MuiInputBase-input': { color: 'white' },
+                      '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                    }}
+                  />
+                  {loadingCep && (
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Rua e Número */}
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="col-span-2">
+                  <TextField
+                    label="Rua"
+                    placeholder="Nome da rua"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'rgb(31 41 55)',
+                        borderRadius: '0.5rem',
+                        '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                        '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                        '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                      },
+                      '& .MuiInputBase-input': { color: 'white' },
+                      '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                    }}
+                  />
+                </div>
+                <div>
+                  <TextField
+                    label="Número"
+                    placeholder="123"
+                    value={streetNumber}
+                    onChange={(e) => setStreetNumber(e.target.value)}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'rgb(31 41 55)',
+                        borderRadius: '0.5rem',
+                        '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                        '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                        '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                      },
+                      '& .MuiInputBase-input': { color: 'white' },
+                      '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Bairro */}
+              <div className="mb-4">
+                <TextField
+                  label="Bairro"
+                  placeholder="Nome do bairro"
+                  value={neighborhood}
+                  onChange={(e) => setNeighborhood(e.target.value)}
+                  fullWidth
+                  size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgb(31 41 55)',
+                      borderRadius: '0.5rem',
+                      '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                      '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                      '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                    },
+                    '& .MuiInputBase-input': { color: 'white' },
+                    '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                    '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                  }}
                 />
               </div>
+
+              {/* Cidade e Estado */}
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="col-span-2">
+                  <TextField
+                    label="Cidade"
+                    placeholder="Nome da cidade"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'rgb(31 41 55)',
+                        borderRadius: '0.5rem',
+                        '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                        '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                        '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                      },
+                      '& .MuiInputBase-input': { color: 'white' },
+                      '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                    }}
+                  />
+                </div>
+                <div>
+                  <TextField
+                    label="Estado"
+                    placeholder="UF"
+                    value={state}
+                    onChange={(e) => setState(e.target.value.toUpperCase())}
+                    inputProps={{ maxLength: 2 }}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'rgb(31 41 55)',
+                        borderRadius: '0.5rem',
+                        '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                        '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                        '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                      },
+                      '& .MuiInputBase-input': { color: 'white', textTransform: 'uppercase' },
+                      '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Complemento */}
+              <div className="mb-4">
+                <TextField
+                  label="Complemento"
+                  placeholder="Apartamento, bloco, etc."
+                  value={complement}
+                  onChange={(e) => setComplement(e.target.value)}
+                  fullWidth
+                  size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgb(31 41 55)',
+                      borderRadius: '0.5rem',
+                      '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                      '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                      '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                    },
+                    '& .MuiInputBase-input': { color: 'white' },
+                    '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                    '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                  }}
+                />
+              </div>
+
+              {/* País */}
               <div>
-                <label className="block mb-1 text-sm">Estado</label>
-                <input
-                  placeholder="UF"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  maxLength={2}
-                  className="border p-2 rounded w-full bg-gray-800 text-white h-10 uppercase"
+                <TextField
+                  label="País"
+                  placeholder="País"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  fullWidth
+                  size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgb(31 41 55)',
+                      borderRadius: '0.5rem',
+                      '& fieldset': { borderColor: 'rgb(75 85 99)' },
+                      '&:hover fieldset': { borderColor: 'rgb(107 114 128)' },
+                      '&.Mui-focused fieldset': { borderColor: 'rgb(59 130 246)' },
+                    },
+                    '& .MuiInputBase-input': { color: 'white' },
+                    '& .MuiInputLabel-root': { color: 'rgb(156 163 175)' },
+                    '& .MuiInputLabel-root.Mui-focused': { color: 'rgb(59 130 246)' },
+                  }}
                 />
               </div>
             </div>
 
-            {/* Complemento */}
-            <div>
-              <label className="block mb-1 text-sm">Complemento</label>
-              <input
-                placeholder="Apartamento, bloco, etc."
-                value={complement}
-                onChange={(e) => setComplement(e.target.value)}
-                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-              />
-            </div>
+            {/* Divider */}
+            <div className="border-t border-gray-700 my-6"></div>
 
-            {/* País */}
+            {/* ===== SEÇÃO: CONFIGURAÇÕES ADICIONAIS ===== */}
             <div>
-              <label className="block mb-1 text-sm">País</label>
-              <input
-                placeholder="País"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="border p-2 rounded w-full bg-gray-800 text-white h-10"
-              />
+              <h4 className="text-md font-semibold mb-4 text-cyan-400 flex items-center gap-2">
+                <span>⚙️</span> Configurações Adicionais
+              </h4>
+
+              {/* Tem Próximo Anfitrião */}
+              <div className="flex items-center gap-3 mb-4">
+                <label className="text-sm font-medium">Tem Próximo Anfitrião?</label>
+                <button
+                  type="button"
+                  onClick={() => setHasNextHost(!hasNextHost)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    hasNextHost ? 'bg-blue-600' : 'bg-gray-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      hasNextHost ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <span className="text-xs text-gray-400">{hasNextHost ? 'Sim' : 'Não'}</span>
+              </div>
+
+              {/* Célula Paralela */}
+              <div>
+                <StyledSelect
+                  id="parallel-celula"
+                  label="Célula Paralela"
+                  value={parallelCelulaId ?? ''}
+                  onChange={(val) => setParallelCelulaId(val !== '' ? Number(val) : null)}
+                  options={parallelCelulaOptions
+                    .filter(c => c.id !== celula?.id)
+                    .map((c) => ({
+                      value: c.id,
+                      label: `${c.name}${c.leader ? ` — ${c.leader.name}` : ''}`,
+                    }))}
+                  placeholder="Nenhuma"
+                />
+                <p className="text-xs text-gray-400 mt-1">Associar a outra célula que acontece em paralelo</p>
+              </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* Botões de ação - sticky e full width */}

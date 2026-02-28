@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Member, Celula, Ministry, WinnerPath, Role, Congregacao, Rede, Discipulado } from '@/types';
 import { createTheme, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, ThemeProvider, Checkbox, ListItemText, OutlinedInput, Autocomplete, TextField, Switch, FormControlLabel, Slider } from '@mui/material';
+import SingleMemberSelect from '@/components/SingleMemberSelect';
+import StyledSelect from '@/components/StyledSelect';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -16,6 +18,8 @@ import { redesService } from '@/services/redesService';
 import { discipuladosService } from '@/services/discipuladosService';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPhoneForDisplay, formatPhoneForInput, stripPhoneFormatting, ensureCountryCode } from '@/lib/phoneUtils';
+import { FiSearch } from 'react-icons/fi';
+import SearchUnassignedMembersModal from '@/components/SearchUnassignedMembersModal';
 import Cropper from 'react-easy-crop';
 import { Area } from 'react-easy-crop';
 import getCroppedImg from '@/utils/cropImage';
@@ -27,11 +31,17 @@ interface MemberModalProps {
   onSave: (data: Partial<Member>, photo?: File, deletePhoto?: boolean, originalMember?: Member | null) => Promise<Member>;
   celulas: Celula[];
   initialCelulaId?: number | null;
+  /** Show a search icon to find and assign unassigned members to a cell */
+  showSearchUnassigned?: boolean;
+  /** Called after an unassigned member is assigned to the cell */
+  onMemberAssigned?: () => void;
 }
 
-export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas = [], initialCelulaId }: MemberModalProps) {
+export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas = [], initialCelulaId, showSearchUnassigned, onMemberAssigned }: MemberModalProps) {
   const isEditing = !!memberId;
   const { user } = useAuth();
+
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   // Ref para o campo de nome
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +201,11 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
     };
   }, [isOpen, user?.permission?.isAdmin, user?.permission?.pastorPresidente]);
 
+  // Verificar se o usuário está editando a si mesmo
+  const isEditingSelf = useMemo(() => {
+    return !!(isEditing && member && user && member.id === user.id);
+  }, [isEditing, member, user]);
+
   // Verificar se usuário pode gerenciar acesso ao sistema
   const canManageSystemAccess = useMemo(() => {
     if (!user) return false;
@@ -205,10 +220,10 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
     return isAdmin || isPastor || isDiscipulador || isLeader;
   }, [user]);
 
-  // Filtrar ministérios permitidos baseado no cargo do usuário logado
-  const allowedMinistries = useMemo(() => {
-    // Se não há usuário logado, retornar lista vazia
-    if (!user) return [];
+  // Verificar quais ministérios o usuário pode selecionar
+  const selectableMinistryIds = useMemo(() => {
+    // Se não há usuário logado, nenhum cargo selecionável
+    if (!user) return new Set<number>();
 
     // Admin e pastores podem atribuir qualquer cargo
     const isAdmin = user.permission?.isAdmin || false;
@@ -216,23 +231,27 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
       user.permission?.ministryType === 'PASTOR';
 
     if (isAdmin || isPastor) {
-      return ministries;
+      return new Set(ministries.map(m => m.id));
     }
 
     // Se o usuário não tem cargo ministerial, não pode criar membros com cargo
     const userMinistryPositionId = user.ministryPositionId;
     if (!userMinistryPositionId) {
-      return [];
+      return new Set<number>();
     }
 
     // Encontrar o cargo do usuário logado
     const userMinistry = ministries.find(m => m.id === userMinistryPositionId);
     if (!userMinistry) {
-      return ministries;
+      return new Set(ministries.map(m => m.id));
     }
 
-    // Retornar apenas cargos com priority MAIOR (menor na hierarquia) que o do usuário
-    return ministries.filter(m => (m.priority ?? 0) > (userMinistry.priority ?? 0));
+    // Retornar apenas IDs de cargos com priority MAIOR (menor na hierarquia) que o do usuário
+    return new Set(
+      ministries
+        .filter(m => (m.priority ?? 0) > (userMinistry.priority ?? 0))
+        .map(m => m.id)
+    );
   }, [user, ministries]);
 
   const muiTheme = createTheme({
@@ -469,27 +488,7 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
     setPhone(formatted);
   };
 
-  const handlePhoneBlur = () => {
-    // Sincronizar com redes sociais (WhatsApp) quando perder o foco
-    const phoneDigits = phone.replace(/\D/g, '');
-    const hasValidPhone = phoneDigits.length >= 12; // +55 + 11 dígitos (DDD + número)
-    
-    setSocialMedia(prevSocialMedia => {
-      const hasWhatsapp = prevSocialMedia.some(sm => sm.type === 'WHATSAPP');
-      
-      // Se já existe WhatsApp, não faz nada (mesmo que seja número diferente)
-      if (hasWhatsapp) {
-        return prevSocialMedia;
-      }
-      
-      // Se há um número válido e não existe WhatsApp, adicionar
-      if (hasValidPhone) {
-        return [...prevSocialMedia, { type: 'WHATSAPP', username: phone }];
-      }
-      
-      return prevSocialMedia;
-    });
-  };
+
 
   // Funções de manipulação de imagem
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -717,7 +716,18 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
         <div className="bg-gray-900 rounded w-11/12 max-w-4xl my-8 max-h-[90vh] flex flex-col">
           <div className="p-6 flex items-center justify-between border-b border-gray-700">
             <h2 className="text-xl font-bold">{isEditing ? 'Editar Membro' : 'Novo Membro'}</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
+            <div className="flex items-center gap-2">
+              {showSearchUnassigned && !isEditing && initialCelulaId && (
+                <button
+                  onClick={() => setIsSearchModalOpen(true)}
+                  className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 rounded transition-colors"
+                  title="Buscar membros sem célula"
+                >
+                  <FiSearch size={18} />
+                </button>
+              )}
+              <button onClick={onClose} className="text-gray-500 hover:text-gray-300">✕</button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -791,61 +801,50 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                   </div>
 
                   <div>
-                    <FormControl fullWidth size="small" error={touched.gender && !gender}>
-                      <InputLabel id="gender-label">Gênero *</InputLabel>
-                      <Select
-                        labelId="gender-label"
-                        value={gender}
-                        onChange={(e) => setGender(e.target.value)}
-                        onBlur={() => setTouched({ ...touched, gender: true })}
-                        label="Gênero *"
-                        className="bg-gray-800"
-                      >
-                        <MenuItem value="">Selecione</MenuItem>
-                        <MenuItem value="MALE">Masculino</MenuItem>
-                        <MenuItem value="FEMALE">Feminino</MenuItem>
-                        <MenuItem value="OTHER">Outro</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <StyledSelect
+                      id="gender"
+                      label="Gênero"
+                      required
+                      value={gender}
+                      onChange={(val) => setGender(String(val))}
+                      onBlur={() => setTouched({ ...touched, gender: true })}
+                      error={touched.gender && !gender}
+                      options={[
+                        { value: 'MALE', label: 'Masculino' },
+                        { value: 'FEMALE', label: 'Feminino' },
+                        { value: 'OTHER', label: 'Outro' },
+                      ]}
+                      placeholder="Selecione"
+                    />
                   </div>
 
                   <div>
-                    <FormControl fullWidth size="small">
-                      <InputLabel id="marital-status-label">Estado Civil</InputLabel>
-                      <Select
-                        labelId="marital-status-label"
-                        value={maritalStatus}
-                        onChange={(e) => setMaritalStatus(e.target.value)}
-                        label="Estado Civil"
-                        className="bg-gray-800"
-                      >
-                        <MenuItem value="SINGLE">Solteiro(a)</MenuItem>
-                        <MenuItem value="COHABITATING">Amasiados</MenuItem>
-                        <MenuItem value="MARRIED">Casado(a)</MenuItem>
-                        <MenuItem value="DIVORCED">Divorciado(a)</MenuItem>
-                        <MenuItem value="WIDOWED">Viúvo(a)</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <StyledSelect
+                      id="marital-status"
+                      label="Estado Civil"
+                      value={maritalStatus}
+                      onChange={(val) => setMaritalStatus(String(val))}
+                      options={[
+                        { value: 'SINGLE', label: 'Solteiro(a)' },
+                        { value: 'COHABITATING', label: 'Amasiados' },
+                        { value: 'MARRIED', label: 'Casado(a)' },
+                        { value: 'DIVORCED', label: 'Divorciado(a)' },
+                        { value: 'WIDOWED', label: 'Viúvo(a)' },
+                      ]}
+                    />
                   </div>
 
                   {maritalStatus === 'MARRIED' && (
                     <div className="md:col-span-1">
-                      <FormControl fullWidth size="small">
-                        <InputLabel id="spouse-label">Cônjuge</InputLabel>
-                        <Select
-                          labelId="spouse-label"
-                          value={spouseId ?? ''}
-                          onChange={(e) => setSpouseId(e.target.value ? Number(e.target.value) : null)}
-                          label="Cônjuge"
-                          className="bg-gray-800"
-                        >
-                          {allMembers
-                            .filter(m => m.id !== member?.id)
-                            .map(m => (
-                              <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
+                      <SingleMemberSelect
+                        options={allMembers}
+                        value={spouseId}
+                        onChange={(id) => setSpouseId(id)}
+                        label="Cônjuge"
+                        placeholder="Buscar cônjuge..."
+                        excludeIds={member?.id ? [member.id] : []}
+                        avatarColor="bg-pink-600"
+                      />
                     </div>
                   )}
 
@@ -879,7 +878,6 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                       label="Telefone"
                       value={phone}
                       onChange={handlePhoneChange}
-                      onBlur={handlePhoneBlur}
                       placeholder="(11) 99999-9999"
                       inputProps={{ maxLength: 25 }}
                       className="bg-gray-800"
@@ -896,94 +894,84 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Congregação */}
                 <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="filter-congregacao-label">Congregação</InputLabel>
-                    <Select
-                      labelId="filter-congregacao-label"
-                      value={filterCongregacaoId ?? ''}
-                      onChange={(e) => {
-                        setFilterCongregacaoId(e.target.value ? Number(e.target.value) : null);
-                        setFilterRedeId(null);
-                        setFilterDiscipuladoId(null);
-                      }}
-                      label="Congregação"
-                      className="bg-gray-800"
-                    >
-                      <MenuItem value="">Todas as congregações</MenuItem>
-                      {congregacoes.map((c) => (
-                        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <StyledSelect
+                    id="filter-congregacao"
+                    label="Congregação"
+                    value={filterCongregacaoId ?? ''}
+                    onChange={(val) => {
+                      setFilterCongregacaoId(val ? Number(val) : null);
+                      setFilterRedeId(null);
+                      setFilterDiscipuladoId(null);
+                    }}
+                    disabled={isEditingSelf}
+                    options={congregacoes.map((c) => ({ value: c.id, label: c.name }))}
+                    placeholder="Todas as congregações"
+                  />
                 </div>
 
                 {/* Rede */}
                 <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="filter-rede-label">Rede</InputLabel>
-                    <Select
-                      labelId="filter-rede-label"
-                      value={filterRedeId ?? ''}
-                      onChange={(e) => {
-                        const selectedRedeId = e.target.value ? Number(e.target.value) : null;
-                        setFilterRedeId(selectedRedeId);
-                        setFilterDiscipuladoId(null);
-                        // Auto-preencher congregação quando rede é selecionada
-                        if (selectedRedeId) {
-                          const rede = redes.find(r => r.id === selectedRedeId);
-                          if (rede?.congregacaoId) {
-                            setFilterCongregacaoId(rede.congregacaoId);
-                          }
+                  <StyledSelect
+                    id="filter-rede"
+                    label="Rede"
+                    value={filterRedeId ?? ''}
+                    onChange={(val) => {
+                      const selectedRedeId = val ? Number(val) : null;
+                      setFilterRedeId(selectedRedeId);
+                      setFilterDiscipuladoId(null);
+                      // Auto-preencher congregação quando rede é selecionada
+                      if (selectedRedeId) {
+                        const rede = redes.find(r => r.id === selectedRedeId);
+                        if (rede?.congregacaoId) {
+                          setFilterCongregacaoId(rede.congregacaoId);
                         }
-                      }}
-                      label="Rede"
-                      className="bg-gray-800"
-                    >
-                      <MenuItem value="">Todas as redes</MenuItem>
-                      {redes.filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId).map((r) => (
-                        <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                      }
+                    }}
+                    disabled={isEditingSelf}
+                    options={redes
+                      .filter(r => !filterCongregacaoId || r.congregacaoId === filterCongregacaoId)
+                      .map((r) => ({ value: r.id, label: r.name }))}
+                    placeholder="Todas as redes"
+                  />
                 </div>
 
                 {/* Discipulado */}
                 <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="filter-discipulado-label">Discipulado</InputLabel>
-                    <Select
-                      labelId="filter-discipulado-label"
-                      value={filterDiscipuladoId ?? ''}
-                      onChange={(e) => {
-                        const selectedDiscipuladoId = e.target.value ? Number(e.target.value) : null;
-                        setFilterDiscipuladoId(selectedDiscipuladoId);
-                        // Auto-preencher rede e congregação quando discipulado é selecionado
-                        if (selectedDiscipuladoId) {
-                          const discipulado = discipulados.find(d => d.id === selectedDiscipuladoId);
-                          if (discipulado?.redeId) {
-                            setFilterRedeId(discipulado.redeId);
-                            const rede = redes.find(r => r.id === discipulado.redeId);
-                            if (rede?.congregacaoId) {
-                              setFilterCongregacaoId(rede.congregacaoId);
-                            }
+                  <StyledSelect
+                    id="filter-discipulado"
+                    label="Discipulado"
+                    value={filterDiscipuladoId ?? ''}
+                    onChange={(val) => {
+                      const selectedDiscipuladoId = val ? Number(val) : null;
+                      setFilterDiscipuladoId(selectedDiscipuladoId);
+                      // Auto-preencher rede e congregação quando discipulado é selecionado
+                      if (selectedDiscipuladoId) {
+                        const discipulado = discipulados.find(d => d.id === selectedDiscipuladoId);
+                        if (discipulado?.redeId) {
+                          setFilterRedeId(discipulado.redeId);
+                          const rede = redes.find(r => r.id === discipulado.redeId);
+                          if (rede?.congregacaoId) {
+                            setFilterCongregacaoId(rede.congregacaoId);
                           }
                         }
-                      }}
-                      label="Discipulado"
-                      className="bg-gray-800"
-                    >
-                      <MenuItem value="">Todos os discipulados</MenuItem>
-                      {discipulados.filter(d => !filterRedeId || d.redeId === filterRedeId).map((d) => (
-                        <MenuItem key={d.id} value={d.id}>{d.discipulador?.name || `Discipulado ${d.id}`}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                      }
+                    }}
+                    disabled={isEditingSelf}
+                    options={discipulados
+                      .filter(d => !filterRedeId || d.redeId === filterRedeId)
+                      .map((d) => ({
+                        value: d.id,
+                        label: d.discipulador?.name || `Discipulado ${d.id}`,
+                      }))}
+                    placeholder="Todos os discipulados"
+                  />
                 </div>
 
                 {/* Célula */}
                 <div>
                   <Autocomplete
                     size="small"
+                    disabled={isEditingSelf}
                     options={celulas.filter(c => {
                       // Filtrar células baseado nos filtros superiores
                       if (filterDiscipuladoId && c.discipuladoId !== filterDiscipuladoId) return false;
@@ -1029,25 +1017,21 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <FormControl
-                    fullWidth
-                    size="small"
+                  <StyledSelect
+                    id="ministry-position"
+                    label="Cargo Ministerial"
+                    required
+                    value={ministryPositionId ?? ''}
+                    onChange={(val) => setMinistryPositionId(val ? Number(val) : null)}
+                    onBlur={() => setTouched({ ...touched, ministryPosition: true })}
                     error={touched.ministryPosition && !ministryPositionId}
-                  >
-                    <InputLabel id="ministry-position-label">Cargo Ministerial *</InputLabel>
-                    <Select
-                      labelId="ministry-position-label"
-                      value={ministryPositionId ?? ''}
-                      onChange={(e) => setMinistryPositionId(e.target.value ? Number(e.target.value) : null)}
-                      onBlur={() => setTouched({ ...touched, ministryPosition: true })}
-                      label="Cargo Ministerial *"
-                      className="bg-gray-800"
-                    >
-                      {allowedMinistries.map(m => (
-                        <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                    disabled={isEditingSelf}
+                    options={ministries.map(m => ({
+                      value: m.id,
+                      label: m.name,
+                      disabled: !selectableMinistryIds.has(m.id)
+                    }))}
+                  />
                 </div>
 
                 <div>
@@ -1056,11 +1040,12 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                       <Switch
                         checked={isBaptized}
                         onChange={(e) => setIsBaptized(e.target.checked)}
+                        disabled={isEditingSelf}
                         color="primary"
                       />
                     }
                     label="É batizado?"
-                    className="border rounded bg-gray-800 px-2 py-1 m-0 w-full flex justify-between"
+                    className={`border rounded bg-gray-800 px-2 py-1 m-0 w-full flex justify-between ${isEditingSelf ? 'opacity-60' : ''}`}
                     labelPlacement="start"
                     sx={{
                       marginLeft: 0,
@@ -1078,6 +1063,7 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                       <DatePicker
                         value={baptismDate}
                         onChange={(newValue: Dayjs | null) => setBaptismDate(newValue)}
+                        disabled={isEditingSelf}
                         format="DD/MM/YYYY"
                         label="Data de Batismo"
                         localeText={{
@@ -1098,20 +1084,14 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                 )}
 
                 <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="winner-path-label">Trilho do Vencedor</InputLabel>
-                    <Select
-                      labelId="winner-path-label"
-                      value={winnerPathId ?? ''}
-                      onChange={(e) => setWinnerPathId(e.target.value ? Number(e.target.value) : null)}
-                      label="Trilho do Vencedor"
-                      className="bg-gray-800"
-                    >
-                      {winnerPaths.map(w => (
-                        <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <StyledSelect
+                    id="winner-path"
+                    label="Trilho do Vencedor"
+                    value={winnerPathId ?? ''}
+                    onChange={(val) => setWinnerPathId(val ? Number(val) : null)}
+                    disabled={isEditingSelf}
+                    options={winnerPaths.map(w => ({ value: w.id, label: w.name }))}
+                  />
                 </div>
 
                 <div className="md:col-span-2">
@@ -1159,11 +1139,12 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                       <Switch
                         checked={canBeHost}
                         onChange={(e) => setCanBeHost(e.target.checked)}
+                        disabled={isEditingSelf}
                         color="primary"
                       />
                     }
                     label="Apto para ser anfitrião?"
-                    className="border rounded bg-gray-800 px-2 py-1 m-0 w-full flex justify-between"
+                    className={`border rounded bg-gray-800 px-2 py-1 m-0 w-full flex justify-between ${isEditingSelf ? 'opacity-60' : ''}`}
                     labelPlacement="start"
                     sx={{
                       marginLeft: 0,
@@ -1181,6 +1162,7 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                     <DatePicker
                       value={registerDate}
                       onChange={(newValue: Dayjs | null) => setRegisterDate(newValue)}
+                      disabled={isEditingSelf}
                       format="DD/MM/YYYY"
                       label="Data de Ingresso"
                       localeText={{
@@ -1206,18 +1188,15 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
               <h4 className="font-medium mb-3 text-sm text-gray-400">ENDEREÇO</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="country-label">País</InputLabel>
-                    <Select
-                      labelId="country-label"
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
-                      label="País"
-                      className="bg-gray-800"
-                    >
-                      <MenuItem value="Brasil">Brasil</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <StyledSelect
+                    id="country"
+                    label="País"
+                    value={country}
+                    onChange={(val) => setCountry(String(val))}
+                    options={[
+                      { value: 'Brasil', label: 'Brasil' },
+                    ]}
+                  />
                 </div>
 
                 <div>
@@ -1296,45 +1275,42 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                 </div>
 
                 <div>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="state-label">UF</InputLabel>
-                    <Select
-                      labelId="state-label"
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                      label="UF"
-                      className="bg-gray-800"
-                    >
-                      <MenuItem value="">Selecione</MenuItem>
-                      <MenuItem value="AC">AC</MenuItem>
-                      <MenuItem value="AL">AL</MenuItem>
-                      <MenuItem value="AP">AP</MenuItem>
-                      <MenuItem value="AM">AM</MenuItem>
-                      <MenuItem value="BA">BA</MenuItem>
-                      <MenuItem value="CE">CE</MenuItem>
-                      <MenuItem value="DF">DF</MenuItem>
-                      <MenuItem value="ES">ES</MenuItem>
-                      <MenuItem value="GO">GO</MenuItem>
-                      <MenuItem value="MA">MA</MenuItem>
-                      <MenuItem value="MT">MT</MenuItem>
-                      <MenuItem value="MS">MS</MenuItem>
-                      <MenuItem value="MG">MG</MenuItem>
-                      <MenuItem value="PA">PA</MenuItem>
-                      <MenuItem value="PB">PB</MenuItem>
-                      <MenuItem value="PR">PR</MenuItem>
-                      <MenuItem value="PE">PE</MenuItem>
-                      <MenuItem value="PI">PI</MenuItem>
-                      <MenuItem value="RJ">RJ</MenuItem>
-                      <MenuItem value="RN">RN</MenuItem>
-                      <MenuItem value="RS">RS</MenuItem>
-                      <MenuItem value="RO">RO</MenuItem>
-                      <MenuItem value="RR">RR</MenuItem>
-                      <MenuItem value="SC">SC</MenuItem>
-                      <MenuItem value="SP">SP</MenuItem>
-                      <MenuItem value="SE">SE</MenuItem>
-                      <MenuItem value="TO">TO</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <StyledSelect
+                    id="state"
+                    label="UF"
+                    value={state}
+                    onChange={(val) => setState(String(val))}
+                    options={[
+                      { value: 'AC', label: 'AC' },
+                      { value: 'AL', label: 'AL' },
+                      { value: 'AP', label: 'AP' },
+                      { value: 'AM', label: 'AM' },
+                      { value: 'BA', label: 'BA' },
+                      { value: 'CE', label: 'CE' },
+                      { value: 'DF', label: 'DF' },
+                      { value: 'ES', label: 'ES' },
+                      { value: 'GO', label: 'GO' },
+                      { value: 'MA', label: 'MA' },
+                      { value: 'MT', label: 'MT' },
+                      { value: 'MS', label: 'MS' },
+                      { value: 'MG', label: 'MG' },
+                      { value: 'PA', label: 'PA' },
+                      { value: 'PB', label: 'PB' },
+                      { value: 'PR', label: 'PR' },
+                      { value: 'PE', label: 'PE' },
+                      { value: 'PI', label: 'PI' },
+                      { value: 'RJ', label: 'RJ' },
+                      { value: 'RN', label: 'RN' },
+                      { value: 'RS', label: 'RS' },
+                      { value: 'RO', label: 'RO' },
+                      { value: 'RR', label: 'RR' },
+                      { value: 'SC', label: 'SC' },
+                      { value: 'SP', label: 'SP' },
+                      { value: 'SE', label: 'SE' },
+                      { value: 'TO', label: 'TO' },
+                    ]}
+                    placeholder="Selecione"
+                  />
                 </div>
               </div>
             </div>
@@ -1363,34 +1339,31 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                 {socialMedia.map((social, index) => (
                   <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-start">
                     <div className="md:col-span-2">
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Tipo</InputLabel>
-                        <Select
-                          value={social.type}
-                          onChange={(e) => {
-                            const updated = [...socialMedia];
-                            updated[index].type = e.target.value;
-                            setSocialMedia(updated);
-                          }}
-                          label="Tipo"
-                          className="bg-gray-800"
-                        >
-                          <MenuItem value="INSTAGRAM">Instagram</MenuItem>
-                          <MenuItem value="FACEBOOK">Facebook</MenuItem>
-                          <MenuItem value="TWITTER">Twitter/X</MenuItem>
-                          <MenuItem value="WHATSAPP">WhatsApp</MenuItem>
-                          <MenuItem value="LINKEDIN">LinkedIn</MenuItem>
-                          <MenuItem value="TIKTOK">TikTok</MenuItem>
-                          <MenuItem value="YOUTUBE">YouTube</MenuItem>
-                          <MenuItem value="TELEGRAM">Telegram</MenuItem>
-                          <MenuItem value="DISCORD">Discord</MenuItem>
-                          <MenuItem value="THREADS">Threads</MenuItem>
-                          <MenuItem value="SNAPCHAT">Snapchat</MenuItem>
-                          <MenuItem value="PINTEREST">Pinterest</MenuItem>
-                          <MenuItem value="TWITCH">Twitch</MenuItem>
-                          <MenuItem value="OUTRO">Outro</MenuItem>
-                        </Select>
-                      </FormControl>
+                      <StyledSelect
+                        id={`social-type-${index}`}
+                        label="Tipo"
+                        value={social.type}
+                        onChange={(val) => {
+                          const updated = [...socialMedia];
+                          updated[index].type = String(val);
+                          setSocialMedia(updated);
+                        }}
+                        options={[
+                          { value: 'INSTAGRAM', label: 'Instagram' },
+                          { value: 'FACEBOOK', label: 'Facebook' },
+                          { value: 'TWITTER', label: 'Twitter/X' },
+                          { value: 'LINKEDIN', label: 'LinkedIn' },
+                          { value: 'TIKTOK', label: 'TikTok' },
+                          { value: 'YOUTUBE', label: 'YouTube' },
+                          { value: 'TELEGRAM', label: 'Telegram' },
+                          { value: 'DISCORD', label: 'Discord' },
+                          { value: 'THREADS', label: 'Threads' },
+                          { value: 'SNAPCHAT', label: 'Snapchat' },
+                          { value: 'PINTEREST', label: 'Pinterest' },
+                          { value: 'TWITCH', label: 'Twitch' },
+                          { value: 'OUTRO', label: 'Outro' },
+                        ]}
+                      />
                     </div>
                     <div className="md:col-span-2">
                       <TextField
@@ -1404,7 +1377,6 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                           setSocialMedia(updated);
                         }}
                         placeholder={
-                          social.type === 'WHATSAPP' ? '+55 11 99999-9999' : 
                           social.type === 'INSTAGRAM' || social.type === 'TWITTER' || social.type === 'TIKTOK' 
                             ? '@username' 
                             : 'username ou URL'
@@ -1430,7 +1402,7 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
             <div className="border-b pb-3">
               <h4 className="font-medium mb-3 text-sm text-gray-400">DADOS DE ACESSO</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
+                <div className="md:col-span-2">
                   <TextField
                     fullWidth
                     size="small"
@@ -1445,112 +1417,114 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
                   />
                 </div>
 
-                <div>
-                  <div className="flex gap-2">
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={hasSystemAccess}
-                          onChange={(e) => canManageSystemAccess && setHasSystemAccess(e.target.checked)}
-                          disabled={!canManageSystemAccess}
-                          color="primary"
-                        />
-                      }
-                      label="Acesso ao sistema"
-                      className={`border rounded bg-gray-800 px-2 py-1 m-0 flex-1 flex justify-between ${!canManageSystemAccess ? 'opacity-60' : ''
-                        }`}
-                      labelPlacement="start"
-                      title={!canManageSystemAccess ? 'Você não tem permissão para gerenciar acesso ao sistema' : ''}
-                      sx={{
-                        marginLeft: 0,
-                        '& .MuiFormControlLabel-label': {
-                          flex: 1,
-                          fontSize: '0.875rem'
+                {!isEditingSelf && canManageSystemAccess && (
+                  <div className="md:col-span-2">
+                    <div className="flex gap-2">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={hasSystemAccess}
+                            onChange={(e) => canManageSystemAccess && setHasSystemAccess(e.target.checked)}
+                            disabled={!canManageSystemAccess}
+                            color="primary"
+                          />
                         }
-                      }}
-                    />
-                    {isEditing && hasSystemAccess && member?.hasSystemAccess && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!member?.id || member?.hasLoggedIn || !canManageSystemAccess) return;
-
-                          setIsResendingInvite(true);
-                          try {
-                            // Verificar se email ou phone mudaram
-                            const originalEmail = member.email ?? '';
-                            const originalPhone = member.phone ? ensureCountryCode(member.phone) : '';
-                            const currentEmail = email;
-                            const currentPhone = stripPhoneFormatting(phone);
-
-                            const emailChanged = originalEmail !== currentEmail;
-                            const phoneChanged = originalPhone !== currentPhone;
-
-                            // Se mudaram, salvar primeiro
-                            if (emailChanged || phoneChanged) {
-                              const updateData: Partial<Member> = {};
-
-                              if (emailChanged) {
-                                updateData.email = currentEmail;
-                              }
-
-                              if (phoneChanged) {
-                                updateData.phone = currentPhone;
-                              }
-
-                              // Salvar as mudanças
-                              await onSave(updateData);
-                              toast.success('Dados atualizados antes de reenviar o convite');
-                            }
-
-                            // Reenviar convite
-                            const response = await memberService.resendInvite(member.id);
-                            const message = response.whatsappSent
-                              ? 'Convite reenviado por email e WhatsApp!'
-                              : 'Convite reenviado por email!';
-                            toast.success(message);
-                          } catch (err: any) {
-                            toast.error(err.response?.data?.message || 'Erro ao reenviar convite');
-                          } finally {
-                            setIsResendingInvite(false);
+                        label="Acesso ao sistema"
+                        className={`border rounded bg-gray-800 px-2 py-1 m-0 flex-1 flex justify-between ${!canManageSystemAccess ? 'opacity-60' : ''
+                          }`}
+                        labelPlacement="start"
+                        title={!canManageSystemAccess ? 'Você não tem permissão para gerenciar acesso ao sistema' : ''}
+                        sx={{
+                          marginLeft: 0,
+                          '& .MuiFormControlLabel-label': {
+                            flex: 1,
+                            fontSize: '0.875rem'
                           }
                         }}
-                        disabled={member?.hasLoggedIn || !canManageSystemAccess || isResendingInvite}
-                        title={
-                          !canManageSystemAccess
-                            ? 'Você não tem permissão para reenviar convites'
-                            : member?.hasLoggedIn
-                              ? 'Este usuário já recebeu o convite e conseguiu acessar o sistema'
-                              : 'Reenviar convite por email e WhatsApp'
+                      />
+                      {isEditing && hasSystemAccess && member?.hasSystemAccess && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!member?.id || member?.hasLoggedIn || !canManageSystemAccess) return;
+
+                            setIsResendingInvite(true);
+                            try {
+                              // Verificar se email ou phone mudaram
+                              const originalEmail = member.email ?? '';
+                              const originalPhone = member.phone ? ensureCountryCode(member.phone) : '';
+                              const currentEmail = email;
+                              const currentPhone = stripPhoneFormatting(phone);
+
+                              const emailChanged = originalEmail !== currentEmail;
+                              const phoneChanged = originalPhone !== currentPhone;
+
+                              // Se mudaram, salvar primeiro
+                              if (emailChanged || phoneChanged) {
+                                const updateData: Partial<Member> = {};
+
+                                if (emailChanged) {
+                                  updateData.email = currentEmail;
+                                }
+
+                                if (phoneChanged) {
+                                  updateData.phone = currentPhone;
+                                }
+
+                                // Salvar as mudanças
+                                await onSave(updateData);
+                                toast.success('Dados atualizados antes de reenviar o convite');
+                              }
+
+                              // Reenviar convite
+                              const response = await memberService.resendInvite(member.id);
+                              const message = response.whatsappSent
+                                ? 'Convite reenviado por email e WhatsApp!'
+                                : 'Convite reenviado por email!';
+                              toast.success(message);
+                            } catch (err: any) {
+                              toast.error(err.response?.data?.message || 'Erro ao reenviar convite');
+                            } finally {
+                              setIsResendingInvite(false);
+                            }
+                          }}
+                          disabled={member?.hasLoggedIn || !canManageSystemAccess || isResendingInvite}
+                          title={
+                            !canManageSystemAccess
+                              ? 'Você não tem permissão para reenviar convites'
+                              : member?.hasLoggedIn
+                                ? 'Este usuário já recebeu o convite e conseguiu acessar o sistema'
+                                : 'Reenviar convite por email e WhatsApp'
+                          }
+                          className={`border rounded p-2 text-sm font-medium flex-1 transition-colors ${member?.hasLoggedIn || !canManageSystemAccess || isResendingInvite
+                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed opacity-60'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                            }`}
+                        >
+                          {isResendingInvite ? 'Reenviando...' : 'Reenviar Convite'}
+                        </button>
+                      )}
+                    </div>
+                    {hasSystemAccess && (
+                      <p className="text-xs text-blue-400 mt-2">
+                        {isEditing && member?.hasLoggedIn
+                          ? 'Usuário já acessou o sistema'
+                          : 'Um convite será enviado por email para criar a senha de acesso ao sistema'
                         }
-                        className={`border rounded p-2 text-sm font-medium flex-1 transition-colors ${member?.hasLoggedIn || !canManageSystemAccess || isResendingInvite
-                          ? 'bg-gray-400 text-gray-700 cursor-not-allowed opacity-60'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
-                          }`}
-                      >
-                        {isResendingInvite ? 'Reenviando...' : 'Reenviar Convite'}
-                      </button>
+                      </p>
+                    )}
+                    {!canManageSystemAccess && (
+                      <p className="text-xs text-orange-400 mt-2">
+                        ⚠️ Apenas líderes, discipuladores, pastores e admins podem gerenciar acesso ao sistema
+                      </p>
                     )}
                   </div>
-                  {hasSystemAccess && (
-                    <p className="text-xs text-blue-400 mt-2">
-                      {isEditing && member?.hasLoggedIn
-                        ? 'Usuário já acessou o sistema'
-                        : 'Um convite será enviado por email para criar a senha de acesso ao sistema'
-                      }
-                    </p>
-                  )}
-                  {!canManageSystemAccess && (
-                    <p className="text-xs text-orange-400 mt-2">
-                      ⚠️ Apenas líderes, discipuladores, pastores e admins podem gerenciar acesso ao sistema
-                    </p>
-                  )}
-                </div>
+                )}
               </div>
             </div>
 
             {/* Status Ativo/Desligado - só na edição */}
-            {isEditing && (
+            {isEditing  && !isEditingSelf && (
               <div className="border-b pb-3">
                 <div className="flex items-center gap-3">
                   <button
@@ -1625,6 +1599,17 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
             </div>
           </div>
         </div>
+      )}
+
+      {showSearchUnassigned && initialCelulaId && (
+        <SearchUnassignedMembersModal
+          isOpen={isSearchModalOpen}
+          onClose={() => setIsSearchModalOpen(false)}
+          celulaId={initialCelulaId}
+          onMemberAssigned={() => {
+            onMemberAssigned?.();
+          }}
+        />
       )}
     </div>
   );

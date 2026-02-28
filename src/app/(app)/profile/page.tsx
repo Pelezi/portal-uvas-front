@@ -409,27 +409,7 @@ export default function ProfilePage() {
     setPhone(formatted);
   };
 
-  const handlePhoneBlur = () => {
-    // Sincronizar com redes sociais (WhatsApp) quando perder o foco
-    const phoneDigits = phone.replace(/\D/g, '');
-    const hasValidPhone = phoneDigits.length >= 12; // +55 + 11 dígitos (DDD + número)
-    
-    setSocialMedia(prevSocialMedia => {
-      const hasWhatsapp = prevSocialMedia.some(sm => sm.type === 'WHATSAPP');
-      
-      // Se já existe WhatsApp, não faz nada (mesmo que seja número diferente)
-      if (hasWhatsapp) {
-        return prevSocialMedia;
-      }
-      
-      // Se há um número válido e não existe WhatsApp, adicionar
-      if (hasValidPhone) {
-        return [...prevSocialMedia, { type: 'WHATSAPP', username: phone }];
-      }
-      
-      return prevSocialMedia;
-    });
-  };
+
 
   const getMaritalStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
@@ -544,7 +524,7 @@ export default function ProfilePage() {
 
         {/* Botões flutuantes quando em modo de edição */}
         {isEditing && (
-          <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 shadow-lg z-50">
+          <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 shadow-lg z-50 lg:left-64">
             <div className="container mx-auto px-6 py-4 flex justify-end gap-3">
               <button
                 onClick={handleCancelEdit}
@@ -693,7 +673,6 @@ export default function ProfilePage() {
                       label="Telefone"
                       value={phone}
                       onChange={handlePhoneChange}
-                      onBlur={handlePhoneBlur}
                       placeholder="(11) 99999-9999"
                       inputProps={{ maxLength: 25 }}
                       className="bg-gray-700"
@@ -1014,7 +993,6 @@ export default function ProfilePage() {
                           <MenuItem value="INSTAGRAM">Instagram</MenuItem>
                           <MenuItem value="FACEBOOK">Facebook</MenuItem>
                           <MenuItem value="TWITTER">Twitter/X</MenuItem>
-                          <MenuItem value="WHATSAPP">WhatsApp</MenuItem>
                           <MenuItem value="LINKEDIN">LinkedIn</MenuItem>
                           <MenuItem value="TIKTOK">TikTok</MenuItem>
                           <MenuItem value="YOUTUBE">YouTube</MenuItem>
@@ -1040,7 +1018,6 @@ export default function ProfilePage() {
                           setSocialMedia(updated);
                         }}
                         placeholder={
-                          sm.type === 'WHATSAPP' ? '+55 11 99999-9999' : 
                           sm.type === 'INSTAGRAM' || sm.type === 'TWITTER' || sm.type === 'TIKTOK' 
                             ? '@username' 
                             : 'username ou URL'
@@ -1163,7 +1140,7 @@ export default function ProfilePage() {
         </div>
 
         {/* DADOS DE ACESSO */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 mb-15">
           {/* Alterar Email */}
           <div className="bg-gray-800 rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold mb-4 text-gray-100 border-b border-gray-700 pb-2">Email</h2>

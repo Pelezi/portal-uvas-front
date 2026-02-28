@@ -11,9 +11,11 @@ import toast from 'react-hot-toast';
 import { createTheme, ThemeProvider, TextField } from '@mui/material';
 import { FiEdit2, FiTrash2, FiPlus, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
+import dynamic from 'next/dynamic';
 import MemberModal from '@/components/MemberModal';
-import MemberViewModal from '@/components/MemberViewModal';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
+
+const MemberViewModal = dynamic(() => import('@/components/MemberViewModal'), { ssr: false });
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -186,8 +188,9 @@ export default function MembersManagementPage() {
   const getInitials = (name?: string | null) => {
     if (!name) return '?';
     const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
+    const filteredParts = parts.filter(p => !['da', 'de', 'do', 'das', 'dos', 'e', 'a', 'o'].includes(p.toLowerCase()) && p.trim() !== '');
+    if (filteredParts.length >= 2) {
+      return (filteredParts[0][0] + filteredParts[1][0]).toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
   };
@@ -233,6 +236,7 @@ export default function MembersManagementPage() {
       if (filterRedeId) filters.redeId = filterRedeId;
       if (filterCongregacaoId) filters.congregacaoId = filterCongregacaoId;
       if (!filterMyDisciples) filters.all = true;
+      if (filterName) filters.name = filterName;
       filters.isActive = !filterInactive;
       filters.page = currentPage;
       filters.pageSize = pageSize;
@@ -509,7 +513,8 @@ export default function MembersManagementPage() {
               {filteredMembers.map((m) => {
                 const leadershipTags: { label: string; color: string }[] = (m as any).leadershipTags || [];
                 const hasLeadership = leadershipTags.length > 0;
-                const showNoCelula = !m.celulaId && !hasLeadership;
+                const isHost = m.hostedCelulas && m.hostedCelulas.length > 0;
+                const showNoCelula = !m.celulaId && !hasLeadership && !isHost;
 
                 return (
                   <li
@@ -541,6 +546,11 @@ export default function MembersManagementPage() {
                           </h4>
                           <p className="text-sm text-gray-400 mt-1">
                             {m.celula && `${m.celula.name}`}
+                            {isHost && !m.celula && m.hostedCelulas && m.hostedCelulas.map((hostCel, idx) => (
+                              <span key={idx} className="text-orange-400 font-semibold">
+                                {idx > 0 && ', '}Anfitrião - {hostCel.name}
+                              </span>
+                            ))}
                             {leadershipTags.map((tag, idx) => (
                               <span key={idx} className={`${tag.color} ml-2 font-semibold`}>
                                 • {tag.label}

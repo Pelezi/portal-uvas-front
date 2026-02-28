@@ -11,6 +11,8 @@ interface MonthReportData {
   present: Member[];
   absent: Member[];
   hasReport?: boolean;
+  offerAmount?: number;
+  type?: 'CELULA' | 'CULTO';
 }
 
 interface MonthReportsResponse {

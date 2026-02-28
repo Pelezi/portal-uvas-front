@@ -78,6 +78,7 @@ export const celulasService = {
       complement?: string;
       state?: string;
       parallelCelulaId?: number | null;
+      isOk?: boolean;
     },
   ): Promise<Celula> => {
     const res = await api.put<Celula>(`/celulas/${id}`, data);

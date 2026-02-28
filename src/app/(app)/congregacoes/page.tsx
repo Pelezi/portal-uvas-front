@@ -8,11 +8,13 @@ import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { FiTrash2, FiPlus, FiEdit2, FiMapPin, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from 'react-icons/fa6';
+import dynamic from 'next/dynamic';
 import ModalConfirm from '@/components/ModalConfirm';
 import { Congregacao, Member, Rede } from '@/types';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
-import CongregacaoViewModal from '@/components/CongregacaoViewModal';
 import { TextField, Autocomplete, ThemeProvider, createTheme } from '@mui/material';
+
+const CongregacaoViewModal = dynamic(() => import('@/components/CongregacaoViewModal'), { ssr: false });
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -30,8 +32,7 @@ export default function CongregacoesPage() {
   const [filterModalOpen, setFilterModalOpen] = useState(false);
 
   // View modal state
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [viewingCongregacao, setViewingCongregacao] = useState<Congregacao | null>(null);
+  const [viewingCongregacaoId, setViewingCongregacaoId] = useState<number | null>(null);
 
   // expansion & cache maps (já não são mais usados, mas mantidos para não quebrar)
   const [expandedCongregacoes, setExpandedCongregacoes] = useState<Record<number, boolean>>({});
@@ -166,23 +167,7 @@ export default function CongregacoesPage() {
   };
 
   const handleOpenViewModal = async (c: Congregacao) => {
-    try {
-      // Carregar as redes da congregação
-      const allRedes = await redesService.getRedes();
-      const congregacaoRedes = (allRedes || []).filter((r: Rede) => r.congregacaoId === c.id);
-      
-      // Criar uma cópia da congregação com as redes
-      const congregacaoWithRedes = {
-        ...c,
-        redes: congregacaoRedes
-      };
-      
-      setViewingCongregacao(congregacaoWithRedes);
-      setIsViewModalOpen(true);
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao carregar detalhes da congregação');
-    }
+    setViewingCongregacaoId(c.id);
   };
 
   const onToggleCongregacao = async (c: Congregacao) => {
@@ -979,12 +964,9 @@ export default function CongregacoesPage() {
 
         {/* View Modal */}
         <CongregacaoViewModal
-          congregacao={viewingCongregacao}
-          isOpen={isViewModalOpen}
-          onClose={() => {
-            setIsViewModalOpen(false);
-            setViewingCongregacao(null);
-          }}
+          congregacaoId={viewingCongregacaoId}
+          isOpen={!!viewingCongregacaoId}
+          onClose={() => setViewingCongregacaoId(null)}
         />
 
         {/* Filter Modal */}

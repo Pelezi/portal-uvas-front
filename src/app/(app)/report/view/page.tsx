@@ -26,6 +26,8 @@ interface ReportData {
   absent: Member[];
   hasReport?: boolean;
   isStandardDay?: boolean;
+  offerAmount?: number;
+  type?: 'CELULA' | 'CULTO';
 }
 
 interface CelulaReportData {
@@ -56,6 +58,7 @@ export default function ViewReportPage() {
   const [selectedRedeId, setSelectedRedeId] = useState<number | null>(null);
   const [selectedDiscipuladoId, setSelectedDiscipuladoId] = useState<number | null>(null);
   const [selectedCelulaId, setSelectedCelulaId] = useState<number | null>(null);
+  const [selectedReportType, setSelectedReportType] = useState<'ALL' | 'CELULA' | 'CULTO'>('ALL');
   
   const [selectedMonth, setSelectedMonth] = useState<Dayjs | null>(dayjs());
   const [celulasData, setCelulasData] = useState<CelulaReportData[]>([]);
@@ -514,6 +517,26 @@ export default function ViewReportPage() {
         });
         csv += '\n';
       });
+
+      // Adicionar linha de ofertas se houver alguma
+      const hasOffers = celulaData.reports.some(r => r.offerAmount !== undefined && r.offerAmount !== null);
+      if (hasOffers) {
+        csv += '\n';
+        csv += 'Oferta;;';
+        celulaData.reports.forEach(report => {
+          if (report.offerAmount !== undefined && report.offerAmount !== null) {
+            csv += `R$ ${report.offerAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          } else {
+            csv += '-';
+          }
+          csv += ';';
+        });
+        csv += '\n';
+        const totalOffers = celulaData.reports
+          .filter(r => r.hasReport && r.offerAmount)
+          .reduce((sum, r) => sum + (r.offerAmount || 0), 0);
+        csv += `Total de Ofertas: R$ ${totalOffers.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      }
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -644,6 +667,48 @@ export default function ViewReportPage() {
           }
         });
       });
+      
+      // Adicionar linha de ofertas se houver alguma
+      const hasOffers = celulaData.reports.some(r => r.offerAmount !== undefined && r.offerAmount !== null);
+      if (hasOffers) {
+        const offerRowIndex = infoRow + 1 + celulaData.allMembers.length + 1;
+        const offerRow = worksheet.getRow(offerRowIndex);
+        const offerData = [
+          'Oferta',
+          '',
+          ...celulaData.reports.map(report => {
+            if (report.offerAmount !== undefined && report.offerAmount !== null) {
+              return `R$ ${report.offerAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+            return '-';
+          })
+        ];
+        offerRow.values = offerData;
+        offerRow.font = { bold: true };
+        offerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF3F4F6' }
+        };
+        offerRow.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+            left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+            bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+            right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+          };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        // Total de ofertas
+        const totalOffers = celulaData.reports
+          .filter(r => r.hasReport && r.offerAmount)
+          .reduce((sum, r) => sum + (r.offerAmount || 0), 0);
+        const totalRow = worksheet.getRow(offerRowIndex + 1);
+        totalRow.getCell(1).value = 'Total de Ofertas:';
+        totalRow.getCell(2).value = `R$ ${totalOffers.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        totalRow.font = { bold: true, color: { argb: 'FF22C55E' } };
+      }
       
       // Ajustar largura das colunas
       worksheet.getColumn(1).width = 30;
@@ -799,6 +864,43 @@ export default function ViewReportPage() {
           }
         }
       });
+
+      // Adicionar informações de ofertas se houver
+      const hasOffers = celulaData.reports.some(r => r.offerAmount !== undefined && r.offerAmount !== null);
+      if (hasOffers) {
+        const finalY = (doc as any).lastAutoTable.finalY || yPos;
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text('Ofertas:', 10, finalY + 10);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        let offerY = finalY + 16;
+        
+        celulaData.reports.forEach((report, idx) => {
+          if (report.offerAmount !== undefined && report.offerAmount !== null) {
+            const dateStr = dayjs(report.date).format('DD/MM/YYYY');
+            const offerValue = `R$ ${report.offerAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            doc.text(`${dateStr}: ${offerValue}`, 15, offerY);
+            offerY += 5;
+          }
+        });
+        
+        // Total de ofertas
+        const totalOffers = celulaData.reports
+          .filter(r => r.hasReport && r.offerAmount)
+          .reduce((sum, r) => sum + (r.offerAmount || 0), 0);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(34, 197, 94); // verde
+        doc.text(
+          `Total de Ofertas: R$ ${totalOffers.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 
+          10, 
+          offerY + 3
+        );
+      }
     });
 
     doc.save(`relatorio_${selectedMonth?.format('YYYY-MM')}.pdf`);
@@ -847,7 +949,7 @@ export default function ViewReportPage() {
 
           {/* Filtros */}
           <div className="bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               {/* Congregação */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -946,7 +1048,25 @@ export default function ViewReportPage() {
                   }}
                 />
               </div>
+
+              {/* Tipo de Relatório */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Tipo de Relatório
+                </label>
+                <select
+                  value={selectedReportType}
+                  onChange={(e) => setSelectedReportType(e.target.value as 'ALL' | 'CELULA' | 'CULTO')}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
+                >
+                  <option value="ALL">Todos</option>
+                  <option value="CELULA">Célula</option>
+                  <option value="CULTO">Culto</option>
+                </select>
+              </div>
             </div>
+          </div>
+
           </div>
 
           {/* Resultados */}
@@ -963,15 +1083,28 @@ export default function ViewReportPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {celulasData.map((celulaData) => (
+              {celulasData.map((celulaData) => {
+                // Filtrar relatórios por tipo
+                const filteredReports = selectedReportType === 'ALL' 
+                  ? celulaData.reports 
+                  : celulaData.reports.filter(r => r.type === selectedReportType || !r.hasReport);
+
+                // Pular célula se não houver relatórios após filtro
+                if (filteredReports.length === 0 || filteredReports.every(r => !r.hasReport)) {
+                  return null;
+                }
+
+                const filteredCelulaData = { ...celulaData, reports: filteredReports };
+
+                return (
                 <div key={celulaData.celula.id} className="bg-gray-800 rounded-lg shadow-sm border border-gray-700">
                   {/* Header da célula */}
                   <div className="px-6 py-4 border-b border-gray-700">
                     <h2 className="text-xl font-bold text-gray-100">
-                      {celulaData.celula.name}
+                      {filteredCelulaData.celula.name}
                     </h2>
                     <p className="text-sm text-gray-400">
-                      {getDayLabel(celulaData.celula.weekday)} {celulaData.celula.time || ''}
+                      {getDayLabel(filteredCelulaData.celula.weekday)} {filteredCelulaData.celula.time || ''}
                     </p>
                   </div>
 
@@ -983,7 +1116,7 @@ export default function ViewReportPage() {
                           <th className="px-4 py-3 text-left text-sm font-semibold text-gray-100 bg-gray-900 sticky left-0 z-10">
                             Membro
                           </th>
-                          {celulaData.reports.map((report) => (
+                          {filteredCelulaData.reports.map((report) => (
                             <th 
                               key={dayjs(report.date).format('YYYY-MM-DD')} 
                               className="px-4 py-3 text-center text-sm font-semibold text-gray-100 bg-gray-900 min-w-[100px]"
@@ -1007,7 +1140,7 @@ export default function ViewReportPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {celulaData.allMembers.map((member, idx) => (
+                        {filteredCelulaData.allMembers.map((member, idx) => (
                           <tr 
                             key={member.id}
                             className={`border-b border-gray-700 ${
@@ -1020,9 +1153,9 @@ export default function ViewReportPage() {
                                 {getMinistryTypeLabel(getMemberMinistryType(member))}
                               </div>
                             </td>
-                            {celulaData.reports.map((report) => {
+                            {filteredCelulaData.reports.map((report) => {
                               const dateStr = dayjs(report.date).format('YYYY-MM-DD');
-                              const isPresent = wasMemberPresent(member.id, celulaData.reports, dateStr);
+                              const isPresent = wasMemberPresent(member.id, filteredCelulaData.reports, dateStr);
                               const isFutureDate = dayjs(report.date).isAfter(dayjs(), 'day');
                               
                               return (
@@ -1054,7 +1187,7 @@ export default function ViewReportPage() {
 
                   {/* Resumo */}
                   <div className="px-4 py-3 bg-gray-900 border-t border-gray-700">
-                    <div className="flex items-center gap-6 text-sm">
+                    <div className="flex items-center gap-6 text-sm flex-wrap">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="text-green-500" size={16} />
                         <span className="text-gray-300">Presente</span>
@@ -1064,12 +1197,24 @@ export default function ViewReportPage() {
                         <span className="text-gray-300">Ausente</span>
                       </div>
                       <div className="ml-auto text-gray-400">
-                        Total de membros: {celulaData.allMembers.length}
+                        Total de membros: {filteredCelulaData.allMembers.length}
                       </div>
+                      {filteredCelulaData.reports.some(r => r.offerAmount !== undefined && r.offerAmount !== null) && (
+                        <div className="w-full mt-2 pt-2 border-t border-gray-700 flex items-center gap-2">
+                          <span className="text-gray-300 font-medium">Total de Ofertas:</span>
+                          <span className="text-green-400 font-semibold">
+                            R$ {filteredCelulaData.reports
+                              .filter(r => r.hasReport && r.offerAmount)
+                              .reduce((sum, r) => sum + (r.offerAmount || 0), 0)
+                              .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

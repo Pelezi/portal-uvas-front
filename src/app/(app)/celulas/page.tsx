@@ -19,9 +19,11 @@ import { LuHistory } from 'react-icons/lu';
 
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import CelulaModal from '@/components/CelulaModal';
-import CelulaViewModal from '@/components/CelulaViewModal';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
+
+const CelulaViewModal = dynamic(() => import('@/components/CelulaViewModal'), { ssr: false });
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 export default function CelulasPage() {
@@ -36,8 +38,7 @@ export default function CelulasPage() {
   const [editingCelula, setEditingCelula] = useState<Celula | null>(null);
 
   // View modal state
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [viewingCelula, setViewingCelula] = useState<Celula | null>(null);
+  const [viewingCelulaId, setViewingCelulaId] = useState<number | null>(null);
 
   // Filter modal state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -99,6 +100,18 @@ export default function CelulasPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNewLeaderDropdown, showOldLeaderDropdown]);
 
+  const handleToggleIsOk = async (celula: Celula) => {
+    try {
+      await celulasService.updateCelula(celula.id, { isOk: !celula.isOk });
+      // Atualizar o estado local
+      setGroups(prev => prev.map(g => g.id === celula.id ? { ...g, isOk: !celula.isOk } : g));
+      toast.success('Status atualizado com sucesso!');
+    } catch (e) {
+      console.error(e);
+      toast.error(ErrorMessages.updateCelula(e));
+    }
+  };
+
   const load = async () => {
     if (authLoading) return;
 
@@ -134,7 +147,7 @@ export default function CelulasPage() {
         // Carregar apenas usuários que podem ser líderes (PRESIDENT_PASTOR, PASTOR, DISCIPULADOR, LEADER ou LEADER_IN_TRAINING)
         const isAdmin = user?.permission?.isAdmin || false;
         const u = await memberService.getMembersAutocomplete({ 
-          ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING',
+          ministryType: 'PRESIDENT_PASTOR,PASTOR,DISCIPULADOR,LEADER,LEADER_IN_TRAINING,MEMBER',
           ...(isAdmin && { all: true })
         });
         setMembers(u || []);
@@ -218,13 +231,11 @@ export default function CelulasPage() {
   };
 
   const handleOpenViewModal = (celula: Celula) => {
-    setViewingCelula(celula);
-    setIsViewModalOpen(true);
+    setViewingCelulaId(celula.id);
   };
 
   const handleCloseViewModal = () => {
-    setIsViewModalOpen(false);
-    setViewingCelula(null);
+    setViewingCelulaId(null);
   };
 
   const duplicate = async (g: Celula) => {
@@ -587,6 +598,15 @@ export default function CelulasPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer" title="Marcar como OK">
+                        <input
+                          type="checkbox"
+                          checked={g.isOk || false}
+                          onChange={() => handleToggleIsOk(g)}
+                          className="w-4 h-4 accent-green-500 cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-400">OK</span>
+                      </label>
                       <button
                         onClick={() => handleOpenViewModal(g)}
                         className="p-2 text-blue-400 hover:bg-blue-900/30 rounded transition-colors"
@@ -653,7 +673,7 @@ export default function CelulasPage() {
 
       {/* CelulaModal */}
       <CelulaModal
-        celula={editingCelula}
+        celulaId={editingCelula?.id}
         isOpen={showCelulaModal}
         onClose={handleCloseCelulaModal}
         onSave={handleSaveCelula}
@@ -797,12 +817,9 @@ export default function CelulasPage() {
 
       {/* CelulaViewModal */}
       <CelulaViewModal
-        celula={viewingCelula}
-        isOpen={isViewModalOpen}
+        celulaId={viewingCelulaId}
+        isOpen={!!viewingCelulaId}
         onClose={handleCloseViewModal}
-        discipuladorName={viewingCelula ? viewingCelula.discipulado?.discipulador?.name : undefined}
-        redeName={viewingCelula ? viewingCelula.discipulado?.rede?.name : undefined}
-        congregacaoName={viewingCelula ? viewingCelula.discipulado?.rede?.congregacao?.name : undefined}
       />
 
       {/* FilterModal */}

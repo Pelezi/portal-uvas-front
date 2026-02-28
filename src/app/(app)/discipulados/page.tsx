@@ -11,9 +11,11 @@ import { ErrorMessages } from '@/lib/errorHandler';
 import { createTheme, ThemeProvider, Autocomplete, TextField, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { FiTrash2, FiPlus, FiEdit2, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
+import dynamic from 'next/dynamic';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
-import DiscipuladoViewModal from '@/components/DiscipuladoViewModal';
 import ModalConfirm from '@/components/ModalConfirm';
+
+const DiscipuladoViewModal = dynamic(() => import('@/components/DiscipuladoViewModal'), { ssr: false });
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -28,8 +30,7 @@ export default function DiscipuladosPage() {
   const [loading, setLoading] = useState(false);
   
   // View modal state
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [viewingDiscipulado, setViewingDiscipulado] = useState<Discipulado | null>(null);
+  const [viewingDiscipuladoId, setViewingDiscipuladoId] = useState<number | null>(null);
   
   // Confirmation modal state
   const [confirmingDiscipulado, setConfirmingDiscipulado] = useState<Discipulado | null>(null);
@@ -241,13 +242,11 @@ export default function DiscipuladosPage() {
   };
 
   const handleOpenViewModal = (d: Discipulado) => {
-    setViewingDiscipulado(d);
-    setIsViewModalOpen(true);
+    setViewingDiscipuladoId(d.id);
   };
 
   const handleCloseViewModal = () => {
-    setIsViewModalOpen(false);
-    setViewingDiscipulado(null);
+    setViewingDiscipuladoId(null);
   };
 
   const handleConfirmDelete = (d: Discipulado) => {
@@ -1146,8 +1145,8 @@ export default function DiscipuladosPage() {
 
         {/* DiscipuladoViewModal */}
         <DiscipuladoViewModal
-          discipulado={viewingDiscipulado}
-          isOpen={isViewModalOpen}
+          discipuladoId={viewingDiscipuladoId}
+          isOpen={!!viewingDiscipuladoId}
           onClose={handleCloseViewModal}
         />
 

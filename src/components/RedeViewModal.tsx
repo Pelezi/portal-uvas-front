@@ -1,24 +1,61 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Rede, Discipulado } from '@/types';
 import { Network, Church, Users, BookOpen } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { redesService } from '@/services/redesService';
+
+const MemberViewModal = dynamic(() => import('./MemberViewModal'), { ssr: false });
+const DiscipuladoViewModal = dynamic(() => import('./DiscipuladoViewModal'), { ssr: false });
+const CongregacaoViewModal = dynamic(() => import('./CongregacaoViewModal'), { ssr: false });
 
 interface RedeViewModalProps {
-  rede: Rede | null;
+  redeId: number | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export default function RedeViewModal({ 
-  rede, 
+  redeId, 
   isOpen, 
   onClose
 }: RedeViewModalProps) {
+  const [rede, setRede] = useState<Rede | null>(null);
+  const [loadingRede, setLoadingRede] = useState(false);
+  const [viewingMemberId, setViewingMemberId] = useState<number | null>(null);
+  const [viewingDiscipuladoId, setViewingDiscipuladoId] = useState<number | null>(null);
+  const [viewingCongregacaoId, setViewingCongregacaoId] = useState<number | null>(null);
+
+  // ESC key handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (redeId && isOpen) {
+      setLoadingRede(true);
+      redesService.getRede(redeId)
+        .then(setRede)
+        .catch(err => {
+          console.error('Erro ao carregar rede:', err);
+          setRede(null);
+        })
+        .finally(() => setLoadingRede(false));
+    } else {
+      setRede(null);
+    }
+  }, [redeId, isOpen]);
+
   const getInitials = (name?: string | null) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -34,7 +71,12 @@ export default function RedeViewModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl bg-gray-800 p-0 gap-0 overflow-hidden max-h-[90vh] rounded-lg">
-        {rede && (
+        {loadingRede && (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+          </div>
+        )}
+        {!loadingRede && rede && (
           <ScrollArea className="max-h-[90vh]">
             <div className="p-6 space-y-6">
               {/* Header */}
@@ -61,7 +103,10 @@ export default function RedeViewModal({
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Pastor Responsável</h3>
                 <div className="space-y-3">
                   {rede.pastor ? (
-                    <div className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                    <div 
+                      onClick={() => setViewingMemberId(rede.pastor!.id)}
+                      className="flex items-center gap-3 bg-gray-700/50 rounded-lg p-3 border border-gray-600 cursor-pointer hover:bg-gray-700 hover:border-blue-500 transition-all"
+                    >
                       <Avatar className="h-11 w-11">
                         <AvatarImage src={rede.pastor.photoUrl} alt={rede.pastor.name} />
                         <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
@@ -93,7 +138,10 @@ export default function RedeViewModal({
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">Hierarquia</h3>
                 <div className="grid grid-cols-1 gap-3">
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center">
+                  <div 
+                    className={`bg-gray-700/50 rounded-lg p-3 border border-gray-600 text-center ${rede.congregacao ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}
+                    onClick={() => rede.congregacao && setViewingCongregacaoId(rede.congregacao.id)}
+                  >
                     <Church className="h-4 w-4 text-blue-500 mx-auto mb-1" />
                     <p className="text-[10px] text-gray-400">Congregação</p>
                     <p className="text-sm font-medium text-white">{rede.congregacao?.name || "—"}</p>
@@ -113,7 +161,8 @@ export default function RedeViewModal({
                   {rede?.discipulados?.map(discipulado => (
                     <div 
                       key={discipulado.id} 
-                      className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors border border-transparent"
+                      onClick={() => setViewingDiscipuladoId(discipulado.id)}
+                      className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-gray-700/30 transition-colors border border-transparent cursor-pointer hover:border-blue-500"
                     >
                       <Avatar className="h-8 w-8">
                         {discipulado.discipulador ? (
@@ -145,6 +194,30 @@ export default function RedeViewModal({
           </ScrollArea>
         )}
       </DialogContent>
+
+      {viewingMemberId !== null && (
+        <MemberViewModal
+          memberId={viewingMemberId}
+          isOpen={true}
+          onClose={() => setViewingMemberId(null)}
+        />
+      )}
+
+      {viewingDiscipuladoId !== null && (
+        <DiscipuladoViewModal
+          discipuladoId={viewingDiscipuladoId}
+          isOpen={true}
+          onClose={() => setViewingDiscipuladoId(null)}
+        />
+      )}
+
+      {viewingCongregacaoId !== null && (
+        <CongregacaoViewModal
+          congregacaoId={viewingCongregacaoId}
+          isOpen={true}
+          onClose={() => setViewingCongregacaoId(null)}
+        />
+      )}
     </Dialog>
   );
 }

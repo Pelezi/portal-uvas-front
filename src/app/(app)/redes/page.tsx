@@ -9,10 +9,12 @@ import toast from 'react-hot-toast';
 import { ErrorMessages } from '@/lib/errorHandler';
 import { FiTrash2, FiPlus, FiEdit2, FiEye } from 'react-icons/fi';
 import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
+import dynamic from 'next/dynamic';
 import ModalConfirm from '@/components/ModalConfirm';
 import FilterModal, { FilterConfig } from '@/components/FilterModal';
-import RedeViewModal from '@/components/RedeViewModal';
 import { Discipulado, Member, Rede, Congregacao } from '@/types';
+
+const RedeViewModal = dynamic(() => import('@/components/RedeViewModal'), { ssr: false });
 import { useAuth } from '@/contexts/AuthContext';
 import { createTheme, ThemeProvider, FormControl, InputLabel, Select, MenuItem, TextField, Autocomplete, Button } from '@mui/material';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -63,8 +65,7 @@ export default function RedesPage() {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // View modal state
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [viewingRede, setViewingRede] = useState<Rede | null>(null);
+  const [viewingRedeId, setViewingRedeId] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -311,13 +312,11 @@ export default function RedesPage() {
   };
 
   const handleOpenViewModal = async (r: Rede) => {
-    setViewingRede(r);
-    setIsViewModalOpen(true);
+    setViewingRedeId(r.id);
   };
 
   const handleCloseViewModal = () => {
-    setIsViewModalOpen(false);
-    setViewingRede(null);
+    setViewingRedeId(null);
   };
 
   // Verificar se há filtros ativos
@@ -776,8 +775,8 @@ export default function RedesPage() {
 
       {/* View Modal */}
       <RedeViewModal
-        rede={viewingRede}
-        isOpen={isViewModalOpen}
+        redeId={viewingRedeId}
+        isOpen={!!viewingRedeId}
         onClose={handleCloseViewModal}
       />
 

@@ -101,6 +101,7 @@ export interface Celula {
   level?: 'EVANGELISM' | 'EDIFICATION' | 'COMMUNION' | 'MULTIPLICATION' | 'UNKNOWN' | null;
   parallelCelulaId?: number | null;
   parallelCelula?: Celula | null;
+  isOk?: boolean;
 
   // Address fields
   country?: string | null;
@@ -275,6 +276,7 @@ export interface Member {
   // Leadership positions
   ledCelulas?: Celula[];
   leadingInTrainingCelulas?: CelulaLeadersInTraining[];
+  hostedCelulas?: Array<{ id: number; name: string }>;
   discipulados?: Discipulado[];
   redes?: Rede[];
   congregacoesPastorGoverno?: Congregacao[];
@@ -308,6 +310,8 @@ export interface ReportCreateInput {
   date?: string;
   /** Report type: CELULA or CULTO */
   type?: 'CELULA' | 'CULTO';
+  /** Offer amount for the report (only for CELULA type) */
+  offerAmount?: number;
 }
 
 export interface PermissionUpsertInput {

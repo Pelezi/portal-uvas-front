@@ -54,6 +54,7 @@ export default function ReportPage() {
   const [presentMap, setPresentMap] = useState<Record<number, boolean>>({});
   const [reportDate, setReportDate] = useState<Dayjs | null>(null);
   const [reportType, setReportType] = useState<"CELULA" | "CULTO">("CELULA");
+  const [offerAmount, setOfferAmount] = useState<string>("");
   const [pendingDate, setPendingDate] = useState<Dayjs | null>(null);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -552,10 +553,16 @@ export default function ReportPage() {
 
     setIsSubmitting(true);
     try {
+      // Converter offerAmount de string para número (remover R$ e converter vírgula para ponto)
+      const offerAmountValue = offerAmount && offerAmount.trim() !== '' 
+        ? parseFloat(offerAmount.replace('R$', '').replace(',', '.').trim()) 
+        : undefined;
+
       await reportsService.createReport(selectedGroup, {
         memberIds,
         date: reportDate.format("YYYY-MM-DD"),
         type: reportType,
+        ...(offerAmountValue !== undefined && !isNaN(offerAmountValue) && { offerAmount: offerAmountValue })
       });
       toast.success("Relatório enviado com sucesso!");
       setShowReplaceModal(false);
@@ -566,6 +573,7 @@ export default function ReportPage() {
         map[mm.id] = false;
       });
       setPresentMap(map);
+      setOfferAmount("");
 
       // Voltar para visão semanal e forçar reload dos relatórios
       setReloadTrigger((prev) => prev + 1);
@@ -1415,6 +1423,47 @@ const handleAddExistingMember = async (member: Member) => {
           </div>
         </div>
       </ThemeProvider>
+
+      {reportType === "CELULA" && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">
+            Valor da Oferta (opcional)
+          </label>
+          <input
+            type="text"
+            value={offerAmount}
+            onChange={(e) => {
+              const value = e.target.value;
+              // Remover tudo exceto dígitos
+              const onlyDigits = value.replace(/\D/g, '');
+              
+              if (onlyDigits === '') {
+                setOfferAmount('');
+                return;
+              }
+              
+              // Converter para número (em centavos)
+              const numValue = parseInt(onlyDigits, 10);
+              
+              // Dividir por 100 para obter o valor em reais
+              const realValue = numValue / 100;
+              
+              // Formatar com 2 casas decimais e vírgula
+              const formatted = realValue.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              });
+              
+              setOfferAmount('R$ ' + formatted);
+            }}
+            placeholder="R$ 0,00"
+            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Digite o valor da oferta coletada na célula
+          </p>
+        </div>
+      )}
 
       <div className="mb-4">
         <div className="flex items-center justify-between">
