@@ -263,6 +263,16 @@ export default function MemberModal({ memberId, isOpen, onClose, onSave, celulas
     },
   });
 
+  // Definir valor padrão do cargo ministerial como REGULAR_ATTENDEE em modo de criação
+  useEffect(() => {
+    if (!isEditing && isOpen && ministries.length > 0 && !ministryPositionId) {
+      const regularAttendee = ministries.find(m => m.type === 'REGULAR_ATTENDEE');
+      if (regularAttendee) {
+        setMinistryPositionId(regularAttendee.id);
+      }
+    }
+  }, [isEditing, isOpen, ministries, ministryPositionId]);
+
   useEffect(() => {
     if (isOpen) {
       if (member) {
