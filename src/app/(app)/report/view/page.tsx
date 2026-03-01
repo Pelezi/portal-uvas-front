@@ -19,6 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
+import { FaFilter, FaFilterCircleXmark } from "react-icons/fa6";
+import FilterModal, { FilterConfig } from '@/components/FilterModal';
 
 interface ReportData {
   date: string;
@@ -53,16 +55,20 @@ export default function ViewReportPage() {
   const [discipulados, setDiscipulados] = useState<Discipulado[]>([]);
   const [celulas, setCelulas] = useState<Celula[]>([]);
   
-  // Filtros selecionados (cada um pode ter apenas um valor ou null)
+  // Filtros selecionados
   const [selectedCongregacaoId, setSelectedCongregacaoId] = useState<number | null>(null);
   const [selectedRedeId, setSelectedRedeId] = useState<number | null>(null);
   const [selectedDiscipuladoId, setSelectedDiscipuladoId] = useState<number | null>(null);
   const [selectedCelulaId, setSelectedCelulaId] = useState<number | null>(null);
-  const [selectedReportType, setSelectedReportType] = useState<'ALL' | 'CELULA' | 'CULTO'>('ALL');
+  const [selectedReportType, setSelectedReportType] = useState< 'CELULA' | 'CULTO'>('CELULA');
+  const [filterMyCells, setFilterMyCells] = useState(true);
   
   const [selectedMonth, setSelectedMonth] = useState<Dayjs | null>(dayjs());
   const [celulasData, setCelulasData] = useState<CelulaReportData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Filter modal state
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const muiTheme = createTheme({
     palette: {
@@ -70,302 +76,76 @@ export default function ViewReportPage() {
     },
   });
 
-  // Carregar dados iniciais
+  const isAdminOrPresident = () => {
+    const permission = user?.permission;
+    return permission?.isAdmin || permission?.ministryType === 'PRESIDENT_PASTOR';
+  };
+
+  // Carregar dados iniciais para filtros
   useEffect(() => {
-    const loadData = async () => {
+    const loadFilterData = async () => {
       if (authLoading) return;
       try {
+        const useAll = isAdminOrPresident();
         const [congregacoesData, redesData, discipuladosData, celulasData] = await Promise.all([
-          congregacoesService.getCongregacoes(),
-          redesService.getRedes(),
-          discipuladosService.getDiscipulados(),
-          celulasService.getCelulas()
+          congregacoesService.getCongregacoes(useAll ? { all: true } : undefined),
+          redesService.getRedes(useAll ? { all: true } : {}),
+          discipuladosService.getDiscipulados(useAll ? { all: true } : undefined),
+          celulasService.getCelulas(useAll ? { all: true } : undefined)
         ]);
 
         setCongregacoes(congregacoesData);
         setRedes(redesData);
         setDiscipulados(discipuladosData);
         setCelulas(celulasData);
-
-        // Auto-configurar filtros baseado nas permissões do usuário
-        const permission = user?.permission;
-        if (permission && !permission.isAdmin) {
-          const allowedCelulaIds = permission.celulaIds || [];
-          
-          if (permission.leader && !permission.discipulador) {
-            // Líder: selecionar automaticamente sua célula
-            if (allowedCelulaIds.length > 0) {
-              const celulaId = allowedCelulaIds[0];
-              setSelectedCelulaId(celulaId);
-              
-              // Encontrar discipulado, rede e congregação automaticamente
-              const celula = celulasData.find(c => c.id === celulaId);
-              if (celula?.discipuladoId) {
-                setSelectedDiscipuladoId(celula.discipuladoId);
-                const discipulado = discipuladosData.find(d => d.id === celula.discipuladoId);
-                if (discipulado?.redeId) {
-                  setSelectedRedeId(discipulado.redeId);
-                  const rede = redesData.find(r => r.id === discipulado.redeId);
-                  if (rede?.congregacaoId) {
-                    setSelectedCongregacaoId(rede.congregacaoId);
-                  }
-                }
-              }
-            }
-          } else if (permission.discipulador) {
-            // Discipulador: selecionar automaticamente seu discipulado
-            const userDiscipulado = discipuladosData.find(d => d.discipuladorMemberId === permission.id);
-            if (userDiscipulado) {
-              setSelectedDiscipuladoId(userDiscipulado.id);
-              setSelectedRedeId(userDiscipulado.redeId);
-              const rede = redesData.find(r => r.id === userDiscipulado.redeId);
-              if (rede?.congregacaoId) {
-                setSelectedCongregacaoId(rede.congregacaoId);
-              }
-            }
-          }
-        }
       } catch (e) {
         console.error(e);
         toast.error('Erro ao carregar dados');
       }
     };
-    loadData();
+    loadFilterData();
   }, [user, authLoading]);
 
-  // Filtrar discipulados baseado na rede selecionada
-  const filteredDiscipulados = selectedRedeId
-    ? discipulados.filter(d => d.redeId === selectedRedeId)
-    : discipulados;
+  // Filtrar opções de dropdown com base na seleção hierárquica
+  const getFilteredRedes = () => {
+    if (selectedCongregacaoId) {
+      return redes.filter(r => r.congregacaoId === selectedCongregacaoId);
+    }
+    return redes;
+  };
 
-  // Filtrar células baseado no discipulado selecionado ou rede selecionada
+  const getFilteredDiscipulados = () => {
+    if (selectedRedeId) {
+      return discipulados.filter(d => d.redeId === selectedRedeId);
+    }
+    if (selectedCongregacaoId) {
+      const redeIdsInCongregacao = redes.filter(r => r.congregacaoId === selectedCongregacaoId).map(r => r.id);
+      return discipulados.filter(d => redeIdsInCongregacao.includes(d.redeId));
+    }
+    return discipulados;
+  };
+
   const getFilteredCelulas = () => {
     if (selectedDiscipuladoId) {
       return celulas.filter(c => c.discipuladoId === selectedDiscipuladoId);
-    } else if (selectedRedeId) {
+    }
+    if (selectedRedeId) {
       const discipuladoIdsInRede = discipulados
         .filter(d => d.redeId === selectedRedeId)
         .map(d => d.id);
       return celulas.filter(c => c.discipuladoId && discipuladoIdsInRede.includes(c.discipuladoId));
     }
+    if (selectedCongregacaoId) {
+      const redeIdsInCongregacao = redes.filter(r => r.congregacaoId === selectedCongregacaoId).map(r => r.id);
+      const discipuladoIdsInRedes = discipulados.filter(d => redeIdsInCongregacao.includes(d.redeId)).map(d => d.id);
+      return celulas.filter(c => c.discipuladoId && discipuladoIdsInRedes.includes(c.discipuladoId));
+    }
     return celulas;
   };
 
+  const filteredRedes = getFilteredRedes();
+  const filteredDiscipulados = getFilteredDiscipulados();
   const filteredCelulas = getFilteredCelulas();
-
-  // Aplicar restrições de permissão
-  const getPermittedCongregacoes = () => {
-    const permission = user?.permission;
-    
-    if (!permission) {
-      return [];
-    }
-
-    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
-      return congregacoes;
-    }
-    
-    const allowedCongregacaoIds = new Set<number>();
-    
-    // Se tem congregacaoIds na permissão, adicionar diretamente
-    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
-      permission.congregacaoIds.forEach(id => allowedCongregacaoIds.add(id));
-    }
-    
-    // Se tem redeIds, buscar congregações através de redes
-    if (permission.redeIds && permission.redeIds.length > 0) {
-      redes.forEach(r => {
-        if (r.congregacaoId && permission.redeIds?.includes(r.id)) {
-          allowedCongregacaoIds.add(r.congregacaoId);
-        }
-      });
-    }
-    
-    // Se tem discipuladoIds, buscar congregações através de discipulados -> redes
-    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
-      const redesInDiscipulados = redes.filter(r => {
-        const discipuladosInRede = discipulados.filter(d => d.redeId === r.id);
-        return discipuladosInRede.some(d => permission.discipuladoIds?.includes(d.id));
-      });
-      redesInDiscipulados.forEach(r => {
-        if (r.congregacaoId) {
-          allowedCongregacaoIds.add(r.congregacaoId);
-        }
-      });
-    }
-    
-    // Se tem celulaIds, buscar congregações através de células -> discipulados -> redes
-    if (permission.celulaIds && permission.celulaIds.length > 0) {
-      const allowedCelulas = celulas.filter(c => permission.celulaIds?.includes(c.id));
-      const discipuladoIds = [...new Set(allowedCelulas.map(c => c.discipuladoId).filter(Boolean))];
-      const redesInDiscipulados = redes.filter(r => {
-        const discipuladosInRede = discipulados.filter(d => d.redeId === r.id);
-        return discipuladosInRede.some(d => discipuladoIds.includes(d.id));
-      });
-      redesInDiscipulados.forEach(r => {
-        if (r.congregacaoId) {
-          allowedCongregacaoIds.add(r.congregacaoId);
-        }
-      });
-    }
-    
-    return congregacoes.filter(c => allowedCongregacaoIds.has(c.id));
-  };
-
-  const getPermittedRedes = () => {
-    const permission = user?.permission;
-    if (!permission) {
-      return [];
-    }
-    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
-      return redes;
-    }
-    
-    const allowedRedeIds = new Set<number>();
-    
-    // Se tem congregacaoIds na permissão, adicionar todas as redes dessas congregações
-    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
-      redes.forEach(r => {
-        if (r.congregacaoId && permission.congregacaoIds?.includes(r.congregacaoId)) {
-          allowedRedeIds.add(r.id);
-        }
-      });
-    }
-    
-    // Se tem redeIds na permissão, adicionar diretamente
-    if (permission.redeIds && permission.redeIds.length > 0) {
-      permission.redeIds.forEach(id => allowedRedeIds.add(id));
-    }
-    
-    // Se tem discipuladoIds, buscar as redes desses discipulados
-    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
-      discipulados.forEach(d => {
-        if (permission.discipuladoIds?.includes(d.id)) {
-          allowedRedeIds.add(d.redeId);
-        }
-      });
-    }
-    
-    // Se tem celulaIds, buscar redes através de células -> discipulados -> redes
-    if (permission.celulaIds && permission.celulaIds.length > 0) {
-      const allowedCelulas = celulas.filter(c => permission.celulaIds?.includes(c.id));
-      const discipuladoIds = [...new Set(allowedCelulas.map(c => c.discipuladoId).filter(Boolean))];
-      const allowedDiscipulados = discipulados.filter(d => discipuladoIds.includes(d.id));
-      allowedDiscipulados.forEach(d => allowedRedeIds.add(d.redeId));
-    }
-    
-    return redes.filter(r => allowedRedeIds.has(r.id));
-  };
-
-  const getPermittedDiscipulados = () => {
-    const permission = user?.permission;
-    if (!permission) {
-      return [];
-    }
-    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
-      return filteredDiscipulados;
-    }
-    
-    const allowedDiscipuladoIds = new Set<number>();
-    
-    // Se tem congregacaoIds, buscar discipulados através de congregações -> redes -> discipulados
-    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
-      const redesInCongregacoes = redes.filter(r => 
-        r.congregacaoId && permission.congregacaoIds?.includes(r.congregacaoId)
-      );
-      const redeIds = redesInCongregacoes.map(r => r.id);
-      filteredDiscipulados.forEach(d => {
-        if (redeIds.includes(d.redeId)) {
-          allowedDiscipuladoIds.add(d.id);
-        }
-      });
-    }
-    
-    // Se tem redeIds, buscar discipulados dessas redes
-    if (permission.redeIds && permission.redeIds.length > 0) {
-      filteredDiscipulados.forEach(d => {
-        if (permission.redeIds?.includes(d.redeId)) {
-          allowedDiscipuladoIds.add(d.id);
-        }
-      });
-    }
-    
-    // Se tem discipuladoIds, adicionar diretamente
-    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
-      permission.discipuladoIds.forEach(id => allowedDiscipuladoIds.add(id));
-    }
-    
-    // Se tem celulaIds, buscar discipulados através de células
-    if (permission.celulaIds && permission.celulaIds.length > 0) {
-      const allowedCelulas = celulas.filter(c => permission.celulaIds?.includes(c.id));
-      allowedCelulas.forEach(c => {
-        if (c.discipuladoId) {
-          allowedDiscipuladoIds.add(c.discipuladoId);
-        }
-      });
-    }
-    
-    return filteredDiscipulados.filter(d => allowedDiscipuladoIds.has(d.id));
-  };
-
-  const getPermittedCelulas = () => {
-    const permission = user?.permission;
-    if (!permission) {
-      return [];
-    }
-    if (permission.isAdmin || permission.ministryType === 'PRESIDENT_PASTOR') {
-      return filteredCelulas;
-    }
-    
-    const allowedCelulaIds = new Set<number>();
-    
-    // Se tem congregacaoIds, buscar células através de congregações -> redes -> discipulados -> células
-    if (permission.congregacaoIds && permission.congregacaoIds.length > 0) {
-      const redesInCongregacoes = redes.filter(r => 
-        r.congregacaoId && permission.congregacaoIds?.includes(r.congregacaoId)
-      );
-      const redeIds = redesInCongregacoes.map(r => r.id);
-      const discipuladosInRedes = discipulados.filter(d => redeIds.includes(d.redeId));
-      const discipuladoIds = discipuladosInRedes.map(d => d.id);
-      filteredCelulas.forEach(c => {
-        if (c.discipuladoId && discipuladoIds.includes(c.discipuladoId)) {
-          allowedCelulaIds.add(c.id);
-        }
-      });
-    }
-    
-    // Se tem redeIds, buscar células através de redes -> discipulados -> células
-    if (permission.redeIds && permission.redeIds.length > 0) {
-      const discipuladosInRedes = discipulados.filter(d => permission.redeIds?.includes(d.redeId));
-      const discipuladoIds = discipuladosInRedes.map(d => d.id);
-      filteredCelulas.forEach(c => {
-        if (c.discipuladoId && discipuladoIds.includes(c.discipuladoId)) {
-          allowedCelulaIds.add(c.id);
-        }
-      });
-    }
-    
-    // Se tem discipuladoIds, buscar células desses discipulados
-    if (permission.discipuladoIds && permission.discipuladoIds.length > 0) {
-      filteredCelulas.forEach(c => {
-        if (c.discipuladoId && permission.discipuladoIds?.includes(c.discipuladoId)) {
-          allowedCelulaIds.add(c.id);
-        }
-      });
-    }
-    
-    // Se tem celulaIds, adicionar diretamente
-    if (permission.celulaIds && permission.celulaIds.length > 0) {
-      permission.celulaIds.forEach(id => allowedCelulaIds.add(id));
-    }
-    
-    return filteredCelulas.filter(c => allowedCelulaIds.has(c.id));
-  };
-
-  const permittedCongregacoes = getPermittedCongregacoes();
-  const permittedRedes = getPermittedRedes();
-  const permittedDiscipulados = getPermittedDiscipulados();
-  const permittedCelulas = getPermittedCelulas();
 
   // Carregar relatórios quando filtros mudam
   useEffect(() => {
@@ -380,7 +160,12 @@ export default function ViewReportPage() {
         const year = selectedMonth.year();
         const month = selectedMonth.month() + 1;
 
-        let filters: { congregacaoId?: number; redeId?: number; discipuladoId?: number; celulaId?: number } = {};
+        let filters: { congregacaoId?: number; redeId?: number; discipuladoId?: number; celulaId?: number; all?: boolean } = {};
+
+        // Se "Minhas células" estiver desativado, trazer todas
+        if (!filterMyCells) {
+          filters.all = true;
+        }
 
         // Aplicar filtros na ordem de prioridade: célula > discipulado > rede > congregação
         if (selectedCelulaId) {
@@ -392,7 +177,6 @@ export default function ViewReportPage() {
         } else if (selectedCongregacaoId) {
           filters.congregacaoId = selectedCongregacaoId;
         }
-        // Se nenhum filtro, o backend retornará todas as células permitidas
 
         const data = await reportsService.getReportsByFilter(year, month, filters);
         setCelulasData(data.celulas);
@@ -406,7 +190,7 @@ export default function ViewReportPage() {
     };
 
     loadReports();
-  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, selectedMonth]);
+  }, [selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId, selectedMonth, filterMyCells]);
 
   // Atualizar rede, discipulado e célula quando congregação muda
   const handleCongregacaoChange = (congregacaoId: number | null) => {
@@ -419,8 +203,7 @@ export default function ViewReportPage() {
   // Atualizar discipulado e célula quando rede muda
   const handleRedeChange = (redeId: number | null) => {
     setSelectedRedeId(redeId);
-    // Limpar filtros inferiores se a nova rede for diferente
-    if (!redeId || !selectedDiscipuladoId || !filteredDiscipulados.find(d => d.id === selectedDiscipuladoId)) {
+    if (!redeId || !selectedDiscipuladoId || !filteredDiscipulados.find(d => d.id === selectedDiscipuladoId && d.redeId === redeId)) {
       setSelectedDiscipuladoId(null);
       setSelectedCelulaId(null);
     }
@@ -429,8 +212,7 @@ export default function ViewReportPage() {
   // Atualizar célula quando discipulado muda
   const handleDiscipuladoChange = (discipuladoId: number | null) => {
     setSelectedDiscipuladoId(discipuladoId);
-    // Limpar célula se o novo discipulado for diferente
-    if (!discipuladoId || !selectedCelulaId || !filteredCelulas.find(c => c.id === selectedCelulaId)) {
+    if (!discipuladoId || !selectedCelulaId) {
       setSelectedCelulaId(null);
     }
   };
@@ -439,6 +221,96 @@ export default function ViewReportPage() {
   const handleCelulaChange = (celulaId: number | null) => {
     setSelectedCelulaId(celulaId);
   };
+
+  // Verificar filtros ativos
+  const hasActiveFilters = selectedCongregacaoId !== null || selectedRedeId !== null || selectedDiscipuladoId !== null || selectedCelulaId !== null || (isAdminOrPresident() && filterMyCells) || selectedReportType !== 'CELULA';
+
+  const clearAllFilters = () => {
+    // Apenas limpar filterMyCells se o usuário for admin ou presidente
+    if (isAdminOrPresident()) {
+      setFilterMyCells(false);
+    }
+    setSelectedCongregacaoId(null);
+    setSelectedRedeId(null);
+    setSelectedDiscipuladoId(null);
+    setSelectedCelulaId(null);
+    setSelectedReportType('CELULA');
+  };
+
+  // Configuração dos filtros para o FilterModal
+  const filterConfigs: FilterConfig[] = [
+    // Switch de Minhas células / Todas as células apenas para admin/presidente
+    ...(isAdminOrPresident() ? [{
+      type: 'switch' as const,
+      label: '',
+      value: filterMyCells,
+      onChange: setFilterMyCells,
+      switchLabelOff: 'Todas as células',
+      switchLabelOn: 'Minhas células'
+    }] : []),
+    {
+      type: 'select',
+      label: 'Tipo de Relatório',
+      value: selectedReportType,
+      onChange: (val: any) => setSelectedReportType(val || 'CELULA'),
+      hideAllOption: true,
+      options: [
+        { value: 'CELULA', label: 'Célula' },
+        { value: 'CULTO', label: 'Culto' },
+      ]
+    },
+    {
+      type: 'select',
+      label: 'Mês',
+      value: selectedMonth,
+      onChange: () => {},
+      renderCustom: () => (
+        <ThemeProvider theme={muiTheme}>
+          <DatePicker
+            views={['month', 'year']}
+            value={selectedMonth}
+            onChange={(newValue) => setSelectedMonth(newValue)}
+            format="MMMM/YYYY"
+            slotProps={{
+              textField: {
+                fullWidth: true,
+                variant: 'outlined',
+                size: 'small',
+              },
+            }}
+          />
+        </ThemeProvider>
+      )
+    },
+    {
+      type: 'select',
+      label: 'Congregação',
+      value: selectedCongregacaoId,
+      onChange: (val: any) => handleCongregacaoChange(val),
+      options: congregacoes.map(c => ({ value: c.id, label: c.name }))
+    },
+    {
+      type: 'select',
+      label: 'Rede',
+      value: selectedRedeId,
+      onChange: (val: any) => handleRedeChange(val),
+      options: filteredRedes.map(r => ({ value: r.id, label: r.name }))
+    },
+    {
+      type: 'select',
+      label: 'Discipulado',
+      value: selectedDiscipuladoId,
+      onChange: (val: any) => handleDiscipuladoChange(val),
+      options: filteredDiscipulados.map(d => ({ value: d.id, label: d.discipulador?.name ? `Discipulado de ${d.discipulador.name}` : 'Sem discipulador' }))
+    },
+    {
+      type: 'select',
+      label: 'Célula',
+      value: selectedCelulaId,
+      onChange: (val: any) => handleCelulaChange(val),
+      options: filteredCelulas.map(c => ({ value: c.id, label: c.name }))
+    },
+  ];
 
   const getMinistryTypeLabel = (type: string | null | undefined): string => {
     if (!type) return 'Não definido';
@@ -907,165 +779,88 @@ export default function ViewReportPage() {
     toast.success('PDF baixado com sucesso');
   };
 
-  const canChangeFilters = () => {
-    const permission = user?.permission;
-    if (!permission) return false;
-    if (permission.isAdmin) return true;
-    return permission.pastor || permission.discipulador || permission.pastorPresidente;
-  };
-
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
       <ThemeProvider theme={muiTheme}>
         <div className="max-w-[95%] mx-auto p-6 space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
+          {/* Título */}
+          <div>
             <h1 className="text-2xl font-bold text-gray-100">
               Visualizar Relatórios
             </h1>
-            <p className="text-gray-400 mt-1">
-              </p>
+            <p className="text-gray-400 mt-1"></p>
+          </div>
+
+          {/* Barra de filtros: Mês + botão Filtros + limpar filtros */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Mês (fora do modal) */}
+            <div className="w-56">
+              <DatePicker
+                views={['month', 'year']}
+                value={selectedMonth}
+                onChange={(newValue) => setSelectedMonth(newValue)}
+                format="MMMM/YYYY"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    variant: 'outlined',
+                    size: 'small',
+                  },
+                }}
+              />
             </div>
-            
-            {celulasData.length > 0 && (
-              <div className="flex gap-2">
-                <button
-                  onClick={downloadXLSX}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                >
-                  <FileSpreadsheet size={18} />
-                  Baixar Planilha
-                </button>
-                <button
-                  onClick={downloadPDF}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Download size={18} />
-                  Baixar PDF
-                </button>
-              </div>
+
+            {/* Botão Filtros */}
+            <button
+              onClick={() => setIsFilterModalOpen(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded transition-colors ${hasActiveFilters
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+                }`}
+              title="Filtros"
+            >
+              <FaFilter className="h-5 w-5" />
+              <span>Filtros</span>
+              {hasActiveFilters && (
+                <span className="bg-white text-blue-600 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                  {[selectedCongregacaoId, selectedRedeId, selectedDiscipuladoId, selectedCelulaId].filter(f => f !== null).length 
+                    + (isAdminOrPresident() && filterMyCells ? 1 : 0)
+                    + (selectedReportType !== 'CELULA' ? 1 : 0)}
+                </span>
+              )}
+            </button>
+
+            {/* Limpar filtros */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                title="Limpar filtros"
+              >
+                <FaFilterCircleXmark className="h-5 w-5" />
+              </button>
             )}
           </div>
 
-          {/* Filtros */}
-          <div className="bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              {/* Congregação */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Congregação {!canChangeFilters() && '(automático)'}
-                </label>
-                <select
-                  value={selectedCongregacaoId || ''}
-                  onChange={(e) => handleCongregacaoChange(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
-                  disabled={!canChangeFilters()}
-                >
-                  <option value="">Todas as congregações</option>
-                  {permittedCongregacoes.map((congregacao) => (
-                    <option key={congregacao.id} value={congregacao.id}>
-                      {congregacao.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Rede */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Rede {!canChangeFilters() && '(automático)'}
-                </label>
-                <select
-                  value={selectedRedeId || ''}
-                  onChange={(e) => handleRedeChange(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
-                  disabled={!canChangeFilters()}
-                >
-                  <option value="">Todas as redes</option>
-                  {permittedRedes.filter(r => !selectedCongregacaoId || r.congregacaoId === selectedCongregacaoId).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Discipulado */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Discipulado {!canChangeFilters() && '(automático)'}
-                </label>
-                <select
-                  value={selectedDiscipuladoId || ''}
-                  onChange={(e) => handleDiscipuladoChange(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
-                  disabled={!canChangeFilters()}
-                >
-                  <option value="">Todos os discipulados</option>
-                  {permittedDiscipulados.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      Discipulado de {d.discipulador?.name || 'N/A'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Célula */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Célula {!canChangeFilters() && '(automático)'}
-                </label>
-                <select
-                  value={selectedCelulaId || ''}
-                  onChange={(e) => handleCelulaChange(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
-                  disabled={!canChangeFilters()}
-                >
-                  <option value="">Todas as células</option>
-                  {permittedCelulas.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Mês */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Mês
-                </label>
-                <DatePicker
-                  views={['month', 'year']}
-                  value={selectedMonth}
-                  onChange={(newValue) => setSelectedMonth(newValue)}
-                  format="MMMM/YYYY"
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      variant: 'outlined',
-                    },
-                  }}
-                />
-              </div>
-
-              {/* Tipo de Relatório */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Tipo de Relatório
-                </label>
-                <select
-                  value={selectedReportType}
-                  onChange={(e) => setSelectedReportType(e.target.value as 'ALL' | 'CELULA' | 'CULTO')}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100"
-                >
-                  <option value="ALL">Todos</option>
-                  <option value="CELULA">Célula</option>
-                  <option value="CULTO">Culto</option>
-                </select>
-              </div>
+          {/* Botões de download abaixo dos filtros */}
+          {celulasData.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={downloadXLSX}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                <FileSpreadsheet size={18} />
+                Baixar Planilha
+              </button>
+              <button
+                onClick={downloadPDF}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Download size={18} />
+                Baixar PDF
+              </button>
             </div>
-          </div>
+          )}
 
           {/* Resultados */}
           {isLoading ? (
@@ -1083,105 +878,138 @@ export default function ViewReportPage() {
             <div className="space-y-6">
               {celulasData.map((celulaData) => {
                 // Filtrar relatórios por tipo
-                const filteredReports = selectedReportType === 'ALL' 
-                  ? celulaData.reports 
-                  : celulaData.reports.filter(r => r.type === selectedReportType || !r.hasReport);
-
-                // Pular célula se não houver relatórios após filtro
-                if (filteredReports.length === 0 || filteredReports.every(r => !r.hasReport)) {
-                  return null;
-                }
+                const filteredReports = celulaData.reports.filter(r => r.type === selectedReportType || !r.hasReport);
 
                 const filteredCelulaData = { ...celulaData, reports: filteredReports };
+
+                // Calcular se tem pelo menos 1 relatório preenchido
+                const hasAnyReport = filteredReports.some(r => r.hasReport);
 
                 return (
                 <div key={celulaData.celula.id} className="bg-gray-800 rounded-lg shadow-sm border border-gray-700">
                   {/* Header da célula */}
                   <div className="px-6 py-4 border-b border-gray-700">
-                    <h2 className="text-xl font-bold text-gray-100">
-                      {filteredCelulaData.celula.name}
-                    </h2>
-                    <p className="text-sm text-gray-400">
-                      {getDayLabel(filteredCelulaData.celula.weekday)} {filteredCelulaData.celula.time || ''}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-100">
+                          {filteredCelulaData.celula.name}
+                        </h2>
+                        <p className="text-sm text-gray-400">
+                          {getDayLabel(filteredCelulaData.celula.weekday)} {filteredCelulaData.celula.time || ''}
+                        </p>
+                      </div>
+                      {!hasAnyReport && (
+                        <span className="text-xs font-medium text-orange-400 bg-orange-900/30 px-3 py-1 rounded-full">
+                          Sem relatório neste mês
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Tabela */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-700">
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-100 bg-gray-900 sticky left-0 z-10">
-                            Membro
-                          </th>
-                          {filteredCelulaData.reports.map((report) => (
-                            <th 
-                              key={dayjs(report.date).format('YYYY-MM-DD')} 
-                              className="px-4 py-3 text-center text-sm font-semibold text-gray-100 bg-gray-900 min-w-[100px]"
-                            >
-                              <div>{dayjs(report.date).format('DD/MM')}</div>
-                              <div className="text-xs font-normal text-gray-400">
-                                {getDayLabel(new Date(report.date).getDay())}
-                              </div>
-                              {!report.hasReport && (
-                                <div className="text-xs font-normal text-orange-500">
-                                  Sem relatório
-                                </div>
-                              )}
-                              {report.hasReport && report.isStandardDay === false && (
-                                <div className="text-xs font-normal text-amber-400">
-                                  ⚠️ Fora do dia padrão
-                                </div>
-                              )}
+                  {filteredReports.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-700">
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-100 bg-gray-900 sticky left-0 z-10">
+                              Membro
                             </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredCelulaData.allMembers.map((member, idx) => (
-                          <tr 
-                            key={member.id}
-                            className={`border-b border-gray-700 ${
-                              idx % 2 === 0 ? 'bg-gray-800' : 'bg-gray-900/50'
-                            }`}
-                          >
-                            <td className="px-4 py-3 text-sm text-gray-100 sticky left-0 z-10 bg-inherit">
-                              <div className="font-medium">{member.name}</div>
-                              <div className="text-xs text-gray-400">
-                                {getMinistryTypeLabel(getMemberMinistryType(member))}
-                              </div>
-                            </td>
-                            {filteredCelulaData.reports.map((report) => {
-                              const dateStr = dayjs(report.date).format('YYYY-MM-DD');
-                              const isPresent = wasMemberPresent(member.id, filteredCelulaData.reports, dateStr);
-                              const isFutureDate = dayjs(report.date).isAfter(dayjs(), 'day');
-                              
-                              return (
-                                <td 
-                                  key={dateStr}
-                                  className="px-4 py-3 text-center"
-                                >
-                                  {report.hasReport ? (
-                                    isPresent === true ? (
-                                      <CheckCircle className="inline-block text-green-500" size={20} />
-                                    ) : isPresent === false ? (
-                                      <XCircle className="inline-block text-red-500" size={20} />
-                                    ) : (
-                                      <span className="text-gray-400">-</span>
-                                    )
-                                  ) : isFutureDate ? (
-                                    <span className="text-gray-400">-</span>
-                                  ) : (
-                                    <span className="text-orange-400">-</span>
-                                  )}
-                                </td>
-                              );
-                            })}
+                            {filteredCelulaData.reports.map((report) => (
+                              <th 
+                                key={dayjs(report.date).format('YYYY-MM-DD')} 
+                                className="px-4 py-3 text-center text-sm font-semibold text-gray-100 bg-gray-900 min-w-[100px]"
+                              >
+                                <div>{dayjs(report.date).format('DD/MM')}</div>
+                                <div className="text-xs font-normal text-gray-400">
+                                  {getDayLabel(new Date(report.date).getDay())}
+                                </div>
+                                {!report.hasReport && (
+                                  <div className="text-xs font-normal text-orange-500">
+                                    Sem relatório
+                                  </div>
+                                )}
+                                {report.hasReport && report.isStandardDay === false && (
+                                  <div className="text-xs font-normal text-amber-400">
+                                    ⚠️ Fora do dia padrão
+                                  </div>
+                                )}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {filteredCelulaData.allMembers.map((member, idx) => (
+                            <tr 
+                              key={member.id}
+                              className={`border-b border-gray-700 ${
+                                idx % 2 === 0 ? 'bg-gray-800' : 'bg-gray-900/50'
+                              }`}
+                            >
+                              <td className="px-4 py-3 text-sm text-gray-100 sticky left-0 z-10 bg-inherit">
+                                <div className="font-medium">{member.name}</div>
+                                <div className="text-xs text-gray-400">
+                                  {getMinistryTypeLabel(getMemberMinistryType(member))}
+                                </div>
+                              </td>
+                              {filteredCelulaData.reports.map((report) => {
+                                const dateStr = dayjs(report.date).format('YYYY-MM-DD');
+                                const isPresent = wasMemberPresent(member.id, filteredCelulaData.reports, dateStr);
+                                const isFutureDate = dayjs(report.date).isAfter(dayjs(), 'day');
+                                
+                                return (
+                                  <td 
+                                    key={dateStr}
+                                    className="px-4 py-3 text-center"
+                                  >
+                                    {report.hasReport ? (
+                                      isPresent === true ? (
+                                        <CheckCircle className="inline-block text-green-500" size={20} />
+                                      ) : isPresent === false ? (
+                                        <XCircle className="inline-block text-red-500" size={20} />
+                                      ) : (
+                                        <span className="text-gray-400">-</span>
+                                      )
+                                    ) : isFutureDate ? (
+                                      <span className="text-gray-400">-</span>
+                                    ) : (
+                                      <span className="text-orange-400">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                          {/* Linha de ofertas por data */}
+                          {filteredCelulaData.reports.some(r => r.offerAmount !== undefined && r.offerAmount !== null) && (
+                            <tr className="border-b border-gray-700 bg-gray-900/80">
+                              <td className="px-4 py-3 text-sm font-semibold text-gray-100 sticky left-0 z-10 bg-gray-900/80">
+                                💰 Oferta
+                              </td>
+                              {filteredCelulaData.reports.map((report) => {
+                                const dateStr = dayjs(report.date).format('YYYY-MM-DD');
+                                return (
+                                  <td key={dateStr} className="px-4 py-3 text-center text-sm">
+                                    {report.hasReport && report.offerAmount !== undefined && report.offerAmount !== null ? (
+                                      <span className="text-green-400 font-medium">
+                                        R$ {report.offerAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-500">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="px-6 py-8 text-center">
+                      <p className="text-gray-500 text-sm">Nenhuma data de relatório para o período</p>
+                    </div>
+                  )}
 
                   {/* Resumo */}
                   <div className="px-4 py-3 bg-gray-900 border-t border-gray-700">
@@ -1216,6 +1044,16 @@ export default function ViewReportPage() {
             </div>
           )}
         </div>
+
+        {/* FilterModal */}
+        <FilterModal
+          isOpen={isFilterModalOpen}
+          onClose={() => setIsFilterModalOpen(false)}
+          onApply={() => { }}
+          onClear={clearAllFilters}
+          filters={filterConfigs}
+          hasActiveFilters={hasActiveFilters}
+        />
       </ThemeProvider>
     </LocalizationProvider>
   );

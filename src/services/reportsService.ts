@@ -68,6 +68,7 @@ export const reportsService = {
       redeId?: number; 
       discipuladoId?: number; 
       celulaId?: number;
+      all?: boolean;
     }
   ): Promise<MultipleCelulasReportsResponse> => {
     const params = new URLSearchParams();
@@ -75,6 +76,7 @@ export const reportsService = {
     if (filters.redeId) params.append('redeId', filters.redeId.toString());
     if (filters.discipuladoId) params.append('discipuladoId', filters.discipuladoId.toString());
     if (filters.celulaId) params.append('celulaId', filters.celulaId.toString());
+    if (filters.all) params.append('all', 'true');
     
     const res = await api.get<MultipleCelulasReportsResponse>(
       `/reports/by-filter/${year}/${month}?${params.toString()}`

@@ -12,6 +12,7 @@ export type FilterConfig = {
   switchLabelOff?: string;  // Label quando switch está desligado (à esquerda)
   switchLabelOn?: string;   // Label quando switch está ligado (à direita)
   inline?: boolean;  // Se true, renderiza inline com o próximo filtro
+  hideAllOption?: boolean;  // Se true, não mostra a opção "Todos" no select
 };
 
 interface FilterModalProps {
@@ -62,7 +63,7 @@ export default function FilterModal({
           }}
           className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">Todos</option>
+          {!filter.hideAllOption && <option value="">Todos</option>}
           {filter.options.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
